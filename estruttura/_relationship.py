@@ -1,17 +1,16 @@
-import slotted
-from basicco import type_checking, import_path, recursive_repr, fabricate_value, custom_repr
-from tippo import Any, Callable, Type, Iterable, TypeVar
+from basicco import type_checking, recursive_repr, fabricate_value, custom_repr, import_path
+from tippo import Any, Callable, Type, Iterable, Generic, TypeVar, cast
+
+from .bases import BaseGeneric
 
 
 T = TypeVar("T")
-RT = TypeVar("RT", bound="Relationship")
 
 
-class Relationship(slotted.SlottedABC):
+class BaseRelationship(BaseGeneric, Generic[T]):
     """Describes a relationship between a structure and its values."""
 
     __slots__ = (
-        "__weakref__",
         "__converter",
         "__types",
         "__subtypes",
@@ -25,55 +24,35 @@ class Relationship(slotted.SlottedABC):
 
     @classmethod
     def deserialize(cls, serialized):
-        # type: (Type[RT], dict[str, Any]) -> RT
-        kwargs = {}
-
-        extra_paths = kwargs["extra_paths"] = serialized.get("extra_paths", ())
-        builtin_paths = kwargs["builtin_paths"] = serialized.get("builtin_paths", None)
-
-        if "converter" in serialized:
-            kwargs["converter"] = import_path.import_path(
-                serialized["converter"],
-                extra_paths=extra_paths,
-                builtin_paths=builtin_paths,
-            )
-
-        if "types" in serialized:
-            kwargs["types"] = (
+        # type: (Type[BRT], dict[str, Any]) -> BRT
+        extra_paths = serialized["extra_paths"]
+        builtin_paths = serialized["builtin_paths"]
+        return cls(
+            converter=import_path.import_path(
+                serialized["converter"], extra_paths=extra_paths, builtin_paths=builtin_paths
+            ),
+            types=(
                 import_path.import_path(t, extra_paths=extra_paths, builtin_paths=builtin_paths)
                 for t in serialized["types"]
-            )
-
-        if "subtypes" in serialized:
-            kwargs["subtypes"] = serialized["subtypes"]
-
-        if "repr" in serialized:
-            kwargs["repr"] = serialized["repr"]
-
-        if "eq" in serialized:
-            kwargs["eq"] = serialized["eq"]
-
-        if "hash" in serialized:
-            kwargs["hash"] = serialized["hash"]
-
-        if "metadata" in serialized:
-            kwargs["metadata"] = serialized["metadata"]
-
-        return cls(**kwargs)
+            ),
+            subtypes=serialized["subtypes"],
+            repr=serialized["repr"],
+            eq=serialized["eq"],
+            hash=serialized["hash"],
+            metadata=serialized["metadata"],
+            extra_paths=extra_paths,
+            builtin_paths=builtin_paths,
+        )
 
     def __init__(
         self,
         converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
-        types=(),  # type: tuple[Type[T] | Type | str | None, ...] | Type[T] | Type | str | None
+        types=(),  # type: Iterable[Type[T] | Type | str | None] | Type[T] | Type | str | None
         subtypes=False,  # type: bool
         repr=True,  # type: bool
         eq=True,  # type: bool
         hash=None,  # type: bool | None
-        # serializer=None,  # type: Callable | str | None
-        # deserializer=None,  # type: Callable | str | None
         metadata=None,  # type: Any
-        # metadata_serializer=None,  # type: Callable | str | None
-        # metadata_deserializer=None,  # type: Callable | str | None
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -97,15 +76,15 @@ class Relationship(slotted.SlottedABC):
             error = "can't contribute to the hash if it's not contributing to the eq"
             raise ValueError(error)
 
-        self.__converter = converter
+        self.__converter = fabricate_value.format_factory(converter)
         self.__types = type_checking.format_types(types)
         self.__subtypes = bool(subtypes)
         self.__repr = bool(repr)
         self.__eq = bool(eq)
         self.__hash = bool(hash)
+        self.__metadata = metadata
         self.__extra_paths = tuple(extra_paths)
         self.__builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
-        self.__metadata = metadata
 
     @recursive_repr.recursive_repr
     def __repr__(self):
@@ -127,9 +106,6 @@ class Relationship(slotted.SlottedABC):
     def __eq__(self, other):
         return isinstance(other, type(self)) and self.to_items() == other.to_items()
 
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
     def convert(self, value):
         # type: (Any) -> T
         return fabricate_value.fabricate_value(
@@ -139,7 +115,7 @@ class Relationship(slotted.SlottedABC):
             builtin_paths=self.__builtin_paths,
         )
 
-    def type_matches(self, value):
+    def accepts_type(self, value):
         # type: (Any) -> bool
         return type_checking.is_instance(
             value,
@@ -151,13 +127,16 @@ class Relationship(slotted.SlottedABC):
 
     def check_type(self, value):
         # type: (Any) -> T
-        return type_checking.assert_is_instance(
-            value,
-            self.__types,
-            subtypes=self.__subtypes,
-            extra_paths=self.__extra_paths,
-            builtin_paths=self.__builtin_paths,
-        )
+        if self.__types:
+            return type_checking.assert_is_instance(
+                value,
+                self.__types,
+                subtypes=self.__subtypes,
+                extra_paths=self.__extra_paths,
+                builtin_paths=self.__builtin_paths,
+            )
+        else:
+            return value
 
     def process(self, value):
         # type: (Any) -> T
@@ -183,36 +162,25 @@ class Relationship(slotted.SlottedABC):
 
     def serialize(self):
         # type: () -> dict[str, Any]
-        serialized = {}  # type: dict[str, Any]
+        extra_paths = self.__extra_paths
+        builtin_paths = self.__builtin_paths
+        return dict(
+            converter=import_path.get_path(self.__converter, extra_paths=extra_paths, builtin_paths=builtin_paths),
+            types=[import_path.get_path(t, extra_paths=extra_paths, builtin_paths=builtin_paths) for t in self.__types],
+            subtypes=self.__subtypes,
+            repr=self.__repr,
+            eq=self.__eq,
+            hash=self.__hash,
+            metadata=self.__metadata,
+            extra_paths=self.__extra_paths,
+            builtin_paths=self.__builtin_paths,
+        )
 
-        if self.__converter is not None:
-            serialized["converter"] = import_path.get_path(self.__converter)
-
-        if self.__types:
-            serialized["types"] = [import_path.get_path(t) for t in self.__types]
-
-        if self.__subtypes:
-            serialized["subtypes"] = self.__subtypes
-
-        if not self.__repr:
-            serialized["repr"] = self.__repr
-
-        if not self.__eq:
-            serialized["eq"] = self.__eq
-
-        if not self.__hash:
-            serialized["hash"] = self.__hash
-
-        if self.__metadata is not None:
-            serialized["metadata"] = self.__metadata
-
-        if self.__extra_paths:
-            serialized["extra_paths"] = list(self.__extra_paths)
-
-        if self.__builtin_paths is not None:
-            serialized["builtin_paths"] = list(self.__builtin_paths)
-
-        return serialized
+    def update(self, *args, **kwargs):
+        # type: (BRT, **Any) -> BRT
+        updated_kwargs = self.to_dict()
+        updated_kwargs.update(*args, **kwargs)
+        return cast(BRT, type(self)(**updated_kwargs))
 
     @property
     def converter(self):
@@ -266,3 +234,6 @@ class Relationship(slotted.SlottedABC):
         # type: () -> tuple[str, ...] | None
         """Builtin module paths in fallback order."""
         return self.__builtin_paths
+
+
+BRT = TypeVar("BRT", bound=BaseRelationship)

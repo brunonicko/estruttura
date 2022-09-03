@@ -7,7 +7,7 @@ from basicco import explicit_hash, runtime_final, qualname
 from tippo import Any, TypeVar, Iterator
 
 
-T_co = TypeVar("T_co", covariant=True)
+T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
 class BaseMeta(slotted.SlottedABCMeta, explicit_hash.ExplicitHashMeta, runtime_final.FinalizedMeta):
@@ -182,6 +182,10 @@ class BaseContainer(BaseGeneric, slotted.SlottedContainer[T_co]):
         raise NotImplementedError()
 
 
+class BaseCollectionMeta(BaseGenericMeta):
+    """Metaclass for :class:`BaseCollection`."""
+
+
 # Trick static type checking.
 SlottedCollection = slotted.SlottedCollection
 if SlottedCollection is None:
@@ -189,7 +193,10 @@ if SlottedCollection is None:
 assert SlottedCollection is not None
 
 
-class BaseCollection(BaseSized, BaseIterable[T_co], BaseContainer[T_co], SlottedCollection):
+# noinspection PyAbstractClass
+class BaseCollection(
+    six.with_metaclass(BaseCollectionMeta, BaseSized, BaseIterable[T_co], BaseContainer[T_co], SlottedCollection)
+):
     """
     Base collection.
 
@@ -199,17 +206,6 @@ class BaseCollection(BaseSized, BaseIterable[T_co], BaseContainer[T_co], Slotted
     """
 
     __slots__ = ()
-
-    @abc.abstractmethod
-    def find(self, **query):
-        # type: (**Any) -> list[T_co]
-        """
-        Find values that match a query.
-
-        :param query: Query.
-        :return: Matching values.
-        """
-        raise NotImplementedError()
 
 
 class BaseProtectedCollection(BaseCollection[T_co]):
@@ -226,7 +222,7 @@ class BaseProtectedCollection(BaseCollection[T_co]):
 
     @abc.abstractmethod
     def _clear(self):
-        # type: (BPC) -> BPC
+        # type: (PCT) -> PCT
         """
         Clear.
 
@@ -235,7 +231,7 @@ class BaseProtectedCollection(BaseCollection[T_co]):
         raise NotImplementedError()
 
 
-BPC = TypeVar("BPC", bound=BaseProtectedCollection)
+PCT = TypeVar("PCT", bound=BaseProtectedCollection)  # protected collection type
 
 
 # noinspection PyAbstractClass
@@ -252,7 +248,7 @@ class BaseInteractiveCollection(BaseProtectedCollection[T_co]):
 
     @runtime_final.final
     def clear(self):
-        # type: (BIC) -> BIC
+        # type: (ICT) -> ICT
         """
         Clear.
 
@@ -261,7 +257,7 @@ class BaseInteractiveCollection(BaseProtectedCollection[T_co]):
         return self._clear()
 
 
-BIC = TypeVar("BIC", bound="BaseInteractiveCollection")
+ICT = TypeVar("ICT", bound="BaseInteractiveCollection")  # interactive collection type
 
 
 # noinspection PyAbstractClass

@@ -1,759 +1,403 @@
-_SERIALIZED_CLASS_KEY = "__class__"
-_ESCAPED_SERIALIZED_CLASS_KEY = "\\__class__"
-_SERIALIZED_VALUE_KEY = "__state__"
+import abc
+
+import six
+from basicco import type_checking, recursive_repr, fabricate_value, custom_repr, runtime_final
+from tippo import Any, Callable, Type, Iterable, Generic, TypeVar, Hashable, cast
+
+from .bases import (
+    BaseHashable,
+    BaseCollectionMeta,
+    BaseGeneric,
+    BaseProtectedCollection,
+    BaseInteractiveCollection,
+    BaseMutableCollection,
+)
 
 
-T = TypeVar("T")  # Any type.
+T = TypeVar("T")  # value type
+T_co = TypeVar("T_co", covariant=True)  # covariant value type
+LT = TypeVar("LT", bound=Hashable)  # location type
+IT = TypeVar("IT")  # internal type
 
 
-def _escape_serialized_class(dct):
-    # type: (Dict[str, Any]) -> Dict[str, Any]
-    """
-    Escape serialized '__class__' key.
+class BaseState(BaseHashable, BaseInteractiveCollection[T], Generic[T, IT]):
+    """Base immutable state."""
 
-    :param dct: Serialized dictionary.
-    :return: Escaped serialized dictionary.
-    """
-    if _SERIALIZED_CLASS_KEY in dct:
-        dct = dct.copy()
-        dct[_ESCAPED_SERIALIZED_CLASS_KEY] = dct.pop(_SERIALIZED_CLASS_KEY)
-    return dct
+    __slots__ = ("__hash", "__internal")
 
+    @staticmethod
+    def __new__(cls, initial=None):
+        if type(initial) is cls:
+            return initial
+        else:
+            return super(BaseState, cls).__new__(cls)
 
-def _unescape_serialized_class(dct):
-    # type: (Dict[str, Any]) -> Dict[str, Any]
-    """
-    Unescape serialized '__class__' key.
-
-    :param dct: Serialized dictionary.
-    :return: Unescaped serialized dictionary.
-    """
-    if _ESCAPED_SERIALIZED_CLASS_KEY in dct:
-        dct = dct.copy()
-        dct[_SERIALIZED_CLASS_KEY] = dct.pop(_ESCAPED_SERIALIZED_CLASS_KEY)
-    return dct
-
-
-class BaseStructureMeta(BaseMeta):
-    """
-    Metaclass for :class:`objetto.bases.BaseStructure`.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseMeta`
-
-    Inherited by:
-      - :class:`objetto.bases.BaseAuxiliaryStructureMeta`
-      - :class:`objetto.bases.BaseAttributeStructureMeta`
-      - :class:`objetto.bases.BaseDataMeta`
-      - :class:`objetto.bases.BaseObjectMeta`
-
-    Features:
-      - Support for `unique descriptors <objetto.objects.unique_descriptor>`_.
-      - Defines serializable structure type.
-    """
-
-    __unique_descriptor_name = WeakKeyDictionary(
-        {}
-    )  # type: MutableMapping[BaseStructureMeta, Optional[str]]
-    __unique_descriptor = WeakKeyDictionary(
-        {}
-    )  # type: MutableMapping[BaseStructureMeta, Optional[UniqueDescriptor]]
-
-    def __init__(cls, name, bases, dct):
-        # type: (str, Tuple[Type, ...], Dict[str, Any]) -> None
-        super(BaseStructureMeta, cls).__init__(name, bases, dct)
-
-        # Find unique descriptors.
-        unique_descriptors = {}
-        for base in reversed(getmro(cls)):
-            base_is_base_structure = isinstance(base, BaseStructureMeta)
-            for member_name, member in iteritems(base.__dict__):
-
-                # Found unique descriptor.
-                if type(member) is UniqueDescriptor:
-
-                    # Valid declaration.
-                    if base_is_base_structure:
-                        unique_descriptors[member_name] = member
-
-                    # Invalid.
-                    else:
-                        error = (
-                            "unique descriptor '{}' can't be declared in base '{}', "
-                            "which is not a subclass of '{}'"
-                        ).format(member_name, base.__name__, BaseStructure.__name__)
-                        raise TypeError(error)
-
-                # Was overridden.
-                elif member_name in unique_descriptors:
-                    del unique_descriptors[member_name]
-
-        # Multiple unique descriptors.
-        if len(unique_descriptors) > 1:
-            error = "class '{}' has multiple unique descriptors at {}".format(
-                cls.__name__, ", ".join("'{}'".format(n) for n in unique_descriptors)
-            )
-            raise TypeError(error)
-
-        # Store unique descriptor.
-        unique_descriptor_name = None  # type: Optional[str]
-        unique_descriptor_ = None  # type: Optional[UniqueDescriptor]
-        if unique_descriptors:
-            unique_descriptor_name, unique_descriptor_ = next(
-                iteritems(unique_descriptors)
-            )
-        type(cls).__unique_descriptor_name[cls] = unique_descriptor_name
-        type(cls).__unique_descriptor[cls] = unique_descriptor_
-
-    @property
-    @final
-    def _unique_descriptor_name(cls):
-        # type: () -> Optional[str]
+    @classmethod
+    @runtime_final.final
+    def _make(cls, internal):
+        # type: (Type[BST], IT) -> BST
         """
-        Unique descriptor name or `None`.
+        Build new state by directly setting the internal value.
 
-        :rtype: str or None
+        :param internal: Internal state.
+        :return: State.
         """
-        return type(cls).__unique_descriptor_name[cls]
+        self = cast(BST, cls.__new__(cls))
+        self.__internal = internal
+        self.__hash = None
+        return self
 
-    @property
-    @final
-    def _unique_descriptor(cls):
-        # type: () -> Optional[UniqueDescriptor]
-        """
-        Unique descriptor or `None`.
-
-        :rtype: objetto.objects.UniqueDescriptor or objetto.data.UniqueDescriptor or \
-None
-        """
-        return type(cls).__unique_descriptor[cls]
-
-    @property
-    @abstractmethod
-    def _serializable_structure_types(cls):
-        # type: () -> Tuple[Type[BaseStructure], ...]
-        """
-        Serializable structure types.
-
-        :rtype: tuple[type[objetto.bases.BaseStructure]]
-        """
+    @staticmethod
+    @abc.abstractmethod
+    def _init_internal(initial):
+        # type: (Any) -> IT
+        """Initialize internal."""
         raise NotImplementedError()
 
-    @property
-    def _relationship_type(cls):
-        # type: () -> Type[BaseRelationship]
-        """
-        Relationship type.
+    @abc.abstractmethod
+    def __init__(self, initial=None):
+        self.__internal = self._init_internal(initial=initial)
+        self.__hash = None  # type: int | None
 
-        :rtype: type[objetto.bases.BaseRelationship]
-        """
-        return BaseRelationship
-
-
-# noinspection PyTypeChecker
-_BS = TypeVar("_BS", bound="BaseStructure")
-
-
-class BaseStructure(
-    with_metaclass(BaseStructureMeta, BaseHashable, BaseProtectedCollection[T])
-):
-    """
-    Base structure.
-
-    Metaclass:
-      - :class:`objetto.bases.BaseStructureMeta`
-
-    Inherits from:
-      - :class:`objetto.bases.BaseHashable`
-      - :class:`objetto.bases.BaseProtectedCollection`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseInteractiveStructure`
-      - :class:`objetto.bases.BaseMutableStructure`
-      - :class:`objetto.bases.BaseAuxiliaryStructure`
-      - :class:`objetto.bases.BaseData`
-      - :class:`objetto.bases.BaseObject`
-
-    Features:
-      - Is hashable.
-      - Is a protected collection.
-      - Has state.
-      - Unique hash based on ID if unique descriptor is defined.
-      - Holds values at locations.
-      - Has a relationship for each location.
-      - Serializes/deserializes values and itself.
-    """
-
-    __slots__ = ()
-
-    @final
+    @runtime_final.final
     def __hash__(self):
         # type: () -> int
         """
         Get hash.
 
         :return: Hash.
-        :rtype: int
         """
-        cls = type(self)
-        if cls._unique_descriptor:
-            return hash(id(self))
-        else:
-            return self._hash()
+        if self.__hash is None:
+            self.__hash = hash(self._internal)
+        return self.__hash
 
-    @final
+    @runtime_final.final
     def __eq__(self, other):
-        # type: (Any) -> bool
+        # type: (object) -> bool
         """
-        Compare with another object for equality/identity.
+        Compare for equality.
 
         :param other: Another object.
-
-        :return: True if equal or the exact same object.
-        :rtype: bool
-        """
-        if self is other:
-            return True
-        if not isinstance(other, collections_abc.Hashable):
-            return self._eq(other)
-        cls = type(self)
-        if cls._unique_descriptor:
-            return False
-        elif isinstance(other, BaseStructure) and type(other)._unique_descriptor:
-            return False
-        else:
-            return self._eq(other)
-
-    @staticmethod
-    @final
-    def __deserialize_value(
-        serialized,  # type: Any
-        location,  # type: Any
-        relationship,  # type: BaseRelationship
-        serializable_structure_types,  # type: Tuple[Type[BaseStructure], ...]
-        class_name,  # type: str
-        override_serialized=MISSING,  # type: Any
-        **kwargs  # type: Any
-    ):
-        # type: (...) -> Any
-        """
-        Deserialize value for location with built-in serializer.
-
-        :param serialized: Serialized value.
-        :param location: Location.
-        :param relationship: Relationship.
-        :param serializable_structure_types: Serializable structure types.
-        :param override_serialized: Override serialized value.
-        :param kwargs: Keyword arguments to be passed to the deserializers.
-        :return: Deserialized value.
-        :raises TypeError: Can't deserialize value due to ambiguous types.
-        """
-
-        # Override serialized.
-        if override_serialized is not MISSING:
-            serialized = override_serialized
-
-        # Possible serialized structure.
-        if type(serialized) in (dict, list):
-
-            # Serialized in a dictionary.
-            if type(serialized) is dict:
-
-                # Serialized structure with path to its class.
-                if _SERIALIZED_CLASS_KEY in serialized:
-                    serialized_class = import_path(
-                        serialized[_SERIALIZED_CLASS_KEY]
-                    )  # type: Type[BaseStructure]
-                    serialized_value = serialized[_SERIALIZED_VALUE_KEY]
-                    if type(serialized_value) is dict:
-                        serialized_value = _unescape_serialized_class(serialized_value)
-                    return serialized_class.deserialize(serialized_value, **kwargs)
-
-                # Unescape keys.
-                serialized = _unescape_serialized_class(serialized)
-
-            # Single, non-ambiguous structure type.
-            single_structure_type = relationship.get_single_exact_type(
-                serializable_structure_types
-            )  # type: Optional[Type[BaseStructure]]
-            if single_structure_type is not None:
-                return single_structure_type.deserialize(serialized, **kwargs)
-
-            # Complex type (dict or list).
-            single_complex_type = relationship.get_single_exact_type(
-                (dict, list)
-            )  # type: Optional[Union[Type[Dict], Type[List]]]
-            if single_complex_type is None:
-                error = (
-                    "can't deserialize '{}' object as a value of '{}' since "
-                    "relationship{} defines none or ambiguous types"
-                ).format(
-                    type(serialized).__name__,
-                    class_name,
-                    " at location {}".format(location) if location is not None else "",
-                )
-                raise TypeError(error)
-
-        # Return type-check deserialized value.
-        return relationship.fabricate_value(serialized, factory=False)
-
-    @staticmethod
-    @final
-    def __serialize_value(
-        value,  # type: Any
-        relationship,  # type: BaseRelationship
-        serializable_structure_types,  # type: Tuple[Type[BaseStructure], ...]
-        override_value=MISSING,  # type: Any
-        **kwargs  # type: Any
-    ):
-        # type: (...) -> Any
-        """
-        Serialize value for location with built-in serializer.
-
-        :param value: Value.
-        :param relationship: Relationship.
-        :param serializable_structure_types: Serializable structure types.
-        :param override_value: Override value.
-        :param kwargs: Keyword arguments to be passed to the serializers.
-        :return: Serialized value.
-        """
-
-        # Override value.
-        if override_value is not MISSING:
-            value = override_value
-
-        # Structure type.
-        if isinstance(value, serializable_structure_types):
-            serialized_value = value.serialize(**kwargs)
-
-            # Escape keys.
-            if type(serialized_value) is dict:
-                serialized_value = _escape_serialized_class(serialized_value)
-
-            # Ambiguous type, serialize with class path.
-            single_structure_type = relationship.get_single_exact_type(
-                serializable_structure_types
-            )  # type: Optional[Type[BaseStructure]]
-            if single_structure_type is None:
-                return {
-                    _SERIALIZED_CLASS_KEY: get_path(type(value)),
-                    _SERIALIZED_VALUE_KEY: serialized_value,
-                }
-
-            return serialized_value
-
-        # Escape keys.
-        if type(value) is dict:
-            value = _escape_serialized_class(value)
-
-        return value
-
-    # @abstractmethod (commented out due to a PyCharm bug)
-    def _hash(self):
-        # type: () -> int
-        """
-        **Abstract**
-
-        Get hash.
-
-        :return: Hash.
-        :rtype: int
-
-        :raises RuntimeError: Abstract method not implemented by subclasses.
-        """
-        # raise NotImplementedError
-        raise RuntimeError()
-
-    # @abstractmethod (commented out due to a PyCharm bug)
-    def _eq(self, other):
-        # type: (Any) -> bool
-        """
-        **Abstract**
-
-        Compare with another object for equality.
-
-        :param other: Another object.
-
         :return: True if equal.
-        :rtype: bool
-
-        :raises RuntimeError: Abstract method not implemented by subclasses.
         """
-        # raise NotImplementedError
-        raise RuntimeError()
+        if isinstance(other, type(self)):
+            return self.__internal == other.__internal
+        try:
+            hash(other)
+        except TypeError:
+            return self.__internal == other
+        else:
+            return False
 
-    @classmethod
-    @abstractmethod
-    def _get_relationship(cls, location):
-        # type: (Any) -> BaseRelationship
+    @runtime_final.final
+    def __copy__(self):
+        # type: (BST) -> BST
         """
-        Get relationship at location.
+        Get itself.
 
-        :param location: Location.
-        :type location: collections.abc.Hashable
-
-        :return: Relationship.
-        :rtype: objetto.bases.BaseRelationship
-
-        :raises KeyError: Invalid location.
+        :return: Itself.
         """
-        raise NotImplementedError()
+        return self
 
-    @classmethod
-    @final
-    def deserialize_value(cls, serialized, location=None, **kwargs):
-        # type: (Any, Any, Any) -> Any
+    @property
+    @runtime_final.final
+    def _internal(self):
+        # type: () -> Any
+        """Internal values."""
+        return self.__internal
+
+
+BST = TypeVar("BST", bound=BaseState)  # base state type
+
+
+class BaseRelationship(BaseGeneric, Generic[T]):
+    """Describes a relationship between a structure and its values."""
+
+    __slots__ = (
+        "__converter",
+        "__types",
+        "__subtypes",
+        "__repr",
+        "__eq",
+        "__hash",
+        "__serializer",
+        "__deserializer",
+        "__metadata",
+        "__extra_paths",
+        "__builtin_paths",
+    )
+
+    def __init__(
+        self,
+        converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
+        types=(),  # type: Iterable[Type[T] | Type | str | None] | Type[T] | Type | str | None
+        subtypes=False,  # type: bool
+        repr=True,  # type: bool
+        eq=True,  # type: bool
+        hash=None,  # type: bool | None
+        serializer=None,  # type: Callable[[T], Any] | str | None
+        deserializer=None,  # type: Callable[[Any], T] | str | None
+        metadata=None,  # type: Any
+        extra_paths=(),  # type: Iterable[str]
+        builtin_paths=None,  # type: Iterable[str] | None
+    ):
+        # type: (...) -> None
         """
-        Deserialize value for location.
-
-        :param serialized: Serialized value.
-
-        :param location: Location.
-        :type location: collections.abc.Hashable
-
-        :param kwargs: Keyword arguments to be passed to the deserializers.
-
-        :return: Deserialized value.
-
-        :raises objetto.exceptions.SerializationError: Can't deserialize value.
-        :raises ValueError: Keyword arguments contain reserved keys.
+        :param converter: Callable value converter.
+        :param types: Types for runtime checking.
+        :param subtypes: Whether to accept subtypes.
+        :param repr: Whether to include in the `__repr__` method.
+        :param eq: Whether to include in the `__eq__` method.
+        :param hash: Whether to include in the `__hash__` method.
+        :param serializer: Callable value serializer.
+        :param deserializer: Callable value deserializer.
+        :param metadata: User metadata.
+        :param extra_paths: Extra module paths in fallback order.
+        :param builtin_paths: Builtin module paths in fallback order.
         """
 
-        # Get relationship.
-        relationship = cls._get_relationship(location)
-        if not relationship.serialized:
-            error = (
-                "can't deserialize '{}' object as a value of '{}' since the "
-                "relationship{} does not allow for serialization/deserialization"
-            ).format(
-                type(serialized).__name__,
-                cls.__fullname__,
-                " at location {}".format(location) if location is not None else "",
-            )
-            raise SerializationError(error)
-
-        # Built-in deserializer.
-        deserializer = lambda override_serialized=MISSING: cls.__deserialize_value(
-            serialized,
-            location,
-            relationship,
-            cls._serializable_structure_types,
-            cls.__fullname__,
-            override_serialized=override_serialized,
-            **kwargs
-        )
-        if relationship.deserializer is None:
-            return deserializer()
-
-        # Check kwargs for reserved keys.
-        if "super" in kwargs:
-            error = "can't pass reserved keyword argument 'super' to deserializers"
+        # Ensure safe hash.
+        if hash is None:
+            hash = eq
+        if hash and not eq:
+            error = "can't contribute to the hash if it's not contributing to the eq"
             raise ValueError(error)
-        if "owner" in kwargs:
-            error = "can't pass reserved keyword argument 'owner' to deserializers"
-            raise ValueError(error)
 
-        # Custom deserializer.
-        kwargs = dict(kwargs)
-        kwargs["super"] = deserializer
-        kwargs["owner"] = cls
-        if type(serialized) is dict:
-            serialized = _unescape_serialized_class(serialized)
-        value = run_factory(
-            relationship.deserializer, args=(serialized,), kwargs=kwargs
+        self.__converter = fabricate_value.format_factory(converter)
+        self.__types = type_checking.format_types(types)
+        self.__subtypes = bool(subtypes)
+        self.__repr = bool(repr)
+        self.__eq = bool(eq)
+        self.__hash = bool(hash)
+        self.__serializer = fabricate_value.format_factory(serializer)
+        self.__deserializer = fabricate_value.format_factory(deserializer)
+        self.__metadata = metadata
+        self.__extra_paths = tuple(extra_paths)
+        self.__builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
+
+    @recursive_repr.recursive_repr
+    def __repr__(self):
+        items = self.to_items()
+        return custom_repr.mapping_repr(
+            mapping=dict(items),
+            prefix="{}(".format(type(self).__name__),
+            template="{key}={value}",
+            separator=", ",
+            suffix=")",
+            sorting=True,
+            sort_key=lambda i, _s=self, _i=items: next(iter(zip(*_i))).index(i[0]),
+            key_repr=str,
         )
-        return relationship.fabricate_value(value, factory=False)
 
-    @final
-    def serialize_value(self, value, location=None, **kwargs):
-        # type: (Any, Any, Any) -> Any
-        """
-        Serialize value for location.
+    def __hash__(self):
+        return hash(self.to_items())
 
-        :param value: Value.
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.to_items() == other.to_items()
 
-        :param location: Location.
-        :type location: collections.abc.Hashable
-
-        :param kwargs: Keyword arguments to be passed to the serializers.
-
-        :return: Serialized value.
-
-        :raises objetto.exceptions.SerializationError: Can't serialize value.
-        :raises ValueError: Keyword arguments contain reserved keys.
-        """
-
-        # Get relationship.
-        cls = type(self)
-        relationship = cls._get_relationship(location)
-        if not relationship.serialized:
-            error = (
-                "can't serialize '{}' value contained in a '{}' object since the "
-                "relationship{} does not allow for serialization/deserialization"
-            ).format(
-                type(value).__name__,
-                cls.__fullname__,
-                " at location {}".format(location) if location is not None else "",
-            )
-            raise SerializationError(error)
-
-        # Built-in serializer
-        serializer = lambda override_value=MISSING: self.__serialize_value(
+    def convert(self, value):
+        # type: (Any) -> T
+        return fabricate_value.fabricate_value(
+            self.__converter,
             value,
-            relationship,
-            cls._serializable_structure_types,
-            override_value=override_value,
-            **kwargs
+            extra_paths=self.__extra_paths,
+            builtin_paths=self.__builtin_paths,
         )
-        if relationship.serializer is None:
-            return serializer()
 
-        # Check kwargs for reserved keys.
-        if "super" in kwargs:
-            error = "can't pass reserved keyword argument 'super' to serializers"
-            raise ValueError(error)
-        if "owner" in kwargs:
-            error = "can't pass reserved keyword argument 'owner' to deserializers"
-            raise ValueError(error)
-        if "instance" in kwargs:
-            error = "can't pass reserved keyword argument 'instance' to deserializers"
-            raise ValueError(error)
-
-        # Custom serializer.
-        kwargs = dict(kwargs)
-        kwargs["super"] = serializer
-        kwargs["owner"] = cls
-        kwargs["instance"] = self
-        serialized_value = run_factory(
-            relationship.serializer, args=(value,), kwargs=kwargs
+    def accepts_type(self, value):
+        # type: (Any) -> bool
+        return type_checking.is_instance(
+            value,
+            self.__types,
+            subtypes=self.__subtypes,
+            extra_paths=self.__extra_paths,
+            builtin_paths=self.__builtin_paths,
         )
-        if type(serialized_value) is dict:
-            serialized_value = _escape_serialized_class(serialized_value)
-        return serialized_value
 
-    @classmethod
-    @abstractmethod
-    def deserialize(cls, serialized, **kwargs):
-        # type: (Type[_BS], Any, Any) -> _BS
-        """
-        Deserialize.
+    def check_type(self, value):
+        # type: (Any) -> T
+        if self.__types:
+            return type_checking.assert_is_instance(
+                value,
+                self.__types,
+                subtypes=self.__subtypes,
+                extra_paths=self.__extra_paths,
+                builtin_paths=self.__builtin_paths,
+            )
+        else:
+            return value
 
-        :param serialized: Serialized.
+    def process(self, value):
+        # type: (Any) -> T
+        return self.check_type(self.convert(value))
 
-        :param kwargs: Keyword arguments to be passed to the deserializers.
+    def serialize(self, value, *args, **kwargs):
+        # type: (T, *Any, **Any) -> Any
+        return fabricate_value.fabricate_value(
+            self.__serializer,
+            value,
+            args=args,
+            kwargs=kwargs,
+            extra_paths=self.__extra_paths,
+            builtin_paths=self.__builtin_paths,
+        )
 
-        :return: Deserialized.
-        :rtype: objetto.bases.BaseStructure
+    def deserialize(self, serialized, *args, **kwargs):
+        # type: (Any, *Any, **Any) -> T
+        return fabricate_value.fabricate_value(
+            self.__deserializer,
+            serialized,
+            args=args,
+            kwargs=kwargs,
+            extra_paths=self.__extra_paths,
+            builtin_paths=self.__builtin_paths,
+        )
 
-        :raises objetto.exceptions.SerializationError: Can't deserialize.
-        """
-        raise NotImplementedError()
+    def to_items(self):
+        # type: () -> tuple[tuple[str, Any], ...]
+        return (
+            ("converter", self.converter),
+            ("types", self.types),
+            ("subtypes", self.subtypes),
+            ("repr", self.repr),
+            ("eq", self.eq),
+            ("hash", self.hash),
+            ("serializer", self.serializer),
+            ("deserializer", self.deserializer),
+            ("metadata", self.metadata),
+            ("extra_paths", self.extra_paths),
+            ("builtin_paths", self.builtin_paths),
+        )
 
-    @abstractmethod
-    def serialize(self, **kwargs):
-        # type: (Any) -> Any
-        """
-        Serialize.
+    def to_dict(self):
+        # type: () -> dict[str, Any]
+        return dict(self.to_items())
 
-        :param kwargs: Keyword arguments to be passed to the serializers.
-
-        :return: Serialized.
-
-        :raises objetto.exceptions.SerializationError: Can't serialize.
-        """
-        raise NotImplementedError()
+    def update(self, *args, **kwargs):
+        # type: (RT, **Any) -> RT
+        updated_kwargs = self.to_dict()
+        updated_kwargs.update(*args, **kwargs)
+        return cast(RT, type(self)(**updated_kwargs))
 
     @property
-    @abstractmethod
-    def _state(self):
-        # type: () -> BaseState
-        """
-        State.
-
-        :rtype: objetto.bases.BaseState
-        """
-        raise NotImplementedError()
-
-
-# noinspection PyAbstractClass
-class BaseInteractiveStructure(BaseStructure[T], BaseInteractiveCollection[T]):
-    """
-    Base interactive structure.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseStructure`
-      - :class:`objetto.bases.BaseInteractiveCollection`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseInteractiveAuxiliaryStructure`
-      - :class:`objetto.bases.BaseInteractiveData`
-
-    Features:
-      - Is an interactive collection/structure.
-    """
-
-    __slots__ = ()
-
-
-# noinspection PyAbstractClass
-class BaseMutableStructure(BaseStructure[T], BaseMutableCollection[T]):
-    """
-    Base mutable structure.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseStructure`
-      - :class:`objetto.bases.BaseMutableCollection`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseMutableAuxiliaryStructure`
-      - :class:`objetto.bases.BaseMutableObject`
-
-    Features:
-      - Is a mutable collection/structure.
-    """
-
-    __slots__ = ()
-
-
-class BaseAuxiliaryStructureMeta(BaseStructureMeta):
-    """
-    Metaclass for :class:`objetto.bases.BaseAuxiliaryStructure`.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseStructureMeta`
-
-    Inherited by:
-      - :class:`objetto.bases.BaseAuxiliaryDataMeta`
-      - :class:`objetto.bases.BaseAuxiliaryObjectMeta`
-      - :class:`objetto.bases.BaseDictStructureMeta`
-      - :class:`objetto.bases.BaseListStructureMeta`
-      - :class:`objetto.bases.BaseSetStructureMeta`
-
-    Features:
-      - Defines a base auxiliary type.
-      - Enforces correct type for :attr:`objetto.bases.BaseAuxiliaryStructure.\
-_relationship`.
-    """
-
-    def __init__(cls, name, bases, dct):
-        super(BaseAuxiliaryStructureMeta, cls).__init__(name, bases, dct)
-
-        # Check relationship type.
-        relationship = getattr(cls, "_relationship")
-        relationship_type = cls._relationship_type
-        assert_is_instance(relationship, relationship_type, subtypes=False)
+    def converter(self):
+        # type: () -> Callable[[Any], T] | Type[T] | str | None
+        return self.__converter
 
     @property
-    @abstractmethod
-    def _base_auxiliary_type(cls):
-        # type: () -> Type[BaseAuxiliaryStructure]
-        """
-        Base auxiliary structure type.
+    def types(self):
+        # type: () -> tuple[Type | str, ...]
+        """Types for runtime checking."""
+        return self.__types
 
-        :rtype: type[objetto.bases.BaseAuxiliaryStructure]
-        """
+    @property
+    def subtypes(self):
+        # type: () -> bool
+        """Whether to accept subtypes."""
+        return self.__subtypes
+
+    @property
+    def repr(self):
+        # type: () -> bool
+        """Whether to include in the `__repr__` method."""
+        return self.__repr
+
+    @property
+    def eq(self):
+        # type: () -> bool
+        """Whether to include in the `__eq__` method."""
+        return self.__eq
+
+    @property
+    def hash(self):
+        # type: () -> bool
+        """Whether to include in the `__hash__` method."""
+        return self.__hash
+
+    @property
+    def serializer(self):
+        # type: () -> Callable[[T], Any] | str | None
+        """Callable value serializer."""
+        return self.__serializer
+
+    @property
+    def deserializer(self):
+        # type: () -> Callable[[Any], T] | str | None
+        """Callable value deserializer."""
+        return self.__deserializer
+
+    @property
+    def metadata(self):
+        # type: () -> Any
+        """User metadata."""
+        return self.__metadata
+
+    @property
+    def extra_paths(self):
+        # type: () -> tuple[str, ...]
+        """Extra module paths in fallback order."""
+        return self.__extra_paths
+
+    @property
+    def builtin_paths(self):
+        # type: () -> tuple[str, ...] | None
+        """Builtin module paths in fallback order."""
+        return self.__builtin_paths
+
+
+RT = TypeVar("RT", bound=BaseRelationship)  # relationship type
+
+
+class BaseStructureMeta(BaseCollectionMeta):
+    """Metaclass for :class:`BaseStructure`."""
+
+
+class BaseStructure(
+    six.with_metaclass(BaseStructureMeta, BaseProtectedCollection[T_co], Generic[T_co, BST, LT, RT])
+):
+    """Base structure."""
+
+    __slots__ = ()
+
+    @classmethod
+    @abc.abstractmethod
+    def deserialize(cls, serialized, *args, **kwargs):
+        # type: (Type[BS], Any, *Any, **Any) -> BS
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def serialize(self, *args, **kwargs):
+        # type: (*Any, **Any) -> Any
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _get_state(self):
+        # type: () -> BST
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _get_relationship(self, location):
+        # type: (LT) -> RT
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _get_value(self, location):
+        # type: (LT) -> T_co
         raise NotImplementedError()
 
 
-# noinspection PyAbstractClass
-class BaseAuxiliaryStructure(
-    with_metaclass(BaseAuxiliaryStructureMeta, BaseStructure[T])
-):
-    """
-    Structure with a single relationship for all locations.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseStructure`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseInteractiveAuxiliaryStructure`
-      - :class:`objetto.bases.BaseMutableAuxiliaryStructure`
-      - :class:`objetto.bases.BaseDictStructure`
-      - :class:`objetto.bases.BaseListStructure`
-      - :class:`objetto.bases.BaseSetStructure`
-      - :class:`objetto.bases.BaseAuxiliaryData`
-      - :class:`objetto.bases.BaseAuxiliaryObject`
-    """
-
-    __slots__ = ()
-
-    _relationship = BaseRelationship()
-    """
-    **Class Attribute**
-
-    Relationship for all locations.
-
-    :type: objetto.bases.BaseRelationship
-    """
-
-    def find_with_attributes(self, **attributes):
-        # type: (Any) -> Any
-        """
-        Find first value that matches unique attribute values.
-
-        :param attributes: Attributes to match.
-
-        :return: Value that has matching attributes.
-
-        :raises ValueError: No attributes provided or no match found.
-        """
-        return self._state.find_with_attributes(**attributes)
-
-    @classmethod
-    @final
-    def _get_relationship(cls, location=None):
-        # type: (Any) -> BaseRelationship
-        """
-        Get relationship.
-
-        :param location: Location.
-        :type location: collections.abc.Hashable
-
-        :return: Relationship.
-        :rtype: objetto.bases.BaseRelationship
-        """
-        return cast("BaseRelationship", cls._relationship)
+BS = TypeVar("BS", bound=BaseStructure)
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveAuxiliaryStructure(
-    BaseAuxiliaryStructure[T],
-    BaseInteractiveStructure[T],
-):
-    """
-    Base interactive auxiliary structure.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseAuxiliaryStructure`
-      - :class:`objetto.bases.BaseInteractiveStructure`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseInteractiveAuxiliaryData`
-      - :class:`objetto.bases.BaseInteractiveDictStructure`
-      - :class:`objetto.bases.BaseInteractiveListStructure`
-      - :class:`objetto.bases.BaseInteractiveSetStructure`
-    """
+class BaseInteractiveStructure(BaseStructure[T_co, BST, LT, RT], BaseInteractiveCollection[T_co]):
+    """Base interactive structure."""
 
     __slots__ = ()
 
 
 # noinspection PyAbstractClass
-class BaseMutableAuxiliaryStructure(
-    BaseAuxiliaryStructure[T],
-    BaseMutableStructure[T],
-):
-    """
-    Base mutable auxiliary structure.
-
-    Inherits from:
-      - :class:`objetto.bases.BaseAuxiliaryStructure`
-      - :class:`objetto.bases.BaseMutableStructure`
-
-    Inherited By:
-      - :class:`objetto.bases.BaseMutableAuxiliaryObject`
-      - :class:`objetto.bases.BaseMutableDictStructure`
-      - :class:`objetto.bases.BaseMutableListStructure`
-      - :class:`objetto.bases.BaseMutableSetStructure`
-    """
+class BaseMutableStructure(BaseStructure[T_co, BST, LT, RT], BaseMutableCollection[T_co]):
+    """Base mutable structure."""
 
     __slots__ = ()

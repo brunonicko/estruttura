@@ -7,15 +7,23 @@ from tippo import Any, TypeVar, Iterator, Sequence, MutableSequence, Iterable, o
 from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
 
 
-T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
+T = TypeVar("T")  # value type
+T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
 class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
     """Base list collection."""
 
     __slots__ = ()
-    __hash__ = None  # type: ignore
+
+    def __hash__(self):
+        """
+        Prevent hashing (not hashable by default).
+
+        :raises TypeError: Not hashable.
+        """
+        error = "unhashable type: {!r}".format(type(self).__name__)
+        raise TypeError(error)
 
     @abc.abstractmethod
     def __eq__(self, other):
@@ -107,6 +115,10 @@ class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
         :raises IndexError: Slice is noncontinuous.
         """
         raise NotImplementedError()
+
+
+# noinspection PyCallByClass
+type.__setattr__(BaseList, "__hash__", None)  # force non-hashable
 
 
 class BaseProtectedList(BaseList[T], BaseProtectedCollection[T]):

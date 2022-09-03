@@ -1,6 +1,13 @@
 import pytest
 
 
+def test_import():
+    import estruttura
+
+    for member_name in estruttura.__all__:
+        getattr(estruttura, member_name)
+
+
 def test_import_bases():
     import estruttura.bases
 

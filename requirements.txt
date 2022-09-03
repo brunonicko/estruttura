@@ -2,3 +2,4 @@ tippo
 basicco
 slotted
 six
+pyrsistent

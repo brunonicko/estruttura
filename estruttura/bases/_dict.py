@@ -19,9 +19,9 @@ from tippo import (
 from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
 
 
-KT = TypeVar("KT")
-VT = TypeVar("VT")
-VT_co = TypeVar("VT_co", covariant=True)
+KT = TypeVar("KT")  # key type
+VT = TypeVar("VT")  # value type
+VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
 
 
 MISSING = object()
@@ -31,7 +31,15 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
     """Base dictionary collection."""
 
     __slots__ = ()
-    __hash__ = None  # type: ignore
+
+    def __hash__(self):
+        """
+        Prevent hashing (not hashable by default).
+
+        :raises TypeError: Not hashable.
+        """
+        error = "unhashable type: {!r}".format(type(self).__name__)
+        raise TypeError(error)
 
     @abc.abstractmethod
     def __eq__(self, other):
@@ -139,6 +147,10 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
         return ValuesView(self)
 
 
+# noinspection PyCallByClass
+type.__setattr__(BaseDict, "__hash__", None)  # force non-hashable
+
+
 class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
     """Base protected dictionary collection."""
 
@@ -146,7 +158,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @abc.abstractmethod
     def _discard(self, key):
-        # type: (BPD, KT) -> BPD
+        # type: (PDT, KT) -> PDT
         """
         Discard key if it exists.
 
@@ -157,7 +169,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @abc.abstractmethod
     def _remove(self, key):
-        # type: (BPD, KT) -> BPD
+        # type: (PDT, KT) -> PDT
         """
         Delete existing key.
 
@@ -169,7 +181,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @abc.abstractmethod
     def _set(self, key, value):
-        # type: (BPD, KT, VT) -> BPD
+        # type: (PDT, KT, VT) -> PDT
         """
         Set value for key.
 
@@ -181,17 +193,17 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPD, Mapping[KT, VT], **VT) -> BPD
+        # type: (PDT, Mapping[KT, VT], **VT) -> PDT
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPD, Iterable[tuple[KT, VT]], **VT) -> BPD
+        # type: (PDT, Iterable[tuple[KT, VT]], **VT) -> PDT
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BPD, **VT) -> BPD
+        # type: (PDT, **VT) -> PDT
         pass
 
     @abc.abstractmethod
@@ -205,7 +217,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
         raise NotImplementedError()
 
 
-BPD = TypeVar("BPD", bound=BaseProtectedDict)
+PDT = TypeVar("PDT", bound=BaseProtectedDict)  # protected dict type
 
 
 # noinspection PyAbstractClass
@@ -216,7 +228,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 
     @runtime_final.final
     def discard(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDT, KT) -> IDT
         """
         Discard key if it exists.
 
@@ -227,7 +239,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 
     @runtime_final.final
     def remove(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDT, KT) -> IDT
         """
         Delete existing key.
 
@@ -239,7 +251,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 
     @runtime_final.final
     def set(self, key, value):
-        # type: (BID, KT, VT) -> BID
+        # type: (IDT, KT, VT) -> IDT
         """
         Set value for key.
 
@@ -251,17 +263,17 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, Mapping[KT, VT], **VT) -> BID
+        # type: (IDT, Mapping[KT, VT], **VT) -> IDT
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, Iterable[tuple[KT, VT]], **VT) -> BID
+        # type: (IDT, Iterable[tuple[KT, VT]], **VT) -> IDT
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BID, **VT) -> BID
+        # type: (IDT, **VT) -> IDT
         pass
 
     @runtime_final.final
@@ -275,7 +287,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
         return self._update(*args, **kwargs)
 
 
-BID = TypeVar("BID", bound=BaseInteractiveDict)
+IDT = TypeVar("IDT", bound=BaseInteractiveDict)  # interactive dict type
 
 
 class _SupportsKeysAndGetItem(Protocol[KT, VT_co]):

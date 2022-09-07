@@ -53,7 +53,7 @@ class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
 
     @overload
     def __getitem__(self, index):
-        # type: (slice) -> Sequence[T_co]
+        # type: (slice) -> MutableSequence[T_co]
         pass
 
     @abc.abstractmethod

@@ -194,28 +194,6 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
         """
         raise NotImplementedError()
 
-    @classmethod
-    @abc.abstractmethod
-    def _from_iterable(cls, iterable):
-        # type: (Iterable) -> BaseSet
-        """
-        Make set from iterable.
-
-        :param iterable: Iterable.
-        :return: Set.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def _hash(self):
-        # type: () -> int
-        """
-        Get hash.
-
-        :return: Hash.
-        """
-        raise NotImplementedError()
-
     @abc.abstractmethod
     def isdisjoint(self, iterable):
         # type: (Iterable) -> bool

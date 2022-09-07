@@ -1,5 +1,3 @@
-"""Base classes."""
-
 from ._bases import (
     BaseMeta,
     Base,

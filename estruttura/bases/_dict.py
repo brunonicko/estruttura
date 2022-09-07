@@ -193,7 +193,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (PDT, Mapping[KT, VT], **VT) -> PDT
+        # type: (PDT, _SupportsKeysAndGetItem[KT, VT], **VT) -> PDT
         pass
 
     @overload

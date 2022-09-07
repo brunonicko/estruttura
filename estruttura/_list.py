@@ -1,13 +1,21 @@
 import itertools
 
 import pyrsistent
+import six
 from basicco import runtime_final, recursive_repr, custom_repr
 from tippo import Any, TypeVar, Iterable, Iterator, overload
 from pyrsistent.typing import PVector
 
-from .bases import BaseProtectedList, BaseInteractiveList
+from .bases import BaseList, BaseProtectedList, BaseInteractiveList, BaseMutableList
 from .utils import resolve_index, resolve_continuous_slice, pre_move
-from ._bases import BaseState, BaseRelationship, BaseStructure
+from ._bases import (
+    BaseState,
+    BaseRelationship,
+    BaseStructure,
+    BaseProtectedStructure,
+    BaseInteractiveStructure,
+    BaseMutableStructure,
+)
 
 
 T = TypeVar("T")  # value type
@@ -94,7 +102,7 @@ class ListState(BaseState[T, PVector[T]], BaseInteractiveList[T]):
 
     @overload
     def __getitem__(self, index):
-        # type: (slice) -> ListState[T]
+        # type: (slice) -> list[T]
         pass
 
     def __getitem__(self, index):
@@ -104,7 +112,7 @@ class ListState(BaseState[T, PVector[T]], BaseInteractiveList[T]):
         :return: Value/values.
         """
         if isinstance(index, slice):
-            return self._make(self._internal[index])
+            return list(self._internal[index])
         else:
             return self._internal[index]
 
@@ -136,9 +144,7 @@ class ListState(BaseState[T, PVector[T]], BaseInteractiveList[T]):
         elif index == 0:
             return self._make(pyrsistent.pvector(values) + self._internal)
         else:
-            return self._make(
-                self._internal[:index] + pyrsistent.pvector(values) + self._internal[index:]
-            )
+            return self._make(self._internal[:index] + pyrsistent.pvector(values) + self._internal[index:])
 
     def _append(self, value):
         # type: (LS, T) -> LS
@@ -202,9 +208,7 @@ class ListState(BaseState[T, PVector[T]], BaseInteractiveList[T]):
         elif post_index == 0:
             return self._make(pyrsistent.pvector(values) + internal)
         else:
-            return self._make(
-                internal[:post_index] + pyrsistent.pvector(values) + internal[post_index:]
-            )
+            return self._make(internal[:post_index] + pyrsistent.pvector(values) + internal[post_index:])
 
     def _delete(self, item):
         # type: (LS, slice | int) -> LS
@@ -299,7 +303,58 @@ class ListState(BaseState[T, PVector[T]], BaseInteractiveList[T]):
 LS = TypeVar("LS", bound=ListState)
 
 
-class BaseListStructure(BaseStructure[T_co, ListState[T_co], int, RT], BaseProtectedList[T_co]):
+# noinspection PyAbstractClass
+class BaseListStructure(BaseStructure[T_co, T_co, ListState[T_co], int, RT], BaseList[T_co]):
     """Base list structure."""
+
+    __slots__ = ()
+
+    @runtime_final.final
+    def get_value(self, location):
+        # type: (int) -> T_co
+        """
+        Get value at location.
+
+        :param location: Location.
+        :return: Value.
+        :raises KeyError: No value at location.
+        """
+        try:
+            return self[location]
+        except IndexError as e:
+            exc = KeyError(e)
+            six.raise_from(exc, None)
+            raise exc
+
+
+# noinspection PyAbstractClass
+class BaseProtectedListStructure(
+    BaseListStructure[T_co, RT],
+    BaseProtectedStructure[T_co, T_co, ListState[T_co], int, RT],
+    BaseProtectedList[T_co],
+):
+    """Base interactive list structure."""
+
+    __slots__ = ()
+
+
+# noinspection PyAbstractClass
+class BaseInteractiveListStructure(
+    BaseProtectedListStructure[T_co, RT],
+    BaseInteractiveStructure[T_co, T_co, ListState[T_co], int, RT],
+    BaseInteractiveList[T_co],
+):
+    """Base interactive list structure."""
+
+    __slots__ = ()
+
+
+# noinspection PyAbstractClass
+class BaseMutableListStructure(
+    BaseProtectedListStructure[T_co, RT],
+    BaseMutableStructure[T_co, T_co, ListState[T_co], int, RT],
+    BaseMutableList[T_co],
+):
+    """Base mutable list structure."""
 
     __slots__ = ()

@@ -7,6 +7,7 @@ from tippo import Any, Callable, Type, Iterable, Generic, TypeVar, Hashable, cas
 from .bases import (
     BaseHashable,
     BaseCollectionMeta,
+    BaseCollection,
     BaseGeneric,
     BaseProtectedCollection,
     BaseInteractiveCollection,
@@ -14,8 +15,9 @@ from .bases import (
 )
 
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")  # contained value type
+T_co = TypeVar("T_co", covariant=True)  # contained covariant value type
+VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
 LT = TypeVar("LT", bound=Hashable)  # location type
 IT = TypeVar("IT")  # internal type
 
@@ -353,7 +355,7 @@ class BaseStructureMeta(BaseCollectionMeta):
 
 
 class BaseStructure(
-    six.with_metaclass(BaseStructureMeta, BaseProtectedCollection[T_co], Generic[T_co, BST, LT, RT])
+    six.with_metaclass(BaseStructureMeta, BaseCollection[T_co], Generic[T_co, VT_co, BST, LT, RT])
 ):
     """Base structure."""
 
@@ -361,28 +363,57 @@ class BaseStructure(
 
     @classmethod
     @abc.abstractmethod
-    def deserialize(cls, serialized, *args, **kwargs):
-        # type: (Type[BS], Any, *Any, **Any) -> BS
+    def deserialize(cls, serialized):
+        # type: (Type[BS], Any) -> BS
+        """
+        Deserialize.
+
+        :return: Deserialized.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def serialize(self, *args, **kwargs):
-        # type: (*Any, **Any) -> Any
+    def serialize(self):
+        # type: () -> Any
+        """
+        Serialize.
+
+        :return: Serialized.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def _get_state(self):
+    def get_state(self):
         # type: () -> BST
+        """
+        Get state.
+
+        :return: State.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def _get_relationship(self, location):
+    def get_relationship(self, location):
         # type: (LT) -> RT
+        """
+        Get relationship at location.
+
+        :param location: Location.
+        :return: Relationship.
+        :raises KeyError: No relationship at location.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
-    def _get_value(self, location):
-        # type: (LT) -> T_co
+    def get_value(self, location):
+        # type: (LT) -> VT_co
+        """
+        Get value at location.
+
+        :param location: Location.
+        :return: Value.
+        :raises KeyError: No value at location.
+        """
         raise NotImplementedError()
 
 
@@ -390,14 +421,21 @@ BS = TypeVar("BS", bound=BaseStructure)
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveStructure(BaseStructure[T_co, BST, LT, RT], BaseInteractiveCollection[T_co]):
+class BaseProtectedStructure(BaseStructure[T_co, VT_co, BST, LT, RT], BaseProtectedCollection[T_co]):
     """Base interactive structure."""
 
     __slots__ = ()
 
 
 # noinspection PyAbstractClass
-class BaseMutableStructure(BaseStructure[T_co, BST, LT, RT], BaseMutableCollection[T_co]):
+class BaseInteractiveStructure(BaseProtectedStructure[T_co, VT_co, BST, LT, RT], BaseInteractiveCollection[T_co]):
+    """Base interactive structure."""
+
+    __slots__ = ()
+
+
+# noinspection PyAbstractClass
+class BaseMutableStructure(BaseProtectedStructure[T_co, VT_co, BST, LT, RT], BaseMutableCollection[T_co]):
     """Base mutable structure."""
 
     __slots__ = ()

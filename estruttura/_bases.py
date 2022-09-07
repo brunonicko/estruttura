@@ -354,9 +354,7 @@ class BaseStructureMeta(BaseCollectionMeta):
     """Metaclass for :class:`BaseStructure`."""
 
 
-class BaseStructure(
-    six.with_metaclass(BaseStructureMeta, BaseCollection[T_co], Generic[T_co, VT_co, BST, LT, RT])
-):
+class BaseStructure(six.with_metaclass(BaseStructureMeta, BaseCollection[T_co], Generic[T_co, VT_co, BST, LT, RT])):
     """Base structure."""
 
     __slots__ = ()

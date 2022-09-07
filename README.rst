@@ -23,4 +23,4 @@ Estruttura
 
 Overview
 --------
-`Estruttura`.
+Abstract data structure classes.

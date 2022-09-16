@@ -294,7 +294,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
 
     @abc.abstractmethod
     def _add(self, value):
-        # type: (PST, T) -> PST
+        # type: (BPS, T) -> BPS
         """
         Add value.
 
@@ -305,7 +305,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
 
     @abc.abstractmethod
     def _discard(self, *values):
-        # type: (PST, T) -> PST
+        # type: (BPS, T) -> BPS
         """
         Discard value(s).
 
@@ -317,7 +317,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
 
     @abc.abstractmethod
     def _remove(self, *values):
-        # type: (PST, T) -> PST
+        # type: (BPS, T) -> BPS
         """
         Remove existing value(s).
 
@@ -332,7 +332,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
 
     @abc.abstractmethod
     def _replace(self, old_value, new_value):
-        # type: (PST, T, T) -> PST
+        # type: (BPS, T, T) -> BPS
         """
         Replace existing value with a new one.
 
@@ -345,7 +345,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
 
     @abc.abstractmethod
     def _update(self, iterable):
-        # type: (PST, Iterable[T]) -> PST
+        # type: (BPS, Iterable[T]) -> BPS
         """
         Update with iterable.
 
@@ -355,7 +355,7 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
         raise NotImplementedError()
 
 
-PST = TypeVar("PST", bound=BaseProtectedSet)  # protected set type
+BPS = TypeVar("BPS", bound=BaseProtectedSet)  # base protected set type
 
 
 # noinspection PyAbstractClass
@@ -366,7 +366,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 
     @runtime_final.final
     def add(self, value):
-        # type: (IST, T) -> IST
+        # type: (BIS, T) -> BIS
         """
         Add value.
 
@@ -377,7 +377,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 
     @runtime_final.final
     def discard(self, *values):
-        # type: (IST, T) -> IST
+        # type: (BIS, T) -> BIS
         """
         Discard value(s).
 
@@ -389,7 +389,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 
     @runtime_final.final
     def remove(self, *values):
-        # type: (IST, T) -> IST
+        # type: (BIS, T) -> BIS
         """
         Remove existing value(s).
 
@@ -402,7 +402,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 
     @runtime_final.final
     def replace(self, old_value, new_value):
-        # type: (IST, T, T) -> IST
+        # type: (BIS, T, T) -> BIS
         """
         Replace existing value with a new one.
 
@@ -415,7 +415,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 
     @runtime_final.final
     def update(self, iterable):
-        # type: (IST, Iterable[T]) -> IST
+        # type: (BIS, Iterable[T]) -> BIS
         """
         Update with iterable.
 
@@ -425,7 +425,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
         return self._update(iterable)
 
 
-IST = TypeVar("IST", bound=BaseInteractiveSet)  # interactive set type
+BIS = TypeVar("BIS", bound=BaseInteractiveSet)  # base interactive set type
 
 
 class BaseMutableSet(BaseProtectedSet[T], BaseMutableCollection[T], slotted.SlottedMutableSet[T]):

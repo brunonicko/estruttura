@@ -2,7 +2,7 @@ import abc
 
 import slotted
 from basicco import runtime_final
-from tippo import Any, TypeVar, Iterator, Sequence, MutableSequence, Iterable, overload
+from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload
 
 from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
 
@@ -220,7 +220,7 @@ class BaseProtectedList(BaseList[T], BaseProtectedCollection[T]):
         raise NotImplementedError()
 
 
-BPL = TypeVar("BPL", bound=BaseProtectedList)
+BPL = TypeVar("BPL", bound=BaseProtectedList)  # base protected list type
 
 
 # noinspection PyAbstractClass
@@ -323,7 +323,7 @@ class BaseInteractiveList(BaseProtectedList[T], BaseInteractiveCollection[T]):
         return self._update(index, *values)
 
 
-BIL = TypeVar("BIL", bound=BaseInteractiveList)
+BIL = TypeVar("BIL", bound=BaseInteractiveList)  # base interactive list type
 
 
 class BaseMutableList(BaseProtectedList[T], BaseMutableCollection[T], slotted.SlottedMutableSequence[T]):

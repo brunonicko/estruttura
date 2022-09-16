@@ -1,5 +1,5 @@
-tippo
-basicco
-slotted
-six
-pyrsistent
+tippo>=3,<4
+basicco>=7,<8
+slotted>=4,<5
+six>=1,<2
+pyrsistent>=0,<1

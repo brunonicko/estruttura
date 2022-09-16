@@ -1,8 +1,6 @@
 from ._bases import (
     BaseMeta,
     Base,
-    BaseGenericMeta,
-    BaseGeneric,
     BaseHashable,
     BaseSized,
     BaseIterable,
@@ -35,8 +33,6 @@ from ._set import (
 __all__ = [
     "BaseMeta",
     "Base",
-    "BaseGenericMeta",
-    "BaseGeneric",
     "BaseHashable",
     "BaseSized",
     "BaseIterable",

@@ -9,7 +9,7 @@ def docs(c):
 @task
 def tests(c):
     c.run("python -m pytest -vv -rs tests")
-    c.run("python -m pytest --doctest-modules -vv -rs README.rst")
+    # c.run("python -m pytest --doctest-modules -vv -rs README.rst")
 
 
 @task

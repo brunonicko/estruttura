@@ -3,18 +3,25 @@ import inspect
 
 import six
 import slotted
-from basicco import explicit_hash, runtime_final, qualname
-from tippo import Any, TypeVar, Iterator
+from basicco import explicit_hash, runtime_final, qualname, namespace
+from tippo import TypeVar, Iterator
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
-class BaseMeta(slotted.SlottedABCMeta, explicit_hash.ExplicitHashMeta, runtime_final.FinalizedMeta):
+class BaseMeta(
+    slotted.SlottedABCGenericMeta,
+    explicit_hash.ExplicitHashMeta,
+    runtime_final.FinalizedMeta,
+    namespace.NamespacedMeta,
+):
     """
     Metaclass for :class:`Base`.
 
     Features:
+      - Implements abstract method checking and support for generics.
+      - Protected namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Forces `__hash__` to be declared if `__eq__` was declared.
       - Automatically decorates `__init__` methods to update the `initializing` tag.
@@ -23,11 +30,35 @@ class BaseMeta(slotted.SlottedABCMeta, explicit_hash.ExplicitHashMeta, runtime_f
       - Implements `__fullname__` class property for back-porting qualified name.
     """
 
+    @staticmethod
+    def __new__(mcs, name, bases, dct, **kwargs):
+        dct = dict(dct)
+        dct["__locked__"] = False
+        return super(BaseMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+
+    def __init__(cls, name, bases, dct, **kwargs):
+        super(BaseMeta, cls).__init__(name, bases, dct, **kwargs)
+        cls.__locked__ = True
+
     @property
     def __fullname__(cls):
         # type: () -> str
         """Qualified name."""
         return qualname.qualname(cls, fallback=cls.__name__)
+
+    def __setattr__(cls, name, value):
+        """Prevent setting class attributes."""
+        if cls.__locked__:
+            error = "{!r} class attributes are read-only".format(cls.__name__)
+            raise AttributeError(error)
+        super(BaseMeta, cls).__setattr__(name, value)
+
+    def __delattr__(cls, name):
+        """Prevent deleting class attributes."""
+        if cls.__locked__:
+            error = "{!r} class attributes are read-only".format(cls.__name__)
+            raise AttributeError(error)
+        super(BaseMeta, cls).__delattr__(name)
 
 
 class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC)):
@@ -36,6 +67,8 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC)):
 
     Features:
       - Defines a `__weakref__` slot.
+      - Implements abstract method checking and support for generics.
+      - Protected namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Forces `__hash__` to be declared if `__eq__` was declared.
       - Default implementation of `__copy__` raises an error.
@@ -95,28 +128,6 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC)):
         return sorted(member_names)
 
 
-class BaseGenericMeta(BaseMeta, slotted.SlottedABCGenericMeta):  # type: ignore
-    """
-    Metaclass for generic :class:`BaseGeneric` classes.
-
-    Features:
-      - Allows for generic bases in Python 2.7.
-    """
-
-
-if slotted.SlottedABCGenericMeta is type:
-    BaseGenericMeta = slotted.SlottedABCGenericMeta  # type: ignore  # noqa
-
-
-class BaseGeneric(six.with_metaclass(BaseGenericMeta, Base)):
-    """
-    Generic base class.
-
-    Features:
-        - Allows for generic bases in Python 2.7.
-    """
-
-
 class BaseHashable(Base, slotted.SlottedHashable):
     """
     Base hashable.
@@ -150,7 +161,7 @@ class BaseSized(Base, slotted.SlottedSized):
         raise NotImplementedError()
 
 
-class BaseIterable(BaseGeneric, slotted.SlottedIterable[T_co]):
+class BaseIterable(Base, slotted.SlottedIterable[T_co]):
     """
     Base iterable.
 
@@ -166,7 +177,7 @@ class BaseIterable(BaseGeneric, slotted.SlottedIterable[T_co]):
         raise NotImplementedError()
 
 
-class BaseContainer(BaseGeneric, slotted.SlottedContainer[T_co]):
+class BaseContainer(Base, slotted.SlottedContainer[T_co]):
     """
     Base container.
 
@@ -182,7 +193,7 @@ class BaseContainer(BaseGeneric, slotted.SlottedContainer[T_co]):
         raise NotImplementedError()
 
 
-class BaseCollectionMeta(BaseGenericMeta):
+class BaseCollectionMeta(BaseMeta):
     """Metaclass for :class:`BaseCollection`."""
 
 
@@ -222,7 +233,7 @@ class BaseProtectedCollection(BaseCollection[T_co]):
 
     @abc.abstractmethod
     def _clear(self):
-        # type: (PCT) -> PCT
+        # type: (BPC) -> BPC
         """
         Clear.
 
@@ -231,7 +242,7 @@ class BaseProtectedCollection(BaseCollection[T_co]):
         raise NotImplementedError()
 
 
-PCT = TypeVar("PCT", bound=BaseProtectedCollection)  # protected collection type
+BPC = TypeVar("BPC", bound=BaseProtectedCollection)  # base protected collection type
 
 
 # noinspection PyAbstractClass
@@ -248,7 +259,7 @@ class BaseInteractiveCollection(BaseProtectedCollection[T_co]):
 
     @runtime_final.final
     def clear(self):
-        # type: (ICT) -> ICT
+        # type: (BIC) -> BIC
         """
         Clear.
 
@@ -257,7 +268,7 @@ class BaseInteractiveCollection(BaseProtectedCollection[T_co]):
         return self._clear()
 
 
-ICT = TypeVar("ICT", bound="BaseInteractiveCollection")  # interactive collection type
+BIC = TypeVar("BIC", bound="BaseInteractiveCollection")  # base interactive collection type
 
 
 # noinspection PyAbstractClass

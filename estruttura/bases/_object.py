@@ -2,10 +2,10 @@ import abc
 import collections
 
 import six
-import enum
-from basicco import runtime_final, mapping_proxy, fabricate_value
-from tippo import Any, Callable, TypeVar, Tuple, Protocol, Iterable, Generic, Type, TypeAlias, overload
+from basicco import runtime_final, fabricate_value, custom_repr, recursive_repr
+from tippo import Any, Callable, TypeVar, Tuple, Protocol, Iterable, Generic, Iterator, Type, TypeAlias, overload
 
+from ._constants import MissingType, MISSING, DELETED
 from ._bases import (
     Base,
     BaseCollectionMeta,
@@ -22,13 +22,6 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-class MissingType(enum.Enum):
-    MISSING = "MISSING"
-
-
-MISSING = MissingType.MISSING
-
-
 class _SupportsKeysAndGetItem(Protocol):
     def keys(self):
         # type: () -> Iterable[str]
@@ -39,9 +32,11 @@ class _SupportsKeysAndGetItem(Protocol):
         pass
 
 
+_attribute_counter = 0
+
+
 class BaseAttribute(Base, Generic[T_co]):
     __slots__ = ("_name", "_default", "_factory", "_init", "_required", "_extra_paths", "_builtin_paths", "__order")
-    __counter = 0
 
     def __init__(
         self,
@@ -53,6 +48,8 @@ class BaseAttribute(Base, Generic[T_co]):
         builtin_paths=None,  # type: Iterable[str] | None
     ):
         # type: (...) -> None
+        global _attribute_counter
+
         if default is not MISSING and factory is not MISSING:
             error = "can't declare both 'default' and 'factory'"
             raise ValueError(error)
@@ -65,13 +62,39 @@ class BaseAttribute(Base, Generic[T_co]):
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
 
-        BaseAttribute.__counter += 1
-        self.__order = BaseAttribute.__counter
+        _attribute_counter += 1
+        self.__order = _attribute_counter
+
+    @recursive_repr.recursive_repr
+    def __repr__(self):
+        items = self._to_items()
+        return custom_repr.mapping_repr(
+            mapping=dict(items),
+            prefix="{}(".format(type(self).__name__),
+            template="{key}={value}",
+            separator=", ",
+            suffix=")",
+            sorting=True,
+            sort_key=lambda i, _s=self, _i=items: next(iter(zip(*_i))).index(i[0]),
+            key_repr=str,
+        )
 
     @abc.abstractmethod
     def __get__(self, instance, owner):
         # type: (BaseObject, Type[BaseObject]) -> T_co
         raise NotImplementedError()
+
+    def _to_items(self):
+        # type: () -> Tuple[Tuple[str, Any], ...]
+        return (
+            ("name", self.name),
+            ("default", self.default),
+            ("factory", self.factory),
+            ("init", self.init),
+            ("required", self.required),
+            ("extra_paths", self.extra_paths),
+            ("builtin_paths", self.builtin_paths),
+        )
 
     def make_default(self):
         # type: () -> T_co
@@ -147,21 +170,54 @@ class BaseAttribute(Base, Generic[T_co]):
         return self._default is not MISSING or self._factory is not MISSING
 
 
-class AttributeInitializer(Base):
+BA = TypeVar("BA", bound=BaseAttribute)  # base attribute type
+
+
+class BaseMutableAttribute(BaseAttribute[T]):
+    __slots__ = ()
+
+    @abc.abstractmethod
+    def __get__(self, instance, owner):
+        # type: (BaseObject, Type[BaseObject]) -> T
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __set__(self, instance, value):
+        # type: (BaseObject, T) -> None
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __delete__(self, instance, value):
+        # type: (BaseObject, T) -> None
+        raise NotImplementedError()
+
+
+class BaseAttributeManager(Base, Generic[BA]):
     __slots__ = ("_attributes",)
 
     def __init__(self, attributes):
-        # type: (Iterable[tuple[str, BaseAttribute]]) -> None
-        self._attributes = tuple(attributes)
+        # type: (collections.OrderedDict[str, BA]) -> None
+        """
+        :param attributes: Attributes.
+        """
+        self._attributes = attributes
 
-    def get_values(self, *args, **kwargs):
+    def get_initial_values(self, *args, **kwargs):
+        # type: (*Any, **Any) -> dict[str, Any]
+        """
+        Get initial attribute values.
+
+        :param args: Positional arguments.
+        :param kwargs: Keyword arguments.
+        :return: Initial attribute values.
+        """
 
         # Go through each attribute.
         i = 0
         reached_kwargs = False
         internal_attribute_names = set()
-        init_values = {}
-        for attribute_name, attribute in self.attributes:
+        initial_values = {}
+        for attribute_name, attribute in six.iteritems(self.attributes):
 
             # Skip non-init attributes.
             if not attribute.init:
@@ -175,7 +231,7 @@ class AttributeInitializer(Base):
 
                     # Has a default value.
                     value = attribute.make_default()
-                    init_values[attribute_name] = value
+                    initial_values[attribute_name] = value
                     continue
 
                 elif attribute.required:
@@ -193,7 +249,7 @@ class AttributeInitializer(Base):
                     reached_kwargs = True
                 else:
                     i += 1
-                    init_values[attribute_name] = value
+                    initial_values[attribute_name] = value
                     continue
 
             # Get value for keyword argument.
@@ -211,10 +267,10 @@ class AttributeInitializer(Base):
                     continue
 
             # Set attribute value.
-            init_values[attribute_name] = value
+            initial_values[attribute_name] = value
 
         # Invalid kwargs.
-        invalid_kwargs = set(kwargs).difference(dict(self.attributes))
+        invalid_kwargs = set(kwargs).difference(self.attributes)
         if invalid_kwargs:
             error = "invalid keyword argument(s) {}".format(", ".join(repr(k) for k in invalid_kwargs))
             raise TypeError(error)
@@ -222,49 +278,59 @@ class AttributeInitializer(Base):
         # Invalid positional arguments.
         invalid_args = args[i:]
         if invalid_args:
-            error = "invalid additional positional argument(s) {}".format(", ".join(repr(p) for p in invalid_args))
+            error = "invalid additional positional argument value(s) {}".format(
+                ", ".join(repr(p) for p in invalid_args)
+            )
             raise TypeError(error)
+
+        return initial_values
 
     @property
     def attributes(self):
-        # type: () -> tuple[tuple[str, BaseAttribute], ...]
+        # type: () -> collections.OrderedDict[str, BA]
+        """Attributes."""
         return self._attributes
 
 
 class BaseObjectMeta(BaseCollectionMeta, type):
+    def __init__(cls, name, bases, dct, **kwargs):
+        super(BaseObjectMeta, cls).__init__(name, bases, dct, **kwargs)
 
-    @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):
-        # type: (...) -> BaseObjectMeta
-        cls = super(BaseObjectMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+        try:
+            attributes = cls.__attributes__
+        except NotImplementedError:
+            pass
+        else:
+            # For each declared attribute.
+            seen_default = None
+            for attribute_name, attribute in six.iteritems(attributes):
 
-        # Scrape attributes.
-        attributes = _AttributeScraper(cls).scrape()
-        type.__setattr__(cls, "__attributes__", attributes)
+                # Set name.
+                attribute.name = attribute_name
 
-        # Name attributes.
-        for attribute_name, attribute in six.iteritems(attributes):
-            attribute.name = attribute_name
-
-        # Check for non-default attributes declared after default ones.
-        seen_default = None
-        for attribute_name, attribute in six.iteritems(attributes):
-            if not attribute.init:
-                continue
-            if attribute.has_default:
-                seen_default = attribute_name
-            elif seen_default is not None:
-                error = "non-default attribute {!r} declared after default attribute {!r}".format(
-                    attribute_name, seen_default
-                )
-                raise TypeError(error)
-
-        return cls
+                # Check for non-default attributes declared after default ones.
+                if not cls.__kw_only__:
+                    if not attribute.init:
+                        continue
+                    if attribute.has_default:
+                        seen_default = attribute_name
+                    elif seen_default is not None:
+                        error = "non-default attribute {!r} declared after default attribute {!r}".format(
+                            attribute_name, seen_default
+                        )
+                        raise TypeError(error)
 
     @property
+    @abc.abstractmethod
+    def __kw_only__(cls):
+        # type: () -> bool
+        raise NotImplementedError()
+
+    @property
+    @abc.abstractmethod
     def __attributes__(cls):
         # type: () -> collections.OrderedDict[str, BaseAttribute]
-        return cls.__namespace__.__attributes__
+        raise NotImplementedError()
 
 
 class BaseObject(six.with_metaclass(BaseObjectMeta, BaseCollection[Item])):
@@ -300,6 +366,37 @@ class BaseObject(six.with_metaclass(BaseObjectMeta, BaseCollection[Item])):
 
         :param attribute_name: Attribute name.
         :return: Value/values.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __contains__(self, value):
+        # type: (object) -> bool
+        """
+        Whether any of the attributes has value.
+
+        :param value: Value.
+        :return: True if has value.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __iter__(self):
+        # type: () -> Iterator[Item]
+        """
+        Iterate over items.
+
+        :return: Item iterator.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __len__(self):
+        # type: () -> int
+        """
+        Number of attributes with values.
+
+        :return: Number of attributes with values.
         """
         raise NotImplementedError()
 
@@ -393,6 +490,16 @@ class BaseMutableObject(BaseProtectedObject, BaseMutableCollection[Item]):
         :param value: Value.
         """
         self.update({attribute_name: value})
+
+    @runtime_final.final
+    def __delitem__(self, attribute_name):
+        # type: (str) -> None
+        """
+        Delete attribute value.
+
+        :param attribute_name: Attribute name.
+        """
+        self.update({attribute_name: DELETED})
 
     @overload
     def update(self, __m, **kwargs):

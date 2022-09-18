@@ -5,10 +5,10 @@ from basicco import type_checking, recursive_repr, fabricate_value, custom_repr,
 from tippo import Any, Callable, Type, Iterable, Generic, TypeVar, Hashable, cast
 
 from .bases import (
+    Base,
     BaseHashable,
     BaseCollectionMeta,
     BaseCollection,
-    BaseGeneric,
     BaseProtectedCollection,
     BaseInteractiveCollection,
     BaseMutableCollection,
@@ -112,7 +112,7 @@ class BaseState(BaseHashable, BaseInteractiveCollection[T], Generic[T, IT]):
 BST = TypeVar("BST", bound=BaseState)  # base state type
 
 
-class BaseRelationship(BaseGeneric, Generic[T]):
+class BaseRelationship(Base, Generic[T]):
     """Describes a relationship between a structure and its values."""
 
     __slots__ = (

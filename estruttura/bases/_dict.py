@@ -15,15 +15,13 @@ from tippo import (
     overload,
 )
 
+from ._constants import MISSING
 from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
 
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
-
-
-MISSING = object()
 
 
 class _SupportsKeysAndGetItem(Protocol[KT, VT_co]):

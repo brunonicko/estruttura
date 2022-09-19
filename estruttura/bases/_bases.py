@@ -1,9 +1,8 @@
 import abc
-import inspect
 
 import six
 import slotted
-from basicco import explicit_hash, runtime_final, qualname, namespace
+from basicco import explicit_hash, runtime_final, qualname, namespace, get_mro
 from tippo import TypeVar, Iterator
 
 
@@ -20,12 +19,11 @@ class BaseMeta(
     Metaclass for :class:`Base`.
 
     Features:
-      - Implements abstract method checking and support for generics.
-      - Protected namespace available as `__namespace__`.
+      - Implements abstract method checking and better support for generics in Python 2.7.
+      - Protected class namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Forces `__hash__` to be declared if `__eq__` was declared.
-      - Automatically decorates `__init__` methods to update the `initializing` tag.
-      - Prevents base class attributes from being modified.
+      - Prevents class attributes from changing.
       - Runtime checking for `final` decorated classes/methods.
       - Implements `__fullname__` class property for back-porting qualified name.
     """
@@ -67,28 +65,18 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC)):
 
     Features:
       - Defines a `__weakref__` slot.
-      - Implements abstract method checking and support for generics.
-      - Protected namespace available as `__namespace__`.
+      - Implements abstract method checking and better support for generics in Python 2.7.
+      - Protected class namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Forces `__hash__` to be declared if `__eq__` was declared.
-      - Default implementation of `__copy__` raises an error.
       - Default implementation of `__ne__` returns the opposite of `__eq__`.
-      - Prevents base class attributes from changing.
+      - Prevents class attributes from changing.
       - Runtime checking for `final` decorated classes/methods.
       - Simplified `__dir__` result that shows only relevant members for client code.
       - Implements `__fullname__` class property for back-porting qualified name.
     """
 
     __slots__ = ("__weakref__",)
-
-    def __copy__(self):
-        """
-        Prevents shallow copy by default.
-
-        :raises RuntimeError: Always raised.
-        """
-        error = "{!r} objects can't be shallow copied".format(type(self).__fullname__)
-        raise RuntimeError(error)
 
     def __repr__(self):
         # type: () -> str
@@ -121,7 +109,7 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC)):
         :return: Simplified list of member names.
         """
         member_names = set()  # type: set[str]
-        for base in reversed(inspect.getmro(type(self))):
+        for base in reversed(get_mro.get_mro(type(self))):
             if base is object or base is type:
                 continue
             member_names.update(n for n in base.__dict__ if not ("__" in n and n.startswith("_")))
@@ -219,14 +207,13 @@ class BaseCollection(
     __slots__ = ()
 
 
-class BaseProtectedCollection(BaseCollection[T_co]):
+class BasePrivateCollection(BaseCollection[T_co]):
     """
-    Base protected collection.
+    Base private collection.
 
     Features:
-      - Has protected transformation methods.
+      - Has private transformation methods.
       - Transformations return a transformed version (immutable) or self (mutable).
-      - Forces implementation of `_clear` method.
     """
 
     __slots__ = ()
@@ -242,11 +229,11 @@ class BaseProtectedCollection(BaseCollection[T_co]):
         raise NotImplementedError()
 
 
-BPC = TypeVar("BPC", bound=BaseProtectedCollection)  # base protected collection type
+BPC = TypeVar("BPC", bound=BasePrivateCollection)  # base private collection type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveCollection(BaseProtectedCollection[T_co]):
+class BaseInteractiveCollection(BasePrivateCollection[T_co]):
     """
     Base interactive collection.
 
@@ -272,12 +259,12 @@ BIC = TypeVar("BIC", bound="BaseInteractiveCollection")  # base interactive coll
 
 
 # noinspection PyAbstractClass
-class BaseMutableCollection(BaseProtectedCollection[T_co]):
+class BaseMutableCollection(BasePrivateCollection[T_co]):
     """
     Base mutable collection.
 
     Features:
-      - Has public mutable transformation and magic methods.
+      - Has public mutable transformation methods.
     """
 
     __slots__ = ()

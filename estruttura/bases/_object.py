@@ -3,16 +3,17 @@ import collections
 
 import six
 from basicco import runtime_final, fabricate_value, custom_repr, recursive_repr
-from tippo import Any, Callable, TypeVar, Tuple, Protocol, Iterable, Generic, Iterator, Type, TypeAlias, overload
+from tippo import Any, Callable, TypeVar, Tuple, Iterable, Generic, Iterator, Type, TypeAlias, overload
 
-from ._constants import MissingType, MISSING, DELETED
+from ._constants import MissingType, MISSING, DELETED, SupportsKeysAndGetItem
+from ._dict import BaseDict
 from ._bases import (
     Base,
     BaseCollectionMeta,
     BaseCollection,
     BaseInteractiveCollection,
     BaseMutableCollection,
-    BaseProtectedCollection,
+    BasePrivateCollection,
 )
 
 
@@ -20,16 +21,6 @@ T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 Item = Tuple[str, Any]  # type: TypeAlias
-
-
-class _SupportsKeysAndGetItem(Protocol):
-    def keys(self):
-        # type: () -> Iterable[str]
-        pass
-
-    def __getitem__(self, __k):
-        # type: (str) -> Any
-        pass
 
 
 _attribute_counter = 0
@@ -85,7 +76,7 @@ class BaseAttribute(Base, Generic[T_co]):
         raise NotImplementedError()
 
     def _to_items(self):
-        # type: () -> Tuple[Tuple[str, Any], ...]
+        # type: () -> tuple[tuple[str, Any], ...]
         return (
             ("name", self.name),
             ("default", self.default),
@@ -170,7 +161,7 @@ class BaseAttribute(Base, Generic[T_co]):
         return self._default is not MISSING or self._factory is not MISSING
 
 
-BA = TypeVar("BA", bound=BaseAttribute)  # base attribute type
+BA = TypeVar("BA", bound=BaseAttribute, covariant=True)  # base attribute type
 
 
 class BaseMutableAttribute(BaseAttribute[T]):
@@ -192,11 +183,52 @@ class BaseMutableAttribute(BaseAttribute[T]):
         raise NotImplementedError()
 
 
+class AttributeMap(BaseDict[str, BA]):
+    __slots__ = ("__attribute_dict",)
+
+    def __init__(self, attribute_items):
+        # type: (Iterable[tuple[str, BA]]) -> None
+        self.__attribute_dict = collections.OrderedDict()  # type: collections.OrderedDict[str, BA]
+        for name, attribute in attribute_items:
+            self.__attribute_dict[name] = attribute
+
+    def __eq__(self, other):
+        return isinstance(other, AttributeMap) and self.__attribute_dict == other.__attribute_dict
+
+    def __reversed__(self):
+        return reversed(self.__attribute_dict)
+
+    def __getitem__(self, name):
+        return self.__attribute_dict[name]
+
+    def get(self, name, fallback=None):
+        return self.__attribute_dict.get(name, fallback)
+
+    def iteritems(self):
+        for name, attribute in six.iteritems(self.__attribute_dict):
+            yield (name, attribute)
+
+    def iterkeys(self):
+        for name in six.iterkeys(self.__attribute_dict):
+            yield name
+
+    def itervalues(self):
+        for attribute in six.itervalues(self.__attribute_dict):
+            yield attribute
+
+    def __len__(self):
+        return len(self.__attribute_dict)
+
+    def __iter__(self) -> Iterator[str]:
+        for name in six.iterkeys(self.__attribute_dict):
+            yield name
+
+
 class BaseAttributeManager(Base, Generic[BA]):
     __slots__ = ("_attributes",)
 
     def __init__(self, attributes):
-        # type: (collections.OrderedDict[str, BA]) -> None
+        # type: (AttributeMap[BA]) -> None
         """
         :param attributes: Attributes.
         """
@@ -287,7 +319,7 @@ class BaseAttributeManager(Base, Generic[BA]):
 
     @property
     def attributes(self):
-        # type: () -> collections.OrderedDict[str, BA]
+        # type: () -> AttributeMap[BA]
         """Attributes."""
         return self._attributes
 
@@ -322,14 +354,14 @@ class BaseObjectMeta(BaseCollectionMeta, type):
 
     @property
     @abc.abstractmethod
-    def __kw_only__(cls):
+    def __kw_only__(cls):  # FIXME: Remove from metaclass.
         # type: () -> bool
         raise NotImplementedError()
 
     @property
     @abc.abstractmethod
-    def __attributes__(cls):
-        # type: () -> collections.OrderedDict[str, BaseAttribute]
+    def __attributes__(cls):  # FIXME: Remove from metaclass.
+        # type: () -> AttributeMap[BaseAttribute]
         raise NotImplementedError()
 
 
@@ -408,24 +440,24 @@ type.__setattr__(BaseObject, "__hash__", None)  # force non-hashable
 BO = TypeVar("BO", bound=BaseObject)  # base object type
 
 
-class BaseProtectedObject(BaseObject, BaseProtectedCollection[Item]):
-    """Base protected object."""
+class BasePrivateObject(BaseObject, BasePrivateCollection[Item]):
+    """Base private object."""
 
     __slots__ = ()
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPM, _SupportsKeysAndGetItem, **Any) -> BPM
+        # type: (BPO, SupportsKeysAndGetItem[str, Any], **Any) -> BPO
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPM, Iterable[Item], **Any) -> BPM
+        # type: (BPO, Iterable[Item], **Any) -> BPO
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BPM, **Any) -> BPM
+        # type: (BPO, **Any) -> BPO
         pass
 
     @abc.abstractmethod
@@ -439,28 +471,28 @@ class BaseProtectedObject(BaseObject, BaseProtectedCollection[Item]):
         raise NotImplementedError()
 
 
-BPM = TypeVar("BPM", bound=BaseProtectedObject)  # base protected object type
+BPO = TypeVar("BPO", bound=BasePrivateObject)  # base private object type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveObject(BaseProtectedObject, BaseInteractiveCollection[Item]):
+class BaseInteractiveObject(BasePrivateObject, BaseInteractiveCollection[Item]):
     """Base interactive object."""
 
     __slots__ = ()
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BPM, _SupportsKeysAndGetItem, **Any) -> BPM
+        # type: (BPO, SupportsKeysAndGetItem[str, Any], **Any) -> BPO
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BPM, Iterable[Item], **Any) -> BPM
+        # type: (BPO, Iterable[Item], **Any) -> BPO
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BPM, **Any) -> BPM
+        # type: (BPO, **Any) -> BPO
         pass
 
     @runtime_final.final
@@ -475,7 +507,7 @@ class BaseInteractiveObject(BaseProtectedObject, BaseInteractiveCollection[Item]
 
 
 # noinspection PyAbstractClass
-class BaseMutableObject(BaseProtectedObject, BaseMutableCollection[Item]):
+class BaseMutableObject(BasePrivateObject, BaseMutableCollection[Item]):
     """Base mutable object."""
 
     __slots__ = ()
@@ -503,7 +535,7 @@ class BaseMutableObject(BaseProtectedObject, BaseMutableCollection[Item]):
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (_SupportsKeysAndGetItem, **Any) -> None
+        # type: (SupportsKeysAndGetItem[str, Any], **Any) -> None
         pass
 
     @overload

@@ -4,7 +4,7 @@ import slotted
 from basicco import runtime_final
 from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload
 
-from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
+from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection
 
 
 T = TypeVar("T")  # value type
@@ -121,8 +121,8 @@ class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
 type.__setattr__(BaseList, "__hash__", None)  # force non-hashable
 
 
-class BaseProtectedList(BaseList[T], BaseProtectedCollection[T]):
-    """Base protected list collection."""
+class BasePrivateList(BaseList[T], BasePrivateCollection[T]):
+    """Base private list collection."""
 
     __slots__ = ()
 
@@ -220,11 +220,11 @@ class BaseProtectedList(BaseList[T], BaseProtectedCollection[T]):
         raise NotImplementedError()
 
 
-BPL = TypeVar("BPL", bound=BaseProtectedList)  # base protected list type
+BPL = TypeVar("BPL", bound=BasePrivateList)  # base private list type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveList(BaseProtectedList[T], BaseInteractiveCollection[T]):
+class BaseInteractiveList(BasePrivateList[T], BaseInteractiveCollection[T]):
     """Base interactive list collection."""
 
     __slots__ = ()
@@ -326,7 +326,7 @@ class BaseInteractiveList(BaseProtectedList[T], BaseInteractiveCollection[T]):
 BIL = TypeVar("BIL", bound=BaseInteractiveList)  # base interactive list type
 
 
-class BaseMutableList(BaseProtectedList[T], BaseMutableCollection[T], slotted.SlottedMutableSequence[T]):
+class BaseMutableList(BasePrivateList[T], BaseMutableCollection[T], slotted.SlottedMutableSequence[T]):
     """Base mutable list collection."""
 
     __slots__ = ()

@@ -4,7 +4,7 @@ import slotted
 from basicco import runtime_final
 from tippo import TypeVar, AbstractSet, Iterable
 
-from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
+from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection
 
 
 T = TypeVar("T")  # value type
@@ -287,8 +287,8 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 type.__setattr__(BaseSet, "__hash__", None)  # force non-hashable
 
 
-class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
-    """Base protected set collection."""
+class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):
+    """Base private set collection."""
 
     __slots__ = ()
 
@@ -355,11 +355,11 @@ class BaseProtectedSet(BaseSet[T], BaseProtectedCollection[T]):
         raise NotImplementedError()
 
 
-BPS = TypeVar("BPS", bound=BaseProtectedSet)  # base protected set type
+BPS = TypeVar("BPS", bound=BasePrivateSet)  # base private set type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
+class BaseInteractiveSet(BasePrivateSet[T], BaseInteractiveCollection[T]):
     """Base interactive set collection."""
 
     __slots__ = ()
@@ -428,7 +428,7 @@ class BaseInteractiveSet(BaseProtectedSet[T], BaseInteractiveCollection[T]):
 BIS = TypeVar("BIS", bound=BaseInteractiveSet)  # base interactive set type
 
 
-class BaseMutableSet(BaseProtectedSet[T], BaseMutableCollection[T], slotted.SlottedMutableSet[T]):
+class BaseMutableSet(BasePrivateSet[T], BaseMutableCollection[T], slotted.SlottedMutableSet[T]):
     """Base mutable set collection."""
 
     __slots__ = ()

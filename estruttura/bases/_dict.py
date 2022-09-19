@@ -11,27 +11,16 @@ from tippo import (
     ValuesView,
     Iterable,
     MutableMapping,
-    Protocol,
     overload,
 )
 
-from ._constants import MISSING
-from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BaseProtectedCollection
+from ._constants import MISSING, SupportsKeysAndGetItem
+from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection
 
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
-
-
-class _SupportsKeysAndGetItem(Protocol[KT, VT_co]):
-    def keys(self):
-        # type: () -> Iterable[KT]
-        pass
-
-    def __getitem__(self, __k):
-        # type: (KT) -> VT_co
-        pass
 
 
 class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
@@ -56,16 +45,6 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
 
         :param other: Another object.
         :return: True if equal.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __reversed__(self):
-        # type: () -> Iterator[KT]
-        """
-        Iterate over reversed keys.
-
-        :return: Reversed keys iterator.
         """
         raise NotImplementedError()
 
@@ -127,7 +106,7 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
     def items(self):
         # type: () -> ItemsView[KT, VT_co]
         """
-        Get items.
+        Items view.
 
         :return: Items.
         """
@@ -137,7 +116,7 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
     def keys(self):
         # type: () -> KeysView[KT]
         """
-        Get keys.
+        Keys view.
 
         :return: Keys.
         """
@@ -147,7 +126,7 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
     def values(self):
         # type: () -> ValuesView[VT_co]
         """
-        Get values.
+        Values view.
 
         :return: Values.
         """
@@ -158,8 +137,8 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
 type.__setattr__(BaseDict, "__hash__", None)  # force non-hashable
 
 
-class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
-    """Base protected dictionary collection."""
+class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):
+    """Base private dictionary collection."""
 
     __slots__ = ()
 
@@ -200,7 +179,7 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPD, _SupportsKeysAndGetItem[KT, VT], **VT) -> BPD
+        # type: (BPD, SupportsKeysAndGetItem[KT, VT], **VT) -> BPD
         pass
 
     @overload
@@ -224,11 +203,11 @@ class BaseProtectedDict(BaseDict[KT, VT], BaseProtectedCollection[KT]):
         raise NotImplementedError()
 
 
-BPD = TypeVar("BPD", bound=BaseProtectedDict)  # base protected dict type
+BPD = TypeVar("BPD", bound=BasePrivateDict)  # base private dict type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[KT]):
+class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]):
     """Base interactive dictionary collection."""
 
     __slots__ = ()
@@ -270,7 +249,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, _SupportsKeysAndGetItem[KT, VT], **VT) -> BID
+        # type: (BID, SupportsKeysAndGetItem[KT, VT], **VT) -> BID
         pass
 
     @overload
@@ -297,7 +276,7 @@ class BaseInteractiveDict(BaseProtectedDict[KT, VT], BaseInteractiveCollection[K
 BID = TypeVar("BID", bound=BaseInteractiveDict)  # base interactive dict type
 
 
-class BaseMutableDict(BaseProtectedDict[KT, VT], BaseMutableCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
+class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
     """Base mutable dictionary collection."""
 
     __slots__ = ()
@@ -403,7 +382,7 @@ class BaseMutableDict(BaseProtectedDict[KT, VT], BaseMutableCollection[KT], slot
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (_SupportsKeysAndGetItem[KT, VT], **VT) -> None
+        # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> None
         pass
 
     @overload

@@ -87,6 +87,7 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC, set_name.SetName, in
       - Implements abstract method checking and better support for generics in Python 2.7.
       - Protected class namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
+      - Non-hashable by default.
       - Forces `__hash__` to be declared if `__eq__` was declared.
       - Default implementation of `__ne__` returns the opposite of `__eq__`.
       - Prevents class attributes from changing.
@@ -107,6 +108,11 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC, set_name.SetName, in
         :return: Representation.
         """
         return "<{} at {}>".format(type(self).__fullname__, hex(id(self)))
+
+    def __hash__(self):
+        """Non-hashable by default."""
+        error = "{!r} object is not hashable".format(type(self).__fullname__)
+        raise TypeError(error)
 
     def __ne__(self, other):
         # type: (object) -> bool
@@ -135,6 +141,10 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC, set_name.SetName, in
                 continue
             member_names.update(n for n in base.__dict__ if not ("__" in n and n.startswith("_")))
         return sorted(member_names)
+
+
+# Set as non-hashable.
+type.__setattr__(Base, "__hash__", None)
 
 
 class BaseHashable(Base, slotted.SlottedHashable):
@@ -436,6 +446,7 @@ class BaseCollection(
     def __init_subclass__(cls, relationship=None, **kwargs):
         # type: (Relationship | None, **Any) -> None
         if relationship is not None:
+            type_checking.assert_is_instance(relationship, cls.__relationship_type__)
             cls.__relationship__ = relationship
         super(BaseCollection, cls).__init_subclass__(**kwargs)
 

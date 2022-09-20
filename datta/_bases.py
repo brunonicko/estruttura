@@ -119,4 +119,6 @@ BPDC = TypeVar("BPDC", bound=BasePrivateDataCollection)  # base private data col
 
 # noinspection PyAbstractClass
 class BaseDataCollection(BasePrivateDataCollection[IT, T_co], BaseInteractiveCollection[T_co]):
-    pass
+    """Base data collection."""
+
+    __slots__ = ()

@@ -1,22 +1,20 @@
 import itertools
 
 import pyrsistent
-from basicco import runtime_final, recursive_repr, custom_repr
+from basicco import recursive_repr, custom_repr
 from tippo import Any, TypeVar, Iterable, Iterator, overload
 from pyrsistent.typing import PVector
 
-from estruttura.bases import BaseInteractiveList
-from estruttura.utils import resolve_index, resolve_continuous_slice, pre_move
+from estruttura import BasePrivateList, BaseInteractiveList, resolve_index, resolve_continuous_slice, pre_move
 
-from ._state import State
+from ._bases import BasePrivateDataCollection, BaseDataCollection
 
 
 T = TypeVar("T")  # value type
 
 
-@runtime_final.final
-class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
-    """Immutable list state."""
+class PrivateListData(BasePrivateDataCollection[PVector[T], T], BasePrivateList[T]):
+    """Private list data."""
 
     __slots__ = ()
 
@@ -32,7 +30,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
 
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
-        super(ListState, self).__init__(initial)
+        super(PrivateListData, self).__init__(initial)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -108,7 +106,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
             return self._internal[index]
 
     def _clear(self):
-        # type: (LS) -> LS
+        # type: (PLD) -> PLD
         """
         Clear.
 
@@ -117,7 +115,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return self._make(pyrsistent.pvector())
 
     def _insert(self, index, *values):
-        # type: (LS, int, T) -> LS
+        # type: (PLD, int, T) -> PLD
         """
         Insert value(s) at index.
 
@@ -138,7 +136,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
             return self._make(self._internal[:index] + pyrsistent.pvector(values) + self._internal[index:])
 
     def _append(self, value):
-        # type: (LS, T) -> LS
+        # type: (PLD, T) -> PLD
         """
         Append value at the end.
 
@@ -148,7 +146,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return self._make(self._internal.append(value))
 
     def _extend(self, iterable):
-        # type: (LS, Iterable[T]) -> LS
+        # type: (PLD, Iterable[T]) -> PLD
         """
         Extend at the end with iterable.
 
@@ -158,7 +156,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return self._make(self._internal.extend(iterable))
 
     def _remove(self, value):
-        # type: (LS, T) -> LS
+        # type: (PLD, T) -> PLD
         """
         Remove first occurrence of value.
 
@@ -169,7 +167,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return self._make(self._internal.remove(value))
 
     def _reverse(self):
-        # type: (LS) -> LS
+        # type: (PLD) -> PLD
         """
         Reverse values.
 
@@ -178,7 +176,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return self._make(pyrsistent.pvector(reversed(self._internal)))
 
     def _move(self, item, target_index):
-        # type: (LS, slice | int, int) -> LS
+        # type: (PLD, slice | int, int) -> PLD
         """
         Move values internally.
 
@@ -202,7 +200,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
             return self._make(internal[:post_index] + pyrsistent.pvector(values) + internal[post_index:])
 
     def _delete(self, item):
-        # type: (LS, slice | int) -> LS
+        # type: (PLD, slice | int) -> PLD
         """
         Delete values at index/slice.
 
@@ -217,7 +215,7 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
             return self._make(self._internal.delete(index, None))
 
     def _update(self, index, *values):
-        # type: (LS, int, T) -> LS
+        # type: (PLD, int, T) -> PLD
         """
         Update value(s) starting at index.
 
@@ -291,4 +289,10 @@ class ListState(State[T, PVector[T]], BaseInteractiveList[T]):
         return resolve_continuous_slice(len(self._internal), slc)
 
 
-LS = TypeVar("LS", bound=ListState)
+PLD = TypeVar("PLD", bound=PrivateListData)
+
+
+class ListData(PrivateListData[T], BaseDataCollection[PVector[T], T], BaseInteractiveList[T]):
+    """List data."""
+
+    __slots__ = ()

@@ -1,38 +1,55 @@
 import abc
 
 from basicco import runtime_final
-from tippo import Any, Type, Generic, TypeVar, cast
+from tippo import Any, Type, Generic, TypeVar, Hashable, cast
 
-from estruttura.bases import BaseHashable, BaseInteractiveCollection
-
-
-T = TypeVar("T")  # contained value type
-IT = TypeVar("IT")  # internal type
+from estruttura import BaseHashable, BasePrivateCollection, BaseInteractiveCollection
 
 
-class State(BaseHashable, BaseInteractiveCollection[T], Generic[T, IT]):
-    """Base immutable state."""
+T_co = TypeVar("T_co", covariant=True)  # covariant value type
+IT = TypeVar("IT", bound=Hashable)  # internal type
+
+
+class BaseData(BaseHashable):
+    """Base data."""
+
+    __slots__ = ("__hash",)
+
+    @abc.abstractmethod
+    def __hash__(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
+        raise NotImplementedError()
+
+
+class BasePrivateDataCollection(BasePrivateCollection[T_co], BaseData, Generic[IT, T_co]):
+    """Base private data collection."""
 
     __slots__ = ("__hash", "__internal")
 
     @staticmethod
-    def __new__(cls, initial=None):
-        if type(initial) is cls:
+    @runtime_final.final
+    def __new__(cls, initial=None, *args, **kwargs):
+        if type(initial) is cls and not args and not kwargs:
             return initial
         else:
-            return super(State, cls).__new__(cls)
+            return super(BasePrivateDataCollection, cls).__new__(cls)
 
     @classmethod
     @runtime_final.final
     def _make(cls, internal):
-        # type: (Type[S], IT) -> S
+        # type: (Type[BPDC], IT) -> BPDC
         """
         Build new state by directly setting the internal value.
 
         :param internal: Internal state.
         :return: State.
         """
-        self = cast(S, cls.__new__(cls))
+        self = cast(BPDC, cls.__new__(cls))
         self.__internal = internal
         self.__hash = None
         return self
@@ -81,7 +98,7 @@ class State(BaseHashable, BaseInteractiveCollection[T], Generic[T, IT]):
 
     @runtime_final.final
     def __copy__(self):
-        # type: (S) -> S
+        # type: (BPDC) -> BPDC
         """
         Get itself.
 
@@ -92,9 +109,14 @@ class State(BaseHashable, BaseInteractiveCollection[T], Generic[T, IT]):
     @property
     @runtime_final.final
     def _internal(self):
-        # type: () -> Any
+        # type: () -> IT
         """Internal values."""
         return self.__internal
 
 
-S = TypeVar("S", bound=State)  # state type
+BPDC = TypeVar("BPDC", bound=BasePrivateDataCollection)  # base private data collection type
+
+
+# noinspection PyAbstractClass
+class BaseDataCollection(BasePrivateDataCollection[IT, T_co], BaseInteractiveCollection[T_co]):
+    pass

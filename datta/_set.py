@@ -1,19 +1,18 @@
 import pyrsistent
-from basicco import runtime_final, recursive_repr, custom_repr
+from basicco import recursive_repr, custom_repr
 from tippo import Any, TypeVar, Iterable, Iterator
 from pyrsistent.typing import PSet
 
-from estruttura.bases import BaseInteractiveSet
-from ._state import State
+from estruttura import BasePrivateSet, BaseInteractiveSet
+
+from ._bases import BasePrivateDataCollection, BaseDataCollection
 
 
 T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
-@runtime_final.final
-class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
-    """Immutable set state."""
+class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
+    """Private set data."""
 
     __slots__ = ()
 
@@ -29,7 +28,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
 
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
-        super(SetState, self).__init__(initial)
+        super(PrivateSetData, self).__init__(initial)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -77,7 +76,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         )
 
     def _clear(self):
-        # type: (SS) -> SS
+        # type: (PSD) -> PSD
         """
         Clear.
 
@@ -86,7 +85,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._make(pyrsistent.pset())
 
     def _add(self, value):
-        # type: (SS, T) -> SS
+        # type: (PSD, T) -> PSD
         """
         Add value.
 
@@ -96,7 +95,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._make(self._internal.add(value))
 
     def _discard(self, *values):
-        # type: (SS, T) -> SS
+        # type: (PSD, T) -> PSD
         """
         Discard value(s).
 
@@ -110,7 +109,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._make(self._internal.discard(*values))
 
     def _remove(self, *values):
-        # type: (SS, T) -> SS
+        # type: (PSD, T) -> PSD
         """
         Remove existing value(s).
 
@@ -125,7 +124,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._make(self._internal.difference(values))
 
     def _replace(self, old_value, new_value):
-        # type: (SS, T, T) -> SS
+        # type: (PSD, T, T) -> PSD
         """
         Replace existing value with a new one.
 
@@ -137,7 +136,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._make(self._internal.remove(old_value).add(new_value))
 
     def _update(self, iterable):
-        # type: (SS, Iterable[T]) -> SS
+        # type: (PSD, Iterable[T]) -> PSD
         """
         Update with iterable.
 
@@ -177,7 +176,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return self._internal.issuperset(iterable)
 
     def intersection(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> PrivateSetData
         """
         Get intersection.
 
@@ -187,7 +186,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return type(self)._make(self._internal.intersection(iterable))
 
     def difference(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> PrivateSetData
         """
         Get difference.
 
@@ -197,7 +196,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return type(self)._make(self._internal.difference(iterable))
 
     def inverse_difference(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> PrivateSetData
         """
         Get an iterable's difference to this.
 
@@ -207,7 +206,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return type(self)._make(pyrsistent.pset(iterable).difference(self._internal))
 
     def symmetric_difference(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> PrivateSetData
         """
         Get symmetric difference.
 
@@ -217,7 +216,7 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return type(self)._make(self._internal.symmetric_difference(iterable))
 
     def union(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> PrivateSetData
         """
         Get union.
 
@@ -227,4 +226,10 @@ class SetState(State[T, PSet[T]], BaseInteractiveSet[T]):
         return type(self)._make(self._internal.union(iterable))
 
 
-SS = TypeVar("SS", bound=SetState)
+PSD = TypeVar("PSD", bound=PrivateSetData)
+
+
+class SetData(PrivateSetData[T], BaseDataCollection[PSet[T], T], BaseInteractiveSet[T]):
+    """Set data."""
+
+    __slots__ = ()

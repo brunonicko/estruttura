@@ -1,80 +1,573 @@
-import itertools
+import abc
 
-import pyrsistent
-import six
-from basicco import runtime_final, recursive_repr, custom_repr
-from tippo import Any, TypeVar, Iterable, Iterator, overload
-from pyrsistent.typing import PVector
+import slotted
+from basicco import runtime_final
+from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload
 
-from .bases import BaseList, BaseProtectedList, BaseInteractiveList, BaseMutableList
-from .utils import resolve_index, resolve_continuous_slice, pre_move
-from ._bases import (
-    BaseState,
-    BaseRelationship,
-    BaseStructure,
-    BaseProtectedStructure,
-    BaseInteractiveStructure,
-    BaseMutableStructure,
-)
+from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection
 
 
 T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
-RT = TypeVar("RT", bound=BaseRelationship)  # relationship type
+
+
+class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
+    """Base list collection."""
+
+    __slots__ = ()
+
+    def __hash__(self):
+        """
+        Prevent hashing (not hashable by default).
+
+        :raises TypeError: Not hashable.
+        """
+        error = "unhashable type: {!r}".format(type(self).__name__)
+        raise TypeError(error)
+
+    @abc.abstractmethod
+    def __eq__(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def __reversed__(self):
+        # type: () -> Iterator[T_co]
+        """
+        Iterate over reversed values.
+
+        :return: Reversed values iterator.
+        """
+        raise NotImplementedError()
+
+    @overload
+    def __getitem__(self, index):
+        # type: (int) -> T_co
+        pass
+
+    @overload
+    def __getitem__(self, index):
+        # type: (slice) -> MutableSequence[T_co]
+        pass
+
+    @abc.abstractmethod
+    def __getitem__(self, index):
+        """
+        Get value/values at index/from slice.
+
+        :param index: Index/slice.
+        :return: Value/values.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def count(self, value):
+        # type: (object) -> int
+        """
+        Count number of occurrences of a value.
+
+        :param value: Value.
+        :return: Number of occurrences.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def index(self, value, start=None, stop=None):
+        # type: (Any, int | None, int | None) -> int
+        """
+        Get index of a value.
+
+        :param value: Value.
+        :param start: Start index.
+        :param stop: Stop index.
+        :return: Index of value.
+        :raises ValueError: Provided stop but did not provide start.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def resolve_index(self, index, clamp=False):
+        # type: (int, bool) -> int
+        """
+        Resolve index to a positive number.
+
+        :param index: Input index.
+        :param clamp: Whether to clamp between zero and the length.
+        :return: Resolved index.
+        :raises IndexError: Index out of range.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def resolve_continuous_slice(self, slc):
+        # type: (slice) -> tuple[int, int]
+        """
+        Resolve continuous slice according to length.
+
+        :param slc: Continuous slice.
+        :return: Index and stop.
+        :raises IndexError: Slice is noncontinuous.
+        """
+        raise NotImplementedError()
+
+
+# noinspection PyCallByClass
+type.__setattr__(BaseList, "__hash__", None)  # force non-hashable
+
+
+class BasePrivateList(BaseList[T], BasePrivateCollection[T]):
+    """Base private list collection."""
+
+    __slots__ = ()
+
+    @abc.abstractmethod
+    def _insert(self, index, *values):
+        # type: (BPL, int, T) -> BPL
+        """
+        Insert value(s) at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _append(self, value):
+        # type: (BPL, T) -> BPL
+        """
+        Append value at the end.
+
+        :param value: Value.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _extend(self, iterable):
+        # type: (BPL, Iterable[T]) -> BPL
+        """
+        Extend at the end with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _remove(self, value):
+        # type: (BPL, T) -> BPL
+        """
+        Remove first occurrence of value.
+
+        :param value: Value.
+        :return: Transformed.
+        :raises ValueError: Value is not present.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _reverse(self):
+        # type: (BPL) -> BPL
+        """
+        Reverse values.
+
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _move(self, item, target_index):
+        # type: (BPL, slice | int, int) -> BPL
+        """
+        Move values internally.
+
+        :param item: Index/slice.
+        :param target_index: Target index.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _delete(self, item):
+        # type: (BPL, slice | int) -> BPL
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _update(self, index, *values):
+        # type: (BPL, int, T) -> BPL
+        """
+        Update value(s) starting at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        raise NotImplementedError()
+
+
+BPL = TypeVar("BPL", bound=BasePrivateList)  # base private list type
 
 
 # noinspection PyAbstractClass
-class BaseListStructure(BaseStructure[T_co, T_co, ListState[T_co], int, RT], BaseList[T_co]):
-    """Base list structure."""
+class BaseInteractiveList(BasePrivateList[T], BaseInteractiveCollection[T]):
+    """Base interactive list collection."""
 
     __slots__ = ()
 
     @runtime_final.final
-    def get_value(self, location):
-        # type: (int) -> T_co
+    def insert(self, index, *values):
+        # type: (BIL, int, T) -> BIL
         """
-        Get value at location.
+        Insert value(s) at index.
 
-        :param location: Location.
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        return self._insert(index, *values)
+
+    @runtime_final.final
+    def append(self, value):
+        # type: (BIL, T) -> BIL
+        """
+        Append value at the end.
+
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._append(value)
+
+    @runtime_final.final
+    def extend(self, iterable):
+        # type: (BIL, Iterable[T]) -> BIL
+        """
+        Extend at the end with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        return self._extend(iterable)
+
+    @runtime_final.final
+    def remove(self, value):
+        # type: (BIL, T) -> BIL
+        """
+        Remove first occurrence of value.
+
+        :param value: Value.
+        :return: Transformed.
+        :raises ValueError: Value is not present.
+        """
+        return self._remove(value)
+
+    @runtime_final.final
+    def reverse(self):
+        # type: (BIL) -> BIL
+        """
+        Reverse values.
+
+        :return: Transformed.
+        """
+        return self._reverse()
+
+    @runtime_final.final
+    def move(self, item, target_index):
+        # type: (BIL, slice | int, int) -> BIL
+        """
+        Move values internally.
+
+        :param item: Index/slice.
+        :param target_index: Target index.
+        :return: Transformed.
+        """
+        return self._move(item, target_index)
+
+    @runtime_final.final
+    def delete(self, item):
+        # type: (BIL, slice | int) -> BIL
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        :return: Transformed.
+        """
+        return self._delete(item)
+
+    @runtime_final.final
+    def update(self, index, *values):
+        # type: (BIL, int, T) -> BIL
+        """
+        Update value(s) starting at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        return self._update(index, *values)
+
+
+BIL = TypeVar("BIL", bound=BaseInteractiveList)  # base interactive list type
+
+
+class BaseMutableList(BasePrivateList[T], BaseMutableCollection[T], slotted.SlottedMutableSequence[T]):
+    """Base mutable list collection."""
+
+    __slots__ = ()
+
+    @runtime_final.final
+    def __iadd__(self, iterable):
+        """
+        In place addition.
+
+        :param iterable: Another iterable.
+        :return: Added list.
+        """
+        self._extend(iterable)
+        return self
+
+    @overload
+    def __getitem__(self, index):
+        # type: (int) -> T
+        pass
+
+    @overload
+    def __getitem__(self, index):
+        # type: (slice) -> MutableSequence[T]
+        pass
+
+    @abc.abstractmethod
+    def __getitem__(self, index):
+        """
+        Get value/values at index/from slice.
+
+        :param index: Index/slice.
+        :return: Value/values.
+        """
+        raise NotImplementedError()
+
+    @overload
+    def __setitem__(self, index, value):
+        # type: (int, T) -> None
+        pass
+
+    @overload
+    def __setitem__(self, slc, values):
+        # type: (slice, Iterable[T]) -> None
+        pass
+
+    @abc.abstractmethod
+    def __setitem__(self, item, value):
+        # type: (slice | int, T | Iterable[T]) -> None
+        """
+        Set value/values at index/slice.
+
+        :param item: Index/slice.
+        :param value: Value/values.
+        :raises IndexError: Slice is noncontinuous.
+        :raises ValueError: Values length does not fit in slice.
+        """
+        raise NotImplementedError()
+
+    @overload
+    def __delitem__(self, index):
+        # type: (int) -> None
+        pass
+
+    @overload
+    def __delitem__(self, slc):
+        # type: (slice) -> None
+        pass
+
+    @abc.abstractmethod
+    def __delitem__(self, item):
+        # type: (slice | int) -> None
+        """
+        Delete value/values at index/slice.
+
+        :param item: Index/slice.
+        :raises IndexError: Slice is noncontinuous.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def pop(self, index=-1):
+        # type: (int) -> T
+        """
+        Pop value from index.
+
+        :param index: Index.
         :return: Value.
-        :raises KeyError: No value at location.
         """
-        try:
-            return self[location]
-        except IndexError as e:
-            exc = KeyError(e)
-            six.raise_from(exc, None)
-            raise exc
+        raise NotImplementedError()
+
+    @runtime_final.final
+    def insert(self, index, *values):
+        # type: (int, T) -> None
+        """
+        Insert value(s) at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :raises ValueError: No values provided.
+        """
+        self._insert(index, *values)
+
+    @runtime_final.final
+    def append(self, value):
+        # type: (T) -> None
+        """
+        Append value at the end.
+
+        :param value: Value.
+        """
+        self._append(value)
+
+    @runtime_final.final
+    def extend(self, iterable):
+        # type: (Iterable[T]) -> None
+        """
+        Extend at the end with iterable.
+
+        :param iterable: Iterable.
+        """
+        self._extend(iterable)
+
+    @runtime_final.final
+    def remove(self, value):
+        # type: (T) -> None
+        """
+        Remove first occurrence of value.
+
+        :param value: Value.
+        :raises ValueError: Value is not present.
+        """
+        self._remove(value)
+
+    @runtime_final.final
+    def reverse(self):
+        # type: () -> None
+        """Reverse values."""
+        self._reverse()
+
+    @runtime_final.final
+    def move(self, item, target_index):
+        # type: (slice | int, int) -> None
+        """
+        Move values internally.
+
+        :param item: Index/slice.
+        :param target_index: Target index.
+        """
+        self._move(item, target_index)
+
+    @runtime_final.final
+    def delete(self, item):
+        # type: (slice | int) -> None
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        """
+        self._delete(item)
+
+    @runtime_final.final
+    def update(self, index, *values):
+        # type: (int, T) -> None
+        """
+        Update value(s) starting at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :raises ValueError: No values provided.
+        """
+        self._update(index, *values)
 
 
-# noinspection PyAbstractClass
-class BaseProtectedListStructure(
-    BaseListStructure[T_co, RT],
-    BaseProtectedStructure[T_co, T_co, ListState[T_co], int, RT],
-    BaseProtectedList[T_co],
-):
-    """Base interactive list structure."""
+def resolve_index(length, index, clamp=False):
+    # type: (int, int, bool) -> int
+    """
+    Resolve index to a positive number.
 
-    __slots__ = ()
+    :param length: Length of the list.
+    :param index: Input index.
+    :param clamp: Whether to clamp between zero and the length.
+    :return: Resolved index.
+    :raises IndexError: Index out of range.
+    """
+    if index < 0:
+        index += length
+    if clamp:
+        if index < 0:
+            index = 0
+        elif index > length:
+            index = length
+    elif index < 0 or index >= length:
+        error = "index out of range"
+        raise IndexError(error)
+    return index
 
 
-# noinspection PyAbstractClass
-class BaseInteractiveListStructure(
-    BaseProtectedListStructure[T_co, RT],
-    BaseInteractiveStructure[T_co, T_co, ListState[T_co], int, RT],
-    BaseInteractiveList[T_co],
-):
-    """Base interactive list structure."""
+def resolve_continuous_slice(length, slc):
+    # type: (int, slice) -> tuple[int, int]
+    """
+    Resolve continuous slice according to length.
 
-    __slots__ = ()
+    :param length: Length of the list.
+    :param slc: Continuous slice.
+    :return: Index and stop.
+    :raises IndexError: Slice is noncontinuous.
+    """
+    index, stop, step = slc.indices(length)
+    if step != 1 or stop < index:
+        error = "slice {} is noncontinuous".format(slc)
+        raise IndexError(error)
+    return index, stop
 
 
-# noinspection PyAbstractClass
-class BaseMutableListStructure(
-    BaseProtectedListStructure[T_co, RT],
-    BaseMutableStructure[T_co, T_co, ListState[T_co], int, RT],
-    BaseMutableList[T_co],
-):
-    """Base mutable list structure."""
+def pre_move(length, item, target_index):
+    # type: (int, slice | int, int) -> tuple[int, int, int, int] | None
+    """
+    Perform checks before moving values internally.
 
-    __slots__ = ()
+    :param length: Length of the list.
+    :param item: Index/slice.
+    :param target_index: Target index.
+    :return: None or (index, stop, target index, post index).
+    """
+
+    # Resolve slice/index.
+    if isinstance(item, slice):
+        index, stop = resolve_continuous_slice(length, item)
+        if index == stop:
+            return None
+    else:
+        index = resolve_index(length, item)
+        stop = index + 1
+
+    # Calculate target index and post index.
+    target_index = resolve_index(length, target_index, clamp=True)
+    if index <= target_index <= stop:
+        return None
+    elif target_index > stop:
+        post_index = target_index - (stop - index)
+    else:
+        post_index = target_index
+
+    return index, stop, target_index, post_index

@@ -1,22 +1,20 @@
 import six
 import pyrsistent
-from basicco import runtime_final, recursive_repr, custom_repr
+from basicco import recursive_repr, custom_repr
 from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, overload
 from pyrsistent.typing import PMap
 
-from estruttura.bases import SupportsKeysAndGetItem, BaseInteractiveDict
+from estruttura import SupportsKeysAndGetItem, BasePrivateDict, BaseInteractiveDict
 
-from ._state import State
+from ._bases import BasePrivateDataCollection, BaseDataCollection
 
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
-VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
 
 
-@runtime_final.final
-class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
-    """Immutable dictionary state."""
+class PrivateDictData(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDict[KT, VT]):
+    """Private dictionary data."""
 
     __slots__ = ()
 
@@ -30,9 +28,27 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
         """
         return pyrsistent.pmap(initial)
 
-    def __init__(self, initial=()):
-        # type: (Union[Iterable[tuple[KT, VT]], Mapping[KT, VT]]) -> None
-        super(DictState, self).__init__(initial)
+    @overload
+    def __init__(self, __m, **kwargs):
+        # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> None
+        pass
+
+    @overload
+    def __init__(self, __m, **kwargs):
+        # type: (Iterable[tuple[KT, VT]], **VT) -> None
+        pass
+
+    @overload
+    def __init__(self, **kwargs):
+        # type: (**VT) -> None
+        pass
+
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1 and not kwargs:
+            initial = args[0]
+        else:
+            initial = dict(*args, **kwargs)
+        super(PrivateDictData, self).__init__(initial)
 
     def __contains__(self, key):
         # type: (Any) -> bool
@@ -91,7 +107,7 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
         return self._internal[key]
 
     def _clear(self):
-        # type: (DS) -> DS
+        # type: (PDD) -> PDD
         """
         Clear.
 
@@ -100,7 +116,7 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
         return self._make(pyrsistent.pmap())
 
     def _discard(self, key):
-        # type: (DS, KT) -> DS
+        # type: (PDD, KT) -> PDD
         """
         Discard key if it exists.
 
@@ -110,7 +126,7 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
         return self._make(self._internal.discard(key))
 
     def _remove(self, key):
-        # type: (DS, KT) -> DS
+        # type: (PDD, KT) -> PDD
         """
         Delete existing key.
 
@@ -121,7 +137,7 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
         return self._make(self._internal.remove(key))
 
     def _set(self, key, value):
-        # type: (DS, KT, VT) -> DS
+        # type: (PDD, KT, VT) -> PDD
         """
         Set value for key.
 
@@ -133,17 +149,17 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (DS, SupportsKeysAndGetItem[KT, VT], VT) -> DS
+        # type: (PDD, SupportsKeysAndGetItem[KT, VT], **VT) -> PDD
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (DS, Iterable[tuple[KT, VT]], VT) -> DS
+        # type: (PDD, Iterable[tuple[KT, VT]], **VT) -> PDD
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (DS, VT) -> DS
+        # type: (PDD, **VT) -> PDD
         pass
 
     def _update(self, *args, **kwargs):
@@ -153,6 +169,8 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
 
         :return: Transformed.
         """
+        if not args and not kwargs:
+            return self
         return self._make(self._internal.update(dict(*args, **kwargs)))
 
     def get(self, key, fallback=None):
@@ -197,4 +215,10 @@ class DictState(State[KT, PMap[KT, VT]], BaseInteractiveDict[KT, VT]):
             yield value
 
 
-DS = TypeVar("DS", bound=DictState)
+PDD = TypeVar("PDD", bound=PrivateDictData)
+
+
+class DictData(PrivateDictData[KT, VT], BaseDataCollection[PMap[KT, VT], KT], BaseInteractiveDict[KT, VT]):
+    """Dictionary data."""
+
+    __slots__ = ()

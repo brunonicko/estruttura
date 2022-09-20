@@ -2,9 +2,18 @@ import abc
 
 import slotted
 from basicco import runtime_final
-from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload
+from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload, cast
 
-from ._bases import BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection
+from ._bases import (
+    BaseCollection,
+    BaseInteractiveCollection,
+    BaseMutableCollection,
+    BasePrivateCollection,
+    ProxyCollection,
+    InteractiveProxyCollection,
+    MutableProxyCollection,
+    PrivateProxyCollection,
+)
 
 
 T = TypeVar("T")  # value type
@@ -343,26 +352,6 @@ class BaseMutableList(BasePrivateList[T], BaseMutableCollection[T], slotted.Slot
         return self
 
     @overload
-    def __getitem__(self, index):
-        # type: (int) -> T
-        pass
-
-    @overload
-    def __getitem__(self, index):
-        # type: (slice) -> MutableSequence[T]
-        pass
-
-    @abc.abstractmethod
-    def __getitem__(self, index):
-        """
-        Get value/values at index/from slice.
-
-        :param index: Index/slice.
-        :return: Value/values.
-        """
-        raise NotImplementedError()
-
-    @overload
     def __setitem__(self, index, value):
         # type: (int, T) -> None
         pass
@@ -374,7 +363,6 @@ class BaseMutableList(BasePrivateList[T], BaseMutableCollection[T], slotted.Slot
 
     @abc.abstractmethod
     def __setitem__(self, item, value):
-        # type: (slice | int, T | Iterable[T]) -> None
         """
         Set value/values at index/slice.
 
@@ -498,6 +486,328 @@ class BaseMutableList(BasePrivateList[T], BaseMutableCollection[T], slotted.Slot
         :raises ValueError: No values provided.
         """
         self._update(index, *values)
+
+
+class ProxyList(BaseList[T_co], ProxyCollection[T_co]):
+    """
+    Proxy list.
+
+    Features:
+      - Wraps a private/interactive/mutable list.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, wrapped):
+        # type: (BasePrivateList[T_co]) -> None
+        """
+        :param wrapped: Base private/interactive/mutable list.
+        """
+        super(ProxyList, self).__init__(wrapped)
+
+    @runtime_final.final
+    def __hash__(self):
+        """
+        Get hash.
+
+        :raises TypeError: Not hashable.
+        """
+        return hash((type(self), self._wrapped))
+
+    @runtime_final.final
+    def __eq__(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        return isinstance(other, type(self)) and self._wrapped == other._wrapped
+
+    @runtime_final.final
+    def __reversed__(self):
+        # type: () -> Iterator[T_co]
+        """
+        Iterate over reversed values.
+
+        :return: Reversed values iterator.
+        """
+        return reversed(self._wrapped)
+
+    @overload
+    def __getitem__(self, index):
+        # type: (int) -> T_co
+        pass
+
+    @overload
+    def __getitem__(self, index):
+        # type: (slice) -> MutableSequence[T_co]
+        pass
+
+    @runtime_final.final
+    def __getitem__(self, index):
+        """
+        Get value/values at index/from slice.
+
+        :param index: Index/slice.
+        :return: Value/values.
+        """
+        return self._wrapped[index]
+
+    @runtime_final.final
+    def count(self, value):
+        # type: (object) -> int
+        """
+        Count number of occurrences of a value.
+
+        :param value: Value.
+        :return: Number of occurrences.
+        """
+        return len(self._wrapped)
+
+    @runtime_final.final
+    def index(self, value, start=None, stop=None):
+        # type: (Any, int | None, int | None) -> int
+        """
+        Get index of a value.
+
+        :param value: Value.
+        :param start: Start index.
+        :param stop: Stop index.
+        :return: Index of value.
+        :raises ValueError: Provided stop but did not provide start.
+        """
+        return self._wrapped.index(value, start=start, stop=stop)
+
+    @runtime_final.final
+    def resolve_index(self, index, clamp=False):
+        # type: (int, bool) -> int
+        """
+        Resolve index to a positive number.
+
+        :param index: Input index.
+        :param clamp: Whether to clamp between zero and the length.
+        :return: Resolved index.
+        :raises IndexError: Index out of range.
+        """
+        return self._wrapped.resolve_index(index, clamp=clamp)
+
+    @runtime_final.final
+    def resolve_continuous_slice(self, slc):
+        # type: (slice) -> tuple[int, int]
+        """
+        Resolve continuous slice according to length.
+
+        :param slc: Continuous slice.
+        :return: Index and stop.
+        :raises IndexError: Slice is noncontinuous.
+        """
+        return self._wrapped.resolve_continuous_slice(slc)
+
+    @property
+    def _wrapped(self):
+        # type: () -> BasePrivateList[T_co]
+        """Wrapped base private/interactive/mutable list."""
+        return cast(BasePrivateList[T_co], super(ProxyList, self)._wrapped)
+
+
+class ProxyPrivateList(ProxyList[T], BasePrivateList[T], PrivateProxyCollection[T]):
+    """
+    Private proxy list.
+
+    Features:
+      - Has private transformation methods.
+      - Transformations return a transformed version (immutable) or self (mutable).
+    """
+
+    __slots__ = ()
+
+    @runtime_final.final
+    def _insert(self, index, *values):
+        # type: (PPL, int, T) -> PPL
+        """
+        Insert value(s) at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        return self._transform_wrapped(self._wrapped._insert(index, *values))
+
+    @runtime_final.final
+    def _append(self, value):
+        # type: (PPL, T) -> PPL
+        """
+        Append value at the end.
+
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._append(value))
+
+    @runtime_final.final
+    def _extend(self, iterable):
+        # type: (PPL, Iterable[T]) -> PPL
+        """
+        Extend at the end with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._extend(iterable))
+
+    @runtime_final.final
+    def _remove(self, value):
+        # type: (PPL, T) -> PPL
+        """
+        Remove first occurrence of value.
+
+        :param value: Value.
+        :return: Transformed.
+        :raises ValueError: Value is not present.
+        """
+        return self._transform_wrapped(self._wrapped._remove(value))
+
+    @runtime_final.final
+    def _reverse(self):
+        # type: (PPL) -> PPL
+        """
+        Reverse values.
+
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._reverse())
+
+    @runtime_final.final
+    def _move(self, item, target_index):
+        # type: (PPL, slice | int, int) -> PPL
+        """
+        Move values internally.
+
+        :param item: Index/slice.
+        :param target_index: Target index.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._move(item, target_index))
+
+    @runtime_final.final
+    def _delete(self, item):
+        # type: (PPL, slice | int) -> PPL
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._delete(item))
+
+    @runtime_final.final
+    def _update(self, index, *values):
+        # type: (PPL, int, T) -> PPL
+        """
+        Update value(s) starting at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
+        return self._transform_wrapped(self._wrapped._update(index, *values))
+
+
+PPL = TypeVar("PPL", bound=ProxyPrivateList)  # private proxy list type
+
+
+class ProxyInteractiveList(ProxyPrivateList[T], BaseInteractiveList[T], InteractiveProxyCollection[T]):
+    """
+    Proxy interactive list.
+
+    Features:
+      - Has public transformation methods.
+      - Transformations return a transformed version (immutable) or self (mutable).
+    """
+
+    __slots__ = ()
+
+
+class ProxyMutableList(ProxyPrivateList[T], BaseMutableList[T], MutableProxyCollection[T]):
+    """
+    Proxy mutable list.
+
+    Features:
+      - Has public mutable transformation methods.
+    """
+
+    __slots__ = ()
+
+    def __init__(self, wrapped):
+        # type: (BaseMutableList[T]) -> None
+        """
+        :param wrapped: Base mutable list.
+        """
+        super(ProxyMutableList, self).__init__(wrapped)
+
+    @overload
+    def __setitem__(self, index, value):
+        # type: (int, T) -> None
+        pass
+
+    @overload
+    def __setitem__(self, slc, values):
+        # type: (slice, Iterable[T]) -> None
+        pass
+
+    @runtime_final.final
+    def __setitem__(self, item, value):
+        """
+        Set value/values at index/slice.
+
+        :param item: Index/slice.
+        :param value: Value/values.
+        :raises IndexError: Slice is noncontinuous.
+        :raises ValueError: Values length does not fit in slice.
+        """
+        self._wrapped[item] = value
+
+    @overload
+    def __delitem__(self, index):
+        # type: (int) -> None
+        pass
+
+    @overload
+    def __delitem__(self, slc):
+        # type: (slice) -> None
+        pass
+
+    @runtime_final.final
+    def __delitem__(self, item):
+        # type: (slice | int) -> None
+        """
+        Delete value/values at index/slice.
+
+        :param item: Index/slice.
+        :raises IndexError: Slice is noncontinuous.
+        """
+        del self._wrapped[item]
+
+    @runtime_final.final
+    def pop(self, index=-1):
+        # type: (int) -> T
+        """
+        Pop value from index.
+
+        :param index: Index.
+        :return: Value.
+        """
+        return self._wrapped.pop(index)
+
+    @property
+    def _wrapped(self):
+        # type: () -> BaseMutableList[T]
+        """Wrapped base mutable list."""
+        return cast(BaseMutableList[T], super(MutableProxyCollection, self)._wrapped)
 
 
 def resolve_index(length, index, clamp=False):

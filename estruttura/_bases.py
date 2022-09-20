@@ -564,6 +564,14 @@ class PrivateProxyCollection(ProxyCollection[T_co], BasePrivateCollection[T_co])
     __slots__ = ()
 
     @runtime_final.final
+    def _transform_wrapped(self, new_wrapped):
+        # type: (PPC, BasePrivateCollection[T_co]) -> PPC
+        if new_wrapped is self._wrapped:
+            return self
+        else:
+            return type(self)(new_wrapped)
+
+    @runtime_final.final
     def _clear(self):
         # type: (PPC) -> PPC
         """
@@ -571,11 +579,7 @@ class PrivateProxyCollection(ProxyCollection[T_co], BasePrivateCollection[T_co])
 
         :return: Transformed.
         """
-        new_wrapped = self._wrapped._clear()  # noqa
-        if new_wrapped is self._wrapped:
-            return self
-        else:
-            return type(self)(new_wrapped)
+        return self._transform_wrapped(self._wrapped._clear())  # noqa
 
 
 PPC = TypeVar("PPC", bound=PrivateProxyCollection)  # private proxy collection type
@@ -602,3 +606,16 @@ class MutableProxyCollection(PrivateProxyCollection[T_co], BaseMutableCollection
     """
 
     __slots__ = ()
+
+    def __init__(self, wrapped):
+        # type: (BaseMutableCollection[T_co]) -> None
+        """
+        :param wrapped: Base mutable collection.
+        """
+        super(MutableProxyCollection, self).__init__(wrapped)
+
+    @property
+    def _wrapped(self):
+        # type: () -> BaseMutableCollection[T_co]
+        """Wrapped base mutable collection."""
+        return cast(BaseMutableCollection[T_co], super(MutableProxyCollection, self)._wrapped)

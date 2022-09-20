@@ -17,8 +17,14 @@ from tippo import (
 
 from ._constants import MISSING, SupportsKeysAndGetItem
 from ._bases import (
-    BaseCollection, BaseInteractiveCollection, BaseMutableCollection, BasePrivateCollection,
-    ProxyCollection, InteractiveProxyCollection, MutableProxyCollection, PrivateProxyCollection
+    BaseCollection,
+    BaseInteractiveCollection,
+    BaseMutableCollection,
+    BasePrivateCollection,
+    ProxyCollection,
+    InteractiveProxyCollection,
+    MutableProxyCollection,
+    PrivateProxyCollection,
 )
 
 
@@ -332,8 +338,8 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         raise NotImplementedError()
 
     @overload
-    def setdefault(self, key):
-        # type: (MutableMapping[KT, VT | None], KT) -> None
+    def setdefault(self, key):  # noqa
+        # type: (MutableMapping[KT, VT | None], KT) -> VT | None
         pass
 
     @overload
@@ -426,6 +432,15 @@ class ProxyDict(BaseDict[KT, VT_co], ProxyCollection[KT]):
         super(ProxyDict, self).__init__(wrapped)
 
     @runtime_final.final
+    def __hash__(self):
+        """
+        Get hash.
+
+        :raises TypeError: Not hashable.
+        """
+        return hash((type(self), self._wrapped))
+
+    @runtime_final.final
     def __eq__(self, other):
         # type: (object) -> bool
         """
@@ -435,15 +450,6 @@ class ProxyDict(BaseDict[KT, VT_co], ProxyCollection[KT]):
         :return: True if equal.
         """
         return isinstance(other, type(self)) and self._wrapped == other._wrapped
-
-    @runtime_final.final
-    def __hash__(self):
-        """
-        Get hash.
-
-        :raises TypeError: Not hashable.
-        """
-        return hash((type(self), self._wrapped))
 
     @runtime_final.final
     def __getitem__(self, key):
@@ -520,6 +526,66 @@ class ProxyPrivateDict(ProxyDict[KT, VT], BasePrivateDict[KT, VT], PrivateProxyC
 
     __slots__ = ()
 
+    @runtime_final.final
+    def _discard(self, key):
+        # type: (PPD, KT) -> PPD
+        """
+        Discard key if it exists.
+
+        :param key: Key.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._discard(key))  # noqa
+
+    @runtime_final.final
+    def _remove(self, key):
+        # type: (PPD, KT) -> PPD
+        """
+        Delete existing key.
+
+        :param key: Key.
+        :return: Transformed.
+        :raises KeyError: Key is not present.
+        """
+        return self._transform_wrapped(self._wrapped._remove(key))  # noqa
+
+    @runtime_final.final
+    def _set(self, key, value):
+        # type: (PPD, KT, VT) -> PPD
+        """
+        Set value for key.
+
+        :param key: Key.
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._set(key, value))  # noqa
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (PPD, SupportsKeysAndGetItem[KT, VT], **VT) -> PPD
+        pass
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (PPD, Iterable[tuple[KT, VT]], **VT) -> PPD
+        pass
+
+    @overload
+    def _update(self, **kwargs):
+        # type: (PPD, **VT) -> PPD
+        pass
+
+    @runtime_final.final
+    def _update(self, *args, **kwargs):
+        """
+        Update keys and values.
+        Same parameters as :meth:`dict.update`.
+
+        :return: Transformed.
+        """
+        return self._transform_wrapped(self._wrapped._update(*args, **kwargs))  # noqa
+
 
 PPD = TypeVar("PPD", bound=ProxyPrivateDict)  # private proxy dictionary type
 
@@ -545,3 +611,61 @@ class ProxyMutableDict(ProxyPrivateDict[KT, VT], BaseMutableDict[KT, VT], Mutabl
     """
 
     __slots__ = ()
+
+    def __init__(self, wrapped):
+        # type: (BaseMutableDict[KT, VT]) -> None
+        """
+        :param wrapped: Base mutable dict.
+        """
+        super(ProxyMutableDict, self).__init__(wrapped)
+
+    @runtime_final.final
+    def pop(self, key, fallback=MISSING):
+        # type: (KT, Any) -> Any
+        """
+        Get value for key and remove it, return fallback value if key is not present.
+
+        :param key: Key.
+        :param fallback: Fallback value.
+        :return: Value or fallback value.
+        :raises KeyError: Key is not present and fallback value not provided.
+        """
+        return self._wrapped.pop(key, fallback=fallback)
+
+    @runtime_final.final
+    def popitem(self):
+        # type: () -> tuple[KT, VT]
+        """
+        Get item and discard key.
+
+        :return: Item.
+        :raises KeyError: Dictionary is empty.
+        """
+        return self._wrapped.popitem()
+
+    @overload
+    def setdefault(self, key):  # noqa
+        # type: (MutableMapping[KT, VT | None], KT) -> VT | None
+        pass
+
+    @overload
+    def setdefault(self, key, default):  # noqa
+        # type: (KT, VT) -> VT
+        pass
+
+    @runtime_final.final
+    def setdefault(self, key, default=None):
+        """
+        Get the value for the specified key, insert key with default if not present.
+
+        :param key: Key.
+        :param default: Default value.
+        :return: Existing or default value.
+        """
+        return self._wrapped.setdefault(key, default=default)
+
+    @property
+    def _wrapped(self):
+        # type: () -> BaseMutableDict[KT, VT]
+        """Wrapped base mutable dict."""
+        return cast(BaseMutableDict[KT, VT], super(MutableProxyCollection, self)._wrapped)

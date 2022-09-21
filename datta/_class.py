@@ -51,12 +51,7 @@ class DataMeta(BaseClassMeta):
 
 class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
     __slots__ = ()
-
-    def __init__(self, *args, **kwargs):
-        manager = AttributeManager(type(self).__attributes__)
-        initial_values = manager.get_initial_values(*args, **kwargs)
-        for name, value in six.iteritems(initial_values):
-            object.__setattr__(self, name, value)
+    __kwargs__ = {"gen_init": True}
 
     @runtime_final.final
     def __hash__(self):
@@ -70,6 +65,23 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
             error = "no attribute named {!r}".format(name)
             raise KeyError(error)
         return getattr(self, name)
+
+    def __setattr__(self, name, value):
+        if name in type(self).__attributes__:
+            error = "{!r} attributes are read-only".format(type(self).__fullname__)
+            raise AttributeError(error)
+        return super(PrivateData, self).__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if name in type(self).__attributes__:
+            error = "{!r} attributes are read-only".format(type(self).__fullname__)
+            raise AttributeError(error)
+        return super(PrivateData, self).__delattr__(name)
+
+    def _init(self, init_values):
+        # type: (dict[str, Any]) -> None
+        for name, value in six.iteritems(init_values):
+            object.__setattr__(self, name, value)
 
     @overload
     def _update(self, __m, **kwargs):

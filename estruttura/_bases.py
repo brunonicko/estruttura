@@ -62,14 +62,14 @@ class BaseMeta(
 
     def __setattr__(cls, name, value):
         """Prevent setting class attributes."""
-        if cls.__locked__:
+        if cls.__locked__ and not name.startswith("_abc_"):
             error = "{!r} class attributes are read-only".format(cls.__name__)
             raise AttributeError(error)
         super(BaseMeta, cls).__setattr__(name, value)
 
     def __delattr__(cls, name):
         """Prevent deleting class attributes."""
-        if cls.__locked__:
+        if cls.__locked__ and not name.startswith("_abc_"):
             error = "{!r} class attributes are read-only".format(cls.__name__)
             raise AttributeError(error)
         super(BaseMeta, cls).__delattr__(name)
@@ -135,7 +135,9 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC, set_name.SetName, in
         for base in reversed(get_mro.get_mro(type(self))):
             if base is object or base is type:
                 continue
-            member_names.update(n for n in base.__dict__ if not ("__" in n and n.startswith("_")))
+            member_names.update(
+                n for n in base.__dict__ if not ("__" in n and n.startswith("_")) and not n.startswith("_abc_")
+            )
         return sorted(member_names)
 
 

@@ -3,6 +3,8 @@ from ._constants import (
     MISSING,
     DeletedType,
     DELETED,
+    DefaultType,
+    DEFAULT,
     SupportsKeysAndGetItem,
 )
 from ._bases import (
@@ -74,6 +76,8 @@ __all__ = [
     "MISSING",
     "DeletedType",
     "DELETED",
+    "DefaultType",
+    "DEFAULT",
     "SupportsKeysAndGetItem",
     "BaseMeta",
     "Base",

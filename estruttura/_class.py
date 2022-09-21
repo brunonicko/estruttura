@@ -5,9 +5,10 @@ import six
 from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value
 from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, overload, cast
 
-from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED
+from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED, DEFAULT
 from ._dict import BaseDict
 from ._bases import BaseMeta, Base, BaseHashable, Relationship
+from ._make import make_method, generate_unique_filename
 
 
 T = TypeVar("T")  # value type
@@ -433,6 +434,12 @@ class AttributeManager(Base, Generic[AT_co]):
                 except IndexError:
                     reached_kwargs = True
                 else:
+                    if value is DEFAULT:
+                        if attribute.has_default:
+                            value = attribute.get_default_value(process=False)
+                        else:
+                            error = "attribute {!r} has no default value".format(attribute_name)
+                            raise ValueError(error)
                     i += 1
                     initial_values[attribute_name] = attribute.process(value)
                     continue
@@ -440,6 +447,8 @@ class AttributeManager(Base, Generic[AT_co]):
             # Get value for keyword argument.
             try:
                 value = kwargs[attribute_name]
+                if value is DEFAULT:
+                    raise KeyError()
             except KeyError:
                 if attribute.has_default:
                     value = attribute.get_default_value(process=False)
@@ -482,6 +491,9 @@ class BaseClassMeta(BaseMeta, type):
 
     __attribute_type__ = Attribute  # type: Type[Attribute]
     __relationship_type__ = Relationship  # type: Type[Relationship]
+    __kw_only__ = False  # type: bool
+    __gen_init__ = False  # type: bool
+
     __attributes = AttributeMap()  # type: AttributeMap
 
     @staticmethod
@@ -561,6 +573,9 @@ class BaseClassMeta(BaseMeta, type):
             attribute.__set_name__(cls, attribute_name)
             assert attribute.name == attribute_name
 
+        # Store attribute map.
+        cls.__attributes = attribute_map
+
         # Check for non-default attributes declared after default ones.
         if not cls.__kw_only__:
             seen_default = None
@@ -575,8 +590,14 @@ class BaseClassMeta(BaseMeta, type):
                     )
                     raise TypeError(error)
 
-        # Store attribute map.
-        cls.__attributes = attribute_map
+        # Generate init method.
+        if cls.__gen_init__:
+            if "__init__" in dct:
+                error = "can't manually define __init__"
+                raise TypeError(error)
+            init_method = cls.__gen_init()
+            init_method.__module__ = cls.__module__
+            type.__setattr__(cls, "__init__", init_method)
 
         return cls
 
@@ -584,6 +605,32 @@ class BaseClassMeta(BaseMeta, type):
     def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
         # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
         return dct
+
+    def __gen_init(cls):
+        globs = {"AttributeManager": AttributeManager, "DEFAULT": DEFAULT}
+        args = []
+        lines = []
+        for name, attribute in six.iteritems(cls.__attributes__):
+            if not attribute.init:
+                continue
+            if attribute.has_default or cls.__kw_only__:
+                args.append("{}=DEFAULT".format(name))
+            else:
+                args.append(name)
+
+        manager_line = "__initial_values = AttributeManager(type(self).__attributes__).get_initial_values("
+        if args:
+            manager_line += ", ".join(args)
+        manager_line += ")"
+        lines.append(manager_line)
+
+        init_line = "self._init(__initial_values)"
+        lines.append(init_line)
+
+        init_script = "def __init__(self{}):".format((", " + ", ".join(args)) if args else "")
+        init_script += "\n    " + "\n    ".join(lines or ["pass"])
+
+        return make_method("__init__", init_script, generate_unique_filename(cls, "__init__"), globs)
 
     @property
     @runtime_final.final
@@ -596,28 +643,35 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
     """Base class."""
 
     __slots__ = ()
-    __kw_only__ = False  # type: bool
 
-    def __init_subclass__(cls, kw_only=None, **kwargs):
-        # type: (bool | None, **Any) -> None
+    def __init_subclass__(
+        cls,
+        kw_only=None,  # type: bool | None
+        gen_init=None,  # type: bool | None
+        **kwargs
+    ):
+        # type: (...) -> None
 
         # Keyword argument only.
         if kw_only is not None:
+            if cls.__kw_only__ and not kw_only:
+                error = "kw_only is already on for {!r} base class(es), can't turn it off".format(cls.__name__)
+                raise TypeError(error)
             cls.__kw_only__ = bool(kw_only)
+
+        # Generate init method.
+        if gen_init is not None:
+            if cls.__gen_init__ and not gen_init:
+                error = "gen_init is already on for {!r} base class(es), can't turn it off".format(cls.__name__)
+                raise TypeError(error)
+            cls.__gen_init__ = bool(gen_init)
 
         super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
 
-    def __setattr__(self, name, value):
-        if name in type(self).__attributes__:
-            error = "data class {!r} is frozen".format(type(self).__fullname__)
-            raise AttributeError(error)
-        return super(BaseClass, self).__setattr__(name, value)
-
-    def __delattr__(self, name):
-        if name in type(self).__attributes__:
-            error = "data class {!r} is frozen".format(type(self).__fullname__)
-            raise AttributeError(error)
-        return super(BaseClass, self).__delattr__(name)
+    @abc.abstractmethod
+    def _init(self, init_values):
+        # type: (dict[str, Any]) -> None
+        raise NotImplementedError()
 
     @abc.abstractmethod
     def __getitem__(self, name):

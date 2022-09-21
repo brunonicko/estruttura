@@ -24,6 +24,14 @@ DELETED = DeletedType.DELETED
 
 
 @final
+class DefaultType(Enum):
+    DEFAULT = "DEFAULT"
+
+
+DEFAULT = DefaultType.DEFAULT
+
+
+@final
 class SupportsKeysAndGetItem(Protocol[KT, VT_co]):
     def keys(self):
         # type: () -> Iterable[KT]

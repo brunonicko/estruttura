@@ -13,7 +13,7 @@ KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 
 
-class PrivateDictData(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDict[KT, VT]):
+class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDict[KT, VT]):
     """Private dictionary data."""
 
     __slots__ = ()
@@ -48,7 +48,7 @@ class PrivateDictData(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
             initial = args[0]
         else:
             initial = dict(*args, **kwargs)
-        super(PrivateDictData, self).__init__(initial)
+        super(PrivateDataDict, self).__init__(initial)
 
     def __contains__(self, key):
         # type: (Any) -> bool
@@ -215,10 +215,10 @@ class PrivateDictData(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
             yield value
 
 
-PDD = TypeVar("PDD", bound=PrivateDictData)
+PDD = TypeVar("PDD", bound=PrivateDataDict)
 
 
-class DictData(PrivateDictData[KT, VT], BaseDataCollection[PMap[KT, VT], KT], BaseInteractiveDict[KT, VT]):
+class DataDict(PrivateDataDict[KT, VT], BaseDataCollection[PMap[KT, VT], KT], BaseInteractiveDict[KT, VT]):
     """Dictionary data."""
 
     __slots__ = ()

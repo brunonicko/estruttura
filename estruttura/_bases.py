@@ -8,14 +8,13 @@ from basicco import (
     qualname,
     init_subclass,
     set_name,
-    namespace,
+    fabricate_value,
+    recursive_repr,
+    custom_repr,
     get_mro,
     type_checking,
-    recursive_repr,
-    fabricate_value,
-    custom_repr,
 )
-from tippo import Any, Callable, Iterable, Type, TypeVar, Iterator, Generic, overload, cast
+from tippo import Any, Callable, Type, TypeVar, Iterator, Iterable, Generic, cast, overload
 
 from ._constants import SupportsKeysAndGetItem
 
@@ -28,7 +27,6 @@ class BaseMeta(
     slotted.SlottedABCGenericMeta,
     explicit_hash.ExplicitHashMeta,
     runtime_final.FinalizedMeta,
-    namespace.NamespacedMeta,
     set_name.SetNameMeta,
     init_subclass.InitSubclassMeta,
 ):
@@ -37,7 +35,6 @@ class BaseMeta(
 
     Features:
       - Implements abstract method checking and better support for generics in Python 2.7.
-      - Protected class namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Forces `__hash__` to be declared if `__eq__` was declared.
       - Prevents class attributes from changing.
@@ -85,7 +82,6 @@ class Base(six.with_metaclass(BaseMeta, slotted.SlottedABC, set_name.SetName, in
     Features:
       - Defines a `__weakref__` slot.
       - Implements abstract method checking and better support for generics in Python 2.7.
-      - Protected class namespace available as `__namespace__`.
       - Forces the use of `__slots__`.
       - Non-hashable by default.
       - Forces `__hash__` to be declared if `__eq__` was declared.
@@ -213,7 +209,7 @@ class BaseContainer(Base, slotted.SlottedContainer[T_co]):
 
 
 class Relationship(BaseHashable, Generic[T]):
-    """Describes a relationship between a collection and its values."""
+    """Describes a relationship with values."""
 
     __slots__ = (
         "_converter",
@@ -415,10 +411,7 @@ R = TypeVar("R", bound=Relationship)  # relationship type
 class BaseCollectionMeta(BaseMeta):
     """Metaclass for :class:`BaseCollection`."""
 
-    @property
-    def __relationship_type__(cls):
-        # type: () -> Type[Relationship]
-        return Relationship
+    __relationship_type__ = Relationship  # type: Type[Relationship]
 
 
 # Trick static type checking.
@@ -448,7 +441,7 @@ class BaseCollection(
         if relationship is not None:
             type_checking.assert_is_instance(relationship, cls.__relationship_type__)
             cls.__relationship__ = relationship
-        super(BaseCollection, cls).__init_subclass__(**kwargs)
+        super(BaseCollection, cls).__init_subclass__(**kwargs)  # noqa
 
 
 class BasePrivateCollection(BaseCollection[T_co]):

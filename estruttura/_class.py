@@ -2,20 +2,12 @@ import abc
 import collections
 
 import six
-from basicco import runtime_final, fabricate_value, custom_repr, recursive_repr
-from tippo import Any, Callable, TypeVar, Tuple, Iterable, Generic, Iterator, Type, TypeAlias, overload, cast
+from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value
+from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, overload, cast
 
-from ._constants import MissingType, MISSING, DELETED, SupportsKeysAndGetItem
+from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED
 from ._dict import BaseDict
-from ._bases import (
-    Base,
-    BaseHashable,
-    BaseCollectionMeta,
-    BaseCollection,
-    BaseInteractiveCollection,
-    BaseMutableCollection,
-    BasePrivateCollection,
-)
+from ._bases import BaseMeta, Base, BaseHashable, Relationship
 
 
 T = TypeVar("T")  # value type
@@ -23,11 +15,12 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 Item = Tuple[str, Any]  # type: TypeAlias
 
-
 _attribute_counter = 0
 
 
-class BaseAttribute(BaseHashable, Generic[T_co]):
+class Attribute(BaseHashable, Generic[T_co]):
+    """Attribute descriptor."""
+
     __slots__ = (
         "_owner",
         "_name",
@@ -54,7 +47,7 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
         repr=True,  # type: bool
         eq=True,  # type: bool
         hash=None,  # type: bool | None
-        relationship=None,  # type: BaseRelationship | None
+        relationship=None,  # type: Relationship | None
         metadata=None,  # type: Any
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
@@ -75,7 +68,7 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
             raise ValueError(error)
 
         # Set attributes.
-        self._owner = None  # type: Type[BaseObject] | None
+        self._owner = None  # type: Type[BaseClass] | None
         self._name = None  # type: str | None
         self._default = default
         self._factory = factory
@@ -113,13 +106,32 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
             key_repr=str,
         )
 
-    @abc.abstractmethod
+    @overload
     def __get__(self, instance, owner):
-        # type: (BaseObject, Type[BaseObject]) -> T_co
-        raise NotImplementedError()
+        # type: (A, None, None) -> A
+        pass
+
+    @overload
+    def __get__(self, instance, owner):
+        # type: (A, None, Type[BaseClass]) -> A
+        pass
+
+    @overload
+    def __get__(self, instance, owner):
+        # type: (BaseClass, Type[BaseClass]) -> T_co
+        pass
+
+    def __get__(self, instance, owner):
+        if instance is not None:
+            if self.name is None:
+                assert self.owner is None
+                error = "attribute not named/owned"
+                raise RuntimeError(error)
+            return instance[self.name]
+        return self
 
     def __set_name__(self, owner, name):
-        # type: (Type[BaseObject], str) -> None
+        # type: (Type[BaseClass], str) -> None
         if self._name is not None and self._name != name:
             error = "attribute already named {!r}, can't rename it to {!r}".format(self._name, name)
             raise TypeError(error)
@@ -154,26 +166,26 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BA, SupportsKeysAndGetItem[str, Any], **Any) -> BA
+        # type: (A, SupportsKeysAndGetItem[str, Any], **Any) -> A
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BA, Iterable[Item], **Any) -> BA
+        # type: (A, Iterable[Item], **Any) -> A
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BA, **Any) -> BA
+        # type: (A, **Any) -> A
         pass
 
     def update(self, *args, **kwargs):
         updated_kwargs = self.to_dict()
         updated_kwargs.update(*args, **kwargs)
-        return cast(BA, type(self)(**updated_kwargs))
+        return cast(A, type(self)(**updated_kwargs))
 
-    def make_default_value(self):
-        # type: () -> T_co
+    def get_default_value(self, process=True):
+        # type: (bool) -> T_co
 
         # Get/fabricate default value.
         if self.default is not MISSING:
@@ -188,11 +200,17 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
             error = "no valid default/factory"
             raise RuntimeError(error)
 
-        # Process using relationship.
-        if self.relationship is not None:
-            default_value = self.relationship.process(default_value)
+        # Process value.
+        if process:
+            default_value = self.process(default_value)
 
         return default_value
+
+    def process(self, value):
+        # type: (Any) -> T
+        if self.relationship is not None:
+            return self.relationship.process(value)
+        return value
 
     @property
     def name(self):
@@ -201,7 +219,7 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
 
     @property
     def owner(self):
-        # type: () -> Type[BaseObject] | None
+        # type: () -> Type[BaseClass] | None
         return self._owner
 
     @property
@@ -245,7 +263,7 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
 
     @property
     def relationship(self):
-        # type: () -> BaseRelationship | None
+        # type: () -> Relationship | None
         return self._relationship
 
     @property
@@ -278,49 +296,61 @@ class BaseAttribute(BaseHashable, Generic[T_co]):
         return self._default is not MISSING or self._factory is not MISSING
 
 
-BA = TypeVar("BA", bound=BaseAttribute)  # base attribute type
-BA_co = TypeVar("BA_co", bound=BaseAttribute, covariant=True)  # covariant base attribute type
+A = TypeVar("A", bound=Attribute)  # attribute type
+AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)  # covariant attribute type
 
 
-class BaseMutableAttribute(BaseAttribute[T]):
+class MutableAttribute(Attribute[T]):
+    """Mutable attribute descriptor."""
+
     __slots__ = ()
 
-    @abc.abstractmethod
-    def __get__(self, instance, owner):
-        # type: (BaseObject, Type[BaseObject]) -> T
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def __set__(self, instance, value):
-        # type: (BaseObject, T) -> None
-        raise NotImplementedError()
+        # type: (BaseMutableClass, T) -> None
+        if self.name is None:
+            assert self.owner is None
+            error = "attribute not named/owned"
+            raise RuntimeError(error)
+        instance[self.name] = value
 
-    @abc.abstractmethod
-    def __delete__(self, instance, value):
-        # type: (BaseObject, T) -> None
-        raise NotImplementedError()
+    def __delete__(self, instance):
+        # type: (BaseMutableClass) -> None
+        if self.name is None:
+            assert self.owner is None
+            error = "attribute not named/owned"
+            raise RuntimeError(error)
+        del instance[self.name]
 
 
-class AttributeMap(BaseDict[str, BA_co]):
+@runtime_final.final
+class AttributeMap(BaseDict[str, AT_co]):
+    """Maps attributes by name."""
+
     __slots__ = ("__attribute_dict",)
 
-    def __init__(self, attribute_items):
-        # type: (Iterable[tuple[str, BA_co]]) -> None
-        self.__attribute_dict = collections.OrderedDict()  # type: collections.OrderedDict[str, BA_co]
+    def __init__(self, attribute_items=()):
+        # type: (Iterable[tuple[str, AT_co]]) -> None
+        """
+        :param attribute_items: Attribute items (name, attribute).
+        """
+        self.__attribute_dict = collections.OrderedDict()  # type: collections.OrderedDict[str, AT_co]
         for name, attribute in attribute_items:
             self.__attribute_dict[name] = attribute
 
     def __repr__(self):
         return "{}({})".format(type(self).__fullname__, custom_repr.iterable_repr(self.items()))
 
+    def __hash__(self):
+        return hash(tuple(self.__attribute_dict.items()))
+
     def __eq__(self, other):
         return isinstance(other, AttributeMap) and self.__attribute_dict == other.__attribute_dict
 
-    def __reversed__(self):
-        return reversed(self.__attribute_dict)
-
     def __getitem__(self, name):
         return self.__attribute_dict[name]
+
+    def __contains__(self, name):
+        return name in self.__attribute_dict
 
     def get(self, name, fallback=None):
         return self.__attribute_dict.get(name, fallback)
@@ -340,20 +370,22 @@ class AttributeMap(BaseDict[str, BA_co]):
     def __len__(self):
         return len(self.__attribute_dict)
 
-    def __iter__(self) -> Iterator[str]:
+    def __iter__(self):
         for name in six.iterkeys(self.__attribute_dict):
             yield name
 
 
-class BaseAttributeManager(Base, Generic[BA_co]):
-    __slots__ = ("_attributes",)
+class AttributeManager(Base, Generic[AT_co]):
+    """Manages attribute values."""
 
-    def __init__(self, attributes):
-        # type: (AttributeMap[BA_co]) -> None
+    __slots__ = ("__attribute_map",)
+
+    def __init__(self, attribute_map):
+        # type: (AttributeMap[AT_co]) -> None
         """
-        :param attributes: Attributes.
+        :param attribute_map: Attributes.
         """
-        self._attributes = attributes
+        self.__attribute_map = attribute_map
 
     def get_initial_values(self, *args, **kwargs):
         # type: (*Any, **Any) -> dict[str, Any]
@@ -370,7 +402,7 @@ class BaseAttributeManager(Base, Generic[BA_co]):
         reached_kwargs = False
         internal_attribute_names = set()
         initial_values = {}
-        for attribute_name, attribute in six.iteritems(self.attributes):
+        for attribute_name, attribute in six.iteritems(self.attribute_map):
 
             # Skip non-init attributes.
             if not attribute.init:
@@ -383,7 +415,7 @@ class BaseAttributeManager(Base, Generic[BA_co]):
                 if attribute.has_default:
 
                     # Has a default value.
-                    value = attribute.make_default()
+                    value = attribute.get_default_value()
                     initial_values[attribute_name] = value
                     continue
 
@@ -402,7 +434,7 @@ class BaseAttributeManager(Base, Generic[BA_co]):
                     reached_kwargs = True
                 else:
                     i += 1
-                    initial_values[attribute_name] = value
+                    initial_values[attribute_name] = attribute.process(value)
                     continue
 
             # Get value for keyword argument.
@@ -410,7 +442,7 @@ class BaseAttributeManager(Base, Generic[BA_co]):
                 value = kwargs[attribute_name]
             except KeyError:
                 if attribute.has_default:
-                    value = attribute.make_default()
+                    value = attribute.get_default_value(process=False)
                 elif attribute.required:
                     error = "missing value for required attribute {!r}".format(attribute_name)
                     exc = TypeError(error)
@@ -420,10 +452,10 @@ class BaseAttributeManager(Base, Generic[BA_co]):
                     continue
 
             # Set attribute value.
-            initial_values[attribute_name] = value
+            initial_values[attribute_name] = attribute.process(value)
 
         # Invalid kwargs.
-        invalid_kwargs = set(kwargs).difference(self.attributes)
+        invalid_kwargs = set(kwargs).difference(self.attribute_map)
         if invalid_kwargs:
             error = "invalid keyword argument(s) {}".format(", ".join(repr(k) for k in invalid_kwargs))
             raise TypeError(error)
@@ -439,220 +471,254 @@ class BaseAttributeManager(Base, Generic[BA_co]):
         return initial_values
 
     @property
-    def attributes(self):
-        # type: () -> AttributeMap[BA_co]
-        """Attributes."""
-        return self._attributes
+    def attribute_map(self):
+        # type: () -> AttributeMap[AT_co]
+        """Attribute map."""
+        return self.__attribute_map
 
 
-class BaseObjectMeta(BaseCollectionMeta, type):
-    def __init__(cls, name, bases, dct, **kwargs):
-        super(BaseObjectMeta, cls).__init__(name, bases, dct, **kwargs)
+class BaseClassMeta(BaseMeta, type):
+    """Metaclass for :class:`BaseClass`."""
 
-        try:
-            attributes = cls.__attributes__
-        except NotImplementedError:
-            pass
-        else:
-            # For each declared attribute.
-            seen_default = None
-            for attribute_name, attribute in six.iteritems(attributes):
+    __attribute_type__ = Attribute  # type: Type[Attribute]
+    __relationship_type__ = Relationship  # type: Type[Relationship]
+    __attributes = AttributeMap()  # type: AttributeMap
 
-                # Set name.
-                attribute.name = attribute_name
+    @staticmethod
+    def __new__(mcs, name, bases, dct, **kwargs):
 
-                # Check for non-default attributes declared after default ones.
-                if not cls.__kw_only__:
-                    if not attribute.init:
-                        continue
-                    if attribute.has_default:
-                        seen_default = attribute_name
-                    elif seen_default is not None:
-                        error = "non-default attribute {!r} declared after default attribute {!r}".format(
-                            attribute_name, seen_default
+        # Scrape bases.
+        attributes = {}  # type: dict[str, Attribute]
+        attribute_orders = {}  # type: dict[str, int]
+        for base in reversed(bases):
+
+            # Prevent overriding attributes with non-attributes.
+            for attribute_name in attributes:
+                if (isinstance(base, BaseClassMeta) and attribute_name not in base.__attributes__) or (
+                    hasattr(base, attribute_name)
+                    and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
+                ):
+                    error = "{!r} overrides {!r} attribute with non attribute {!r} object".format(
+                        base.__name__,
+                        attribute_name,
+                        type(getattr(base, attribute_name)).__name__,
+                    )
+                    raise TypeError(error)
+
+            # Collect base's attributes.
+            if isinstance(base, BaseClassMeta):
+                for attribute_name, attribute in six.iteritems(base.__attributes__):
+
+                    # Attribute type changed and it's not compatible anymore.
+                    if not isinstance(attribute, mcs.__attribute_type__):
+                        error = (
+                            "metaclass {!r} for class {!r} defines '__attribute_type__' as {!r}, "
+                            "but base {!r} utilizes {!r}"
+                        ).format(
+                            mcs.__name__,
+                            name,
+                            mcs.__attribute_type__.__name__,
+                            base.__fullname__,
+                            base.__attribute_type__,
                         )
                         raise TypeError(error)
 
-    @property
-    @abc.abstractmethod
-    def __kw_only__(cls):
-        # type: () -> bool
-        raise NotImplementedError()
+                    assert attribute.name == attribute_name
+
+                    # Collect attribute and remember order only if not seen before.
+                    attributes[attribute_name] = attribute
+                    if attribute_name not in attribute_orders:
+                        attribute_orders[attribute_name] = attribute.order
+
+        # Collect attributes for this class.
+        this_attributes = {}  # type: dict[str, Attribute]
+        for member_name, member in six.iteritems(dct):
+            if isinstance(member, mcs.__attribute_type__):
+
+                # Collect attribute.
+                attributes[member_name] = this_attributes[member_name] = member
+                if member_name not in attribute_orders:
+                    attribute_orders[member_name] = member.order
+
+        # Build ordered attribute map.
+        attribute_items = sorted(six.iteritems(attributes), key=lambda i: attribute_orders[i[0]])
+        attribute_map = AttributeMap(attribute_items)
+
+        this_attribute_items = [(n, a) for n, a in attribute_items if n in this_attributes]
+        this_attribute_map = AttributeMap(this_attribute_items)
+
+        # Hook to edit dct.
+        dct_copy = dict(dct)
+        edited_dct = mcs.__edit_dct__(this_attribute_map, attribute_map, name, bases, dct_copy, **kwargs)
+        if edited_dct is not dct_copy:
+            dct_copy = edited_dct
+
+        # Build class.
+        cls = super(BaseClassMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
+
+        # Name attributes.
+        for attribute_name, attribute in six.iteritems(this_attributes):
+            attribute.__set_name__(cls, attribute_name)
+            assert attribute.name == attribute_name
+
+        # Check for non-default attributes declared after default ones.
+        if not cls.__kw_only__:
+            seen_default = None
+            for attribute_name, attribute in six.iteritems(attribute_map):
+                if not attribute.init:
+                    continue
+                if attribute.has_default:
+                    seen_default = attribute_name
+                elif seen_default is not None:
+                    error = "non-default attribute {!r} declared after default attribute {!r}".format(
+                        attribute_name, seen_default
+                    )
+                    raise TypeError(error)
+
+        # Store attribute map.
+        cls.__attributes = attribute_map
+
+        return cls
+
+    @staticmethod
+    def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
+        # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
+        return dct
 
     @property
-    @abc.abstractmethod
-    def __attributes__(cls):  # FIXME: Remove from metaclass.
-        # type: () -> AttributeMap[BaseAttribute]
-        raise NotImplementedError()
+    @runtime_final.final
+    def __attributes__(cls):
+        # type: () -> AttributeMap
+        return cls.__attributes
 
 
-class BaseObject(six.with_metaclass(BaseObjectMeta, BaseCollection[Item])):
-    """Base object."""
+class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
+    """Base class."""
 
     __slots__ = ()
+    __kw_only__ = False  # type: bool
 
-    def __hash__(self):
-        """
-        Prevent hashing (not hashable by default).
+    def __init_subclass__(cls, kw_only=None, **kwargs):
+        # type: (bool | None, **Any) -> None
 
-        :raises TypeError: Not hashable.
-        """
-        error = "unhashable type: {!r}".format(type(self).__name__)
-        raise TypeError(error)
+        # Keyword argument only.
+        if kw_only is not None:
+            cls.__kw_only__ = bool(kw_only)
+
+        super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
+
+    def __setattr__(self, name, value):
+        if name in type(self).__attributes__:
+            error = "data class {!r} is frozen".format(type(self).__fullname__)
+            raise AttributeError(error)
+        return super(BaseClass, self).__setattr__(name, value)
+
+    def __delattr__(self, name):
+        if name in type(self).__attributes__:
+            error = "data class {!r} is frozen".format(type(self).__fullname__)
+            raise AttributeError(error)
+        return super(BaseClass, self).__delattr__(name)
 
     @abc.abstractmethod
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __getitem__(self, attribute_name):
+    def __getitem__(self, name):
         # type: (str) -> Any
-        """
-        Get attribute value.
-
-        :param attribute_name: Attribute name.
-        :return: Value/values.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __contains__(self, value):
-        # type: (object) -> bool
-        """
-        Whether any of the attributes has value.
-
-        :param value: Value.
-        :return: True if has value.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __iter__(self):
-        # type: () -> Iterator[Item]
-        """
-        Iterate over items.
-
-        :return: Item iterator.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __len__(self):
-        # type: () -> int
-        """
-        Number of attributes with values.
-
-        :return: Number of attributes with values.
-        """
         raise NotImplementedError()
 
 
-# noinspection PyCallByClass
-type.__setattr__(BaseObject, "__hash__", None)  # force non-hashable
-
-
-BO = TypeVar("BO", bound=BaseObject)  # base object type
-
-
-class BasePrivateObject(BaseObject, BasePrivateCollection[Item]):
-    """Base private object."""
+class BasePrivateClass(BaseClass):
+    """Base private class."""
 
     __slots__ = ()
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPO, SupportsKeysAndGetItem[str, Any], **Any) -> BPO
+        # type: (BPC, SupportsKeysAndGetItem[str, Any], **Any) -> BPC
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPO, Iterable[Item], **Any) -> BPO
+        # type: (BPC, Iterable[Item], **Any) -> BPC
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BPO, **Any) -> BPO
+        # type: (BPC, **Any) -> BPC
         pass
 
     @abc.abstractmethod
     def _update(self, *args, **kwargs):
         """
         Update attribute values.
-        Same parameters as :meth:`dict.update`.
 
         :return: Transformed.
         """
         raise NotImplementedError()
 
 
-BPO = TypeVar("BPO", bound=BasePrivateObject)  # base private object type
+BPC = TypeVar("BPC", bound=BasePrivateClass)  # base private class type
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveObject(BasePrivateObject, BaseInteractiveCollection[Item]):
-    """Base interactive object."""
+class BaseInteractiveClass(BasePrivateClass):
+    """Base interactive class."""
 
     __slots__ = ()
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BPO, SupportsKeysAndGetItem[str, Any], **Any) -> BPO
+        # type: (BC, SupportsKeysAndGetItem[str, Any], **Any) -> BC
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BPO, Iterable[Item], **Any) -> BPO
+        # type: (BC, Iterable[Item], **Any) -> BC
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BPO, **Any) -> BPO
+        # type: (BC, **Any) -> BC
         pass
 
     @runtime_final.final
     def update(self, *args, **kwargs):
         """
         Update attribute values.
-        Same parameters as :meth:`dict.update`.
 
         :return: Transformed.
         """
-        return self._update(*args, **kwargs)
+        updates = {}
+        for name, value in six.iteritems(dict(*args, **kwargs)):
+            if value is not DELETED:
+                attribute = type(self).__attributes__[name]
+                value = attribute.relationship.process(value)
+            updates[name] = value
+        return self._update(updates)
+
+
+BC = TypeVar("BC", bound=BaseClass)  # base class type
+
+
+class BaseMutableClassMeta(BaseClassMeta):
+    """Metaclass for :class:`BaseMutableClass`."""
+
+    __attribute_type__ = MutableAttribute  # type: Type[Attribute]
 
 
 # noinspection PyAbstractClass
-class BaseMutableObject(BasePrivateObject, BaseMutableCollection[Item]):
-    """Base mutable object."""
+class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BasePrivateClass)):
+    """Base mutable class."""
 
     __slots__ = ()
 
     @runtime_final.final
-    def __setitem__(self, attribute_name, value):
+    def __setitem__(self, name, value):
         # type: (str, Any) -> None
-        """
-        Set attribute value.
-
-        :param attribute_name: Attribute name.
-        :param value: Value.
-        """
-        self.update({attribute_name: value})
+        self._update({name: value})
 
     @runtime_final.final
-    def __delitem__(self, attribute_name):
+    def __delitem__(self, name):
         # type: (str) -> None
-        """
-        Delete attribute value.
-
-        :param attribute_name: Attribute name.
-        """
-        self.update({attribute_name: DELETED})
+        self._update({name: DELETED})
 
     @overload
     def update(self, __m, **kwargs):
@@ -671,8 +737,5 @@ class BaseMutableObject(BasePrivateObject, BaseMutableCollection[Item]):
 
     @runtime_final.final
     def update(self, *args, **kwargs):
-        """
-        Update keys and values.
-        Same parameters as :meth:`dict.update`.
-        """
+        """Update attribute values."""
         self._update(*args, **kwargs)

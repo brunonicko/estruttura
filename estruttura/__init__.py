@@ -56,17 +56,18 @@ from ._set import (
     ProxyInteractiveSet,
     ProxyMutableSet,
 )
-# from ._object import (
-#     BaseAttribute,
-#     BaseMutableAttribute,
-#     AttributeMap,
-#     BaseAttributeManager,
-#     BaseObjectMeta,
-#     BaseObject,
-#     BasePrivateObject,
-#     BaseInteractiveObject,
-#     BaseMutableObject,
-# )
+from ._class import (
+    Attribute,
+    MutableAttribute,
+    AttributeMap,
+    AttributeManager,
+    BaseClassMeta,
+    BaseClass,
+    BasePrivateClass,
+    BaseInteractiveClass,
+    BaseMutableClassMeta,
+    BaseMutableClass,
+)
 
 __all__ = [
     "MissingType",
@@ -117,13 +118,14 @@ __all__ = [
     "ProxyPrivateSet",
     "ProxyInteractiveSet",
     "ProxyMutableSet",
-    # "BaseAttribute",
-    # "BaseMutableAttribute",
-    # "AttributeMap",
-    # "BaseAttributeManager",
-    # "BaseObjectMeta",
-    # "BaseObject",
-    # "BasePrivateObject",
-    # "BaseInteractiveObject",
-    # "BaseMutableObject",
+    "Attribute",
+    "MutableAttribute",
+    "AttributeMap",
+    "AttributeManager",
+    "BaseClassMeta",
+    "BaseClass",
+    "BasePrivateClass",
+    "BaseInteractiveClass",
+    "BaseMutableClassMeta",
+    "BaseMutableClass",
 ]

@@ -1,13 +1,20 @@
 import abc
 
+import six
 from basicco import runtime_final
-from tippo import Any, Type, Generic, TypeVar, Hashable, cast
+from tippo import Any, ClassVar, Type, Generic, TypeVar, Hashable, cast
 
-from estruttura import BaseHashable, BasePrivateCollection, BaseInteractiveCollection
+from estruttura import BaseHashable, Relationship, BaseCollectionMeta, BasePrivateCollection, BaseInteractiveCollection
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 IT = TypeVar("IT", bound=Hashable)  # internal type
+
+
+class DataRelationship(Relationship[T_co]):
+    """Data relationship."""
+
+    __slots__ = ()
 
 
 class BaseData(BaseHashable):
@@ -26,7 +33,13 @@ class BaseData(BaseHashable):
         raise NotImplementedError()
 
 
-class BasePrivateDataCollection(BasePrivateCollection[T_co], BaseData, Generic[IT, T_co]):
+class BaseDataCollectionMeta(BaseCollectionMeta):
+    __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
+
+
+class BasePrivateDataCollection(
+    six.with_metaclass(BaseDataCollectionMeta, BasePrivateCollection[T_co], BaseData, Generic[IT, T_co])
+):
     """Base private data collection."""
 
     __slots__ = ("__hash", "__internal")

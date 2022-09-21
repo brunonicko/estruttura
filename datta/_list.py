@@ -13,7 +13,7 @@ from ._bases import BasePrivateDataCollection, BaseDataCollection
 T = TypeVar("T")  # value type
 
 
-class PrivateListData(BasePrivateDataCollection[PVector[T], T], BasePrivateList[T]):
+class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[T]):
     """Private list data."""
 
     __slots__ = ()
@@ -30,7 +30,7 @@ class PrivateListData(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
 
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
-        super(PrivateListData, self).__init__(initial)
+        super(PrivateDataList, self).__init__(initial)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -289,10 +289,10 @@ class PrivateListData(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
         return resolve_continuous_slice(len(self._internal), slc)
 
 
-PLD = TypeVar("PLD", bound=PrivateListData)
+PLD = TypeVar("PLD", bound=PrivateDataList)
 
 
-class ListData(PrivateListData[T], BaseDataCollection[PVector[T], T], BaseInteractiveList[T]):
+class DataList(PrivateDataList[T], BaseDataCollection[PVector[T], T], BaseInteractiveList[T]):
     """List data."""
 
     __slots__ = ()

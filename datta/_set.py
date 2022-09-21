@@ -11,7 +11,7 @@ from ._bases import BasePrivateDataCollection, BaseDataCollection
 T = TypeVar("T")  # value type
 
 
-class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
+class PrivateDataSet(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
     """Private set data."""
 
     __slots__ = ()
@@ -28,7 +28,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
 
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
-        super(PrivateSetData, self).__init__(initial)
+        super(PrivateDataSet, self).__init__(initial)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -176,7 +176,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return self._internal.issuperset(iterable)
 
     def intersection(self, iterable):
-        # type: (Iterable) -> PrivateSetData
+        # type: (Iterable) -> PrivateDataSet
         """
         Get intersection.
 
@@ -186,7 +186,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return type(self)._make(self._internal.intersection(iterable))
 
     def difference(self, iterable):
-        # type: (Iterable) -> PrivateSetData
+        # type: (Iterable) -> PrivateDataSet
         """
         Get difference.
 
@@ -196,7 +196,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return type(self)._make(self._internal.difference(iterable))
 
     def inverse_difference(self, iterable):
-        # type: (Iterable) -> PrivateSetData
+        # type: (Iterable) -> PrivateDataSet
         """
         Get an iterable's difference to this.
 
@@ -206,7 +206,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return type(self)._make(pyrsistent.pset(iterable).difference(self._internal))
 
     def symmetric_difference(self, iterable):
-        # type: (Iterable) -> PrivateSetData
+        # type: (Iterable) -> PrivateDataSet
         """
         Get symmetric difference.
 
@@ -216,7 +216,7 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return type(self)._make(self._internal.symmetric_difference(iterable))
 
     def union(self, iterable):
-        # type: (Iterable) -> PrivateSetData
+        # type: (Iterable) -> PrivateDataSet
         """
         Get union.
 
@@ -226,10 +226,10 @@ class PrivateSetData(BasePrivateDataCollection[PSet[T], T], BasePrivateSet[T]):
         return type(self)._make(self._internal.union(iterable))
 
 
-PSD = TypeVar("PSD", bound=PrivateSetData)
+PSD = TypeVar("PSD", bound=PrivateDataSet)
 
 
-class SetData(PrivateSetData[T], BaseDataCollection[PSet[T], T], BaseInteractiveSet[T]):
+class DataSet(PrivateDataSet[T], BaseDataCollection[PSet[T], T], BaseInteractiveSet[T]):
     """Set data."""
 
     __slots__ = ()

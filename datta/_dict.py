@@ -6,7 +6,7 @@ from pyrsistent.typing import PMap
 
 from estruttura import SupportsKeysAndGetItem, BasePrivateDict, BaseInteractiveDict
 
-from ._bases import BasePrivateDataCollection, BaseDataCollection
+from ._collections import BasePrivateDataCollection, BaseDataCollection
 
 
 KT = TypeVar("KT")  # key type

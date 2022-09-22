@@ -4,7 +4,7 @@ import slotted
 from basicco import runtime_final
 from tippo import TypeVar, AbstractSet, Iterable, cast
 
-from ._bases import (
+from ._collections import (
     BaseCollection,
     BaseInteractiveCollection,
     BaseMutableCollection,
@@ -24,15 +24,6 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
     """Base set collection."""
 
     __slots__ = ()
-
-    def __hash__(self):
-        """
-        Prevent hashing (not hashable by default).
-
-        :raises TypeError: Not hashable.
-        """
-        error = "unhashable type: {!r}".format(type(self).__name__)
-        raise TypeError(error)
 
     @runtime_final.final
     def __le__(self, other):
@@ -193,17 +184,6 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
         return self.__xor__(other)
 
     @abc.abstractmethod
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
     def isdisjoint(self, iterable):
         # type: (Iterable) -> bool
         """
@@ -290,10 +270,6 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
         :return: Inverse Difference.
         """
         raise NotImplementedError()
-
-
-# noinspection PyCallByClass
-type.__setattr__(BaseSet, "__hash__", None)  # force non-hashable
 
 
 class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):

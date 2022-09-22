@@ -16,7 +16,7 @@ from tippo import (
 )
 
 from ._constants import MISSING, SupportsKeysAndGetItem
-from ._bases import (
+from ._collections import (
     BaseCollection,
     BaseInteractiveCollection,
     BaseMutableCollection,
@@ -37,26 +37,6 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
     """Base dictionary collection."""
 
     __slots__ = ()
-
-    def __hash__(self):
-        """
-        Prevent hashing (not hashable by default).
-
-        :raises TypeError: Not hashable.
-        """
-        error = "unhashable type: {!r}".format(type(self).__name__)
-        raise TypeError(error)
-
-    @abc.abstractmethod
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        raise NotImplementedError()
 
     @abc.abstractmethod
     def __getitem__(self, key):
@@ -141,10 +121,6 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
         :return: Values.
         """
         return ValuesView(self)
-
-
-# noinspection PyCallByClass
-type.__setattr__(BaseDict, "__hash__", None)  # force non-hashable
 
 
 class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):

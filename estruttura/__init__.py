@@ -14,7 +14,11 @@ from ._bases import (
     BaseSized,
     BaseIterable,
     BaseContainer,
+)
+from ._relationship import (
     Relationship,
+)
+from ._collections import (
     BaseCollectionMeta,
     BaseCollection,
     BasePrivateCollection,
@@ -58,16 +62,26 @@ from ._set import (
     ProxyInteractiveSet,
     ProxyMutableSet,
 )
-from ._class import (
+from ._attribute import (
+    ClassProtocol,
+    MutableClassProtocol,
     Attribute,
     MutableAttribute,
     AttributeMap,
+)
+from ._class import (
     BaseClassMeta,
     BaseClass,
     BasePrivateClass,
     BaseInteractiveClass,
     BaseMutableClassMeta,
     BaseMutableClass,
+)
+from ._utils import (
+    attributes,
+    attribute_type,
+    relationship,
+    relationship_type,
 )
 
 __all__ = [
@@ -121,6 +135,8 @@ __all__ = [
     "ProxyPrivateSet",
     "ProxyInteractiveSet",
     "ProxyMutableSet",
+    "ClassProtocol",
+    "MutableClassProtocol",
     "Attribute",
     "MutableAttribute",
     "AttributeMap",
@@ -130,4 +146,8 @@ __all__ = [
     "BaseInteractiveClass",
     "BaseMutableClassMeta",
     "BaseMutableClass",
+    "attributes",
+    "attribute_type",
+    "relationship",
+    "relationship_type",
 ]

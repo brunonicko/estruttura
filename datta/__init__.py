@@ -1,8 +1,11 @@
-from ._bases import DataRelationship, BaseData, BasePrivateDataCollection, BaseDataCollection
+from ._bases import BaseDataMeta, BaseData
+from ._attribute import DataAttribute
+from ._relationship import DataRelationship
+from ._collections import BasePrivateDataCollection, BaseDataCollection
 from ._dict import PrivateDataDict, DataDict
 from ._list import PrivateDataList, DataList
 from ._set import PrivateDataSet, DataSet
-from ._class import DataAttribute, DataMeta, PrivateData, Data
+from ._class import DataMeta, PrivateData, Data
 
 __all__ = [
     "DataRelationship",

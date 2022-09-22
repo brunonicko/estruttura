@@ -7,7 +7,7 @@ from pyrsistent.typing import PVector
 
 from estruttura import BasePrivateList, BaseInteractiveList, resolve_index, resolve_continuous_slice, pre_move
 
-from ._bases import BasePrivateDataCollection, BaseDataCollection
+from ._collections import BasePrivateDataCollection, BaseDataCollection
 
 
 T = TypeVar("T")  # value type

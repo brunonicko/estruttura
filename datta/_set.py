@@ -5,7 +5,7 @@ from pyrsistent.typing import PSet
 
 from estruttura import BasePrivateSet, BaseInteractiveSet
 
-from ._bases import BasePrivateDataCollection, BaseDataCollection
+from ._collections import BasePrivateDataCollection, BaseDataCollection
 
 
 T = TypeVar("T")  # value type

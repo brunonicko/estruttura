@@ -4,7 +4,7 @@ import slotted
 from basicco import runtime_final
 from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, overload, cast
 
-from ._bases import (
+from ._collections import (
     BaseCollection,
     BaseInteractiveCollection,
     BaseMutableCollection,
@@ -24,26 +24,6 @@ class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
     """Base list collection."""
 
     __slots__ = ()
-
-    def __hash__(self):
-        """
-        Prevent hashing (not hashable by default).
-
-        :raises TypeError: Not hashable.
-        """
-        error = "unhashable type: {!r}".format(type(self).__name__)
-        raise TypeError(error)
-
-    @abc.abstractmethod
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        raise NotImplementedError()
 
     @abc.abstractmethod
     def __reversed__(self):
@@ -124,10 +104,6 @@ class BaseList(BaseCollection[T_co], slotted.SlottedSequence[T_co]):
         :raises IndexError: Slice is noncontinuous.
         """
         raise NotImplementedError()
-
-
-# noinspection PyCallByClass
-type.__setattr__(BaseList, "__hash__", None)  # force non-hashable
 
 
 class BasePrivateList(BaseList[T], BasePrivateCollection[T]):

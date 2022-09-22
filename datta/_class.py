@@ -1,4 +1,3 @@
-import contextlib
 import copy
 
 import six
@@ -7,7 +6,6 @@ from basicco import mangling, runtime_final, state
 from estruttura import (
     DELETED,
     SupportsKeysAndGetItem,
-    Attribute,
     AttributeMap,
     BaseClassMeta,
     BasePrivateClass,
@@ -15,7 +13,9 @@ from estruttura import (
 )
 from tippo import Any, TypeVar, Type, Iterable, Tuple, TypeAlias, overload
 
-from ._bases import DataRelationship, BaseData
+from ._bases import BaseDataMeta, BaseData
+from ._relationship import DataRelationship
+from ._attribute import DataAttribute
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
@@ -23,13 +23,7 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-class DataAttribute(Attribute[T_co]):
-    """Data attribute."""
-
-    __slots__ = ()
-
-
-class DataMeta(BaseClassMeta):
+class DataMeta(BaseDataMeta, BaseClassMeta):
     __attribute_type__ = DataAttribute  # type: Type[DataAttribute]
     __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
 
@@ -52,12 +46,6 @@ class DataMeta(BaseClassMeta):
 class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
     __slots__ = ("__mutable",)
     __kwargs__ = {"gen_init": True}
-
-    def __copy__(self):
-        cls = type(self)
-        self_copy = cls.__new__(cls)
-        state.update_state(self_copy, state.get_state(self))
-        return self_copy
 
     def __hash__(self):
         # type: () -> int

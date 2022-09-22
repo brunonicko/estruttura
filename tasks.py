@@ -1,20 +1,21 @@
-from invoke import task  # type: ignore
+from invoke import task  # type: ignore  # noqa
 
 
 @task
-def docs(c):
-    c.run("sphinx-build -M html ./docs/source ./docs/build")
+def conform(c):
+    c.run("isort estruttura tests ./docs/source/conf.py setup.py tasks.py -m 3 -l 88 --up --tc --lbt 0 --color")
+    c.run("black estruttura --line-length=120")
+    c.run("black tests --line-length=120")
+    c.run("black setup.py --line-length=120")
+    c.run("black tasks.py --line-length=120")
 
 
 @task
-def tests(c):
-    c.run("python -m pytest -vv -rs tests")
-    # c.run("python -m pytest --doctest-modules -vv -rs README.rst")
-
-
-@task
-def tox(c):
-    c.run("tox")
+def lint(c):
+    c.run("flake8 estruttura --count --select=E9,F63,F7,F82 --show-source --statistics")
+    c.run("flake8 tests --count --select=E9,F63,F7,F82 --show-source --statistics")
+    c.run("flake8 estruttura --count --ignore=F811,F405,F403,F401,E203,E731,C901,W503 " "--max-line-length=120 --statistics")
+    c.run("flake8 tests --count --ignore=F811,F405,F403,F401,E203,E731,C901,W503 " "--max-line-length=120 --statistics")
 
 
 @task
@@ -23,29 +24,20 @@ def mypy(c):
 
 
 @task
-def lint(c):
-    c.run("flake8 estruttura --count --select=E9,F63,F7,F82 --show-source --statistics")
-    c.run("flake8 tests --count --select=E9,F63,F7,F82 --show-source --statistics")
-    c.run(
-        "flake8 estruttura --count --ignore=F811,F403,F401,E203,E731,C901,W503 "
-        "--max-line-length=120 --statistics"
-    )
-    c.run(
-        "flake8 tests --count --ignore=F811,F403,F401,E203,E731,C901,W503 "
-        "--max-line-length=120 --statistics"
-    )
+def tests(c):
+    c.run("python -m pytest -vv -rs tests")
+    c.run("python -m pytest --doctest-modules -vv -rs README.rst")
 
 
 @task
-def black(c):
-    c.run("black estruttura --line-length=120")
-    c.run("black tests --line-length=120")
+def docs(c):
+    c.run("sphinx-build -M html ./docs/source ./docs/build")
 
 
 @task
 def checks(c):
-    black(c)
+    conform(c)
     lint(c)
     mypy(c)
-    tox(c)
+    tests(c)
     docs(c)

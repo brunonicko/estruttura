@@ -7,7 +7,6 @@ from estruttura import (
     DELETED,
     SupportsKeysAndGetItem,
     Attribute,
-    AttributeManager,
     AttributeMap,
     BaseClassMeta,
     BasePrivateClass,
@@ -56,7 +55,10 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
     @runtime_final.final
     def __hash__(self):
         # type: () -> int
-        return object.__hash__(self)  # FIXME
+        return hash(tuple(self))
+
+    def __eq__(self, other):
+        return type(other) is type(self) and tuple(other) == tuple(self)
 
     @runtime_final.final
     def __getitem__(self, name):
@@ -105,12 +107,26 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
 
         :return: Transformed.
         """
-        self_copy = copy.copy(self)
-        for name, value in dict(*args, **kwargs):
-            if value is DELETED:
-                object.__delattr__(self_copy, name)
-            else:
+        updates = dict(*args, **kwargs)
+        if not updates:
+            return self
+
+        original = dict(self)
+
+        cls = type(self)
+        self_copy = cls.__new__(cls)
+
+        for name, value in six.iteritems(original):
+            if name not in updates:
                 object.__setattr__(self_copy, name, value)
+
+        for name, value in six.iteritems(updates):
+            if value is not DELETED:
+                object.__setattr__(self_copy, name, value)
+            elif cls.__attributes__[name].required:
+                error = "can't delete required attribute {!r}".format(name)
+                raise AttributeError(error)
+
         return self_copy
 
 

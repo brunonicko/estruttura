@@ -2,13 +2,12 @@ import abc
 import collections
 
 import six
-from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value
+from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value, dynamic_code
 from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, overload, cast
 
 from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED, DEFAULT
 from ._dict import BaseDict
 from ._bases import BaseMeta, Base, BaseHashable, Relationship
-from ._make import make_method, generate_unique_filename
 
 
 T = TypeVar("T")  # value type
@@ -375,19 +374,6 @@ class AttributeMap(BaseDict[str, AT_co]):
         for name in six.iterkeys(self.__attribute_dict):
             yield name
 
-
-class AttributeManager(Base, Generic[AT_co]):
-    """Manages attribute values."""
-
-    __slots__ = ("__attribute_map",)
-
-    def __init__(self, attribute_map):
-        # type: (AttributeMap[AT_co]) -> None
-        """
-        :param attribute_map: Attributes.
-        """
-        self.__attribute_map = attribute_map
-
     def get_initial_values(self, *args, **kwargs):
         # type: (*Any, **Any) -> dict[str, Any]
         """
@@ -403,7 +389,7 @@ class AttributeManager(Base, Generic[AT_co]):
         reached_kwargs = False
         internal_attribute_names = set()
         initial_values = {}
-        for attribute_name, attribute in six.iteritems(self.attribute_map):
+        for attribute_name, attribute in six.iteritems(self):
 
             # Skip non-init attributes.
             if not attribute.init:
@@ -438,7 +424,7 @@ class AttributeManager(Base, Generic[AT_co]):
                         if attribute.has_default:
                             value = attribute.get_default_value(process=False)
                         else:
-                            error = "attribute {!r} has no default value".format(attribute_name)
+                            error = "missing value for attribute {!r}".format(attribute_name)
                             raise ValueError(error)
                     i += 1
                     initial_values[attribute_name] = attribute.process(value)
@@ -464,7 +450,7 @@ class AttributeManager(Base, Generic[AT_co]):
             initial_values[attribute_name] = attribute.process(value)
 
         # Invalid kwargs.
-        invalid_kwargs = set(kwargs).difference(self.attribute_map)
+        invalid_kwargs = set(kwargs).difference(self)
         if invalid_kwargs:
             error = "invalid keyword argument(s) {}".format(", ".join(repr(k) for k in invalid_kwargs))
             raise TypeError(error)
@@ -479,11 +465,39 @@ class AttributeManager(Base, Generic[AT_co]):
 
         return initial_values
 
-    @property
-    def attribute_map(self):
-        # type: () -> AttributeMap[AT_co]
-        """Attribute map."""
-        return self.__attribute_map
+
+def _make_init(cls):
+    # type: (Type[BaseClass]) -> Callable
+    globs = {"DEFAULT": DEFAULT}
+    args = []
+    lines = []
+    for name, attribute in six.iteritems(cls.__attributes__):
+        if not attribute.init:
+            continue
+        if attribute.has_default or cls.__kw_only__:
+            args.append("{}=DEFAULT".format(name))
+        else:
+            args.append(name)
+
+    manager_line = "__initial_values = type(self).__attributes__.get_initial_values("
+    if args:
+        manager_line += ", ".join(args)
+    manager_line += ")"
+    lines.append(manager_line)
+
+    init_line = "self._init(__initial_values)"
+    lines.append(init_line)
+
+    init_script = "def __init__(self{}):".format((", " + ", ".join(args)) if args else "")
+    init_script += "\n    " + "\n    ".join(lines or ["pass"])
+
+    return dynamic_code.make_function(
+        "__init__",
+        init_script,
+        globs=globs,
+        filename=dynamic_code.generate_unique_filename("__init__", cls.__module__, cls.__fullname__),
+        module=cls.__module__,
+    )
 
 
 class BaseClassMeta(BaseMeta, type):
@@ -595,9 +609,7 @@ class BaseClassMeta(BaseMeta, type):
             if "__init__" in dct:
                 error = "can't manually define __init__"
                 raise TypeError(error)
-            init_method = cls.__gen_init()
-            init_method.__module__ = cls.__module__
-            type.__setattr__(cls, "__init__", init_method)
+            type.__setattr__(cls, "__init__", _make_init(cls))
 
         return cls
 
@@ -605,32 +617,6 @@ class BaseClassMeta(BaseMeta, type):
     def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
         # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
         return dct
-
-    def __gen_init(cls):
-        globs = {"AttributeManager": AttributeManager, "DEFAULT": DEFAULT}
-        args = []
-        lines = []
-        for name, attribute in six.iteritems(cls.__attributes__):
-            if not attribute.init:
-                continue
-            if attribute.has_default or cls.__kw_only__:
-                args.append("{}=DEFAULT".format(name))
-            else:
-                args.append(name)
-
-        manager_line = "__initial_values = AttributeManager(type(self).__attributes__).get_initial_values("
-        if args:
-            manager_line += ", ".join(args)
-        manager_line += ")"
-        lines.append(manager_line)
-
-        init_line = "self._init(__initial_values)"
-        lines.append(init_line)
-
-        init_script = "def __init__(self{}):".format((", " + ", ".join(args)) if args else "")
-        init_script += "\n    " + "\n    ".join(lines or ["pass"])
-
-        return make_method("__init__", init_script, generate_unique_filename(cls, "__init__"), globs)
 
     @property
     @runtime_final.final
@@ -668,14 +654,36 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
 
         super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
 
-    @abc.abstractmethod
-    def _init(self, init_values):
-        # type: (dict[str, Any]) -> None
-        raise NotImplementedError()
+    @recursive_repr.recursive_repr
+    def __repr__(self):
+        items = tuple(self)
+        return custom_repr.mapping_repr(
+            mapping=dict(items),
+            prefix="{}(".format(type(self).__fullname__),
+            template="{key}={value}",
+            separator=", ",
+            suffix=")",
+            sorting=True,
+            sort_key=lambda i, _s=self, _i=items: next(iter(zip(*_i))).index(i[0]),
+            key_repr=str,
+        )
+
+    def __iter__(self):
+        for name in type(self).__attributes__:
+            try:
+                value = self[name]
+            except (KeyError, AttributeError):
+                continue
+            yield (name, value)
 
     @abc.abstractmethod
     def __getitem__(self, name):
         # type: (str) -> Any
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _init(self, init_values):
+        # type: (dict[str, Any]) -> None
         raise NotImplementedError()
 
 

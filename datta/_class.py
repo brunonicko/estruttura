@@ -1,8 +1,9 @@
+import contextlib
 import copy
 
 import six
 
-from basicco import mangling, runtime_final
+from basicco import mangling, runtime_final, state
 from estruttura import (
     DELETED,
     SupportsKeysAndGetItem,
@@ -49,16 +50,21 @@ class DataMeta(BaseClassMeta):
 
 
 class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
-    __slots__ = ()
+    __slots__ = ("__mutable",)
     __kwargs__ = {"gen_init": True}
 
-    @runtime_final.final
+    def __copy__(self):
+        cls = type(self)
+        self_copy = cls.__new__(cls)
+        state.update_state(self_copy, state.get_state(self))
+        return self_copy
+
     def __hash__(self):
         # type: () -> int
-        return hash(tuple(self))
+        return hash(tuple(self))  # FIXME: generated
 
     def __eq__(self, other):
-        return type(other) is type(self) and tuple(other) == tuple(self)
+        return type(other) is type(self) and tuple(other) == tuple(self)  # FIXME: generated
 
     @runtime_final.final
     def __getitem__(self, name):
@@ -111,20 +117,22 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         if not updates:
             return self
 
-        original = dict(self)
-
         cls = type(self)
-        self_copy = cls.__new__(cls)
-
-        for name, value in six.iteritems(original):
-            if name not in updates:
-                object.__setattr__(self_copy, name, value)
+        self_copy = copy.copy(self)
 
         for name, value in six.iteritems(updates):
-            if value is not DELETED:
+            if value is DELETED:
+                if cls.__attributes__[name].required or not cls.__attributes__[name].deletable:
+                    error = "attribute {!r} can't be deleted".format(name)
+                    raise AttributeError(error)
+                elif not hasattr(self_copy, name):
+                    error = "no value set for attribute {!r}, can't delete".format(value)
+                    raise AttributeError(error)
+                object.__delattr__(self_copy, name)
+            elif cls.__attributes__[name].settable or not hasattr(self_copy, name):
                 object.__setattr__(self_copy, name, value)
-            elif cls.__attributes__[name].required:
-                error = "can't delete required attribute {!r}".format(name)
+            else:
+                error = "attribute {!r} can't be set".format(name)
                 raise AttributeError(error)
 
         return self_copy

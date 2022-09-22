@@ -3,11 +3,11 @@ import collections
 
 import six
 from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value, dynamic_code
-from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, overload, cast
+from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, Iterator, overload, cast
 
 from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED, DEFAULT
 from ._dict import BaseDict
-from ._bases import BaseMeta, Base, BaseHashable, Relationship
+from ._bases import BaseMeta, BaseIterable, BaseContainer, BaseHashable, Relationship
 
 
 T = TypeVar("T")  # value type
@@ -28,6 +28,9 @@ class Attribute(BaseHashable, Generic[T_co]):
         "_factory",
         "_init",
         "_required",
+        "_settable",
+        "_deletable",
+        "_delegated",
         "_repr",
         "_eq",
         "_hash",
@@ -44,6 +47,9 @@ class Attribute(BaseHashable, Generic[T_co]):
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
         init=True,  # type: bool
         required=True,  # type: bool
+        settable=True,  # type: bool
+        deletable=True,  # type: bool
+        delegated=True,  # type: bool
         repr=True,  # type: bool
         eq=True,  # type: bool
         hash=None,  # type: bool | None
@@ -74,6 +80,9 @@ class Attribute(BaseHashable, Generic[T_co]):
         self._factory = factory
         self._init = bool(init)
         self._required = bool(required)
+        self._settable = bool(settable)
+        self._deletable = bool(deletable)
+        self._delegated = bool(delegated)
         self._repr = bool(repr)
         self._eq = bool(eq)
         self._hash = bool(hash)
@@ -151,6 +160,9 @@ class Attribute(BaseHashable, Generic[T_co]):
             ("factory", self.factory),
             ("init", self.init),
             ("required", self.required),
+            ("settable", self.settable),
+            ("deletable", self.deletable),
+            ("delegated", self.delegated),
             ("repr", self.repr),
             ("eq", self.eq),
             ("hash", self.hash),
@@ -242,6 +254,21 @@ class Attribute(BaseHashable, Generic[T_co]):
     def required(self):
         # type: () -> bool
         return self._init
+
+    @property
+    def settable(self):
+        # type: () -> bool
+        return self._settable
+
+    @property
+    def deletable(self):
+        # type: () -> bool
+        return self._deletable
+
+    @property
+    def delegated(self):
+        # type: () -> bool
+        return self._delegated
 
     @property
     def repr(self):
@@ -625,7 +652,7 @@ class BaseClassMeta(BaseMeta, type):
         return cls.__attributes
 
 
-class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
+class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContainer[str])):
     """Base class."""
 
     __slots__ = ()
@@ -655,7 +682,7 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
         super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
 
     @recursive_repr.recursive_repr
-    def __repr__(self):
+    def __repr__(self):  # FIXME: generated
         items = tuple(self)
         return custom_repr.mapping_repr(
             mapping=dict(items),
@@ -668,18 +695,30 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
             key_repr=str,
         )
 
-    def __iter__(self):
-        for name in type(self).__attributes__:
-            try:
-                value = self[name]
-            except (KeyError, AttributeError):
-                continue
-            yield (name, value)
-
     @abc.abstractmethod
     def __getitem__(self, name):
         # type: (str) -> Any
         raise NotImplementedError()
+
+    def __iter__(self):
+        # type: () -> Iterator[Item]
+        for name, attribute in six.iteritems(type(self).__attributes__):
+            try:
+                value = self[name]
+            except KeyError:
+                continue
+            yield name, value
+
+    def __contains__(self, name):
+        # type: (object) -> bool
+        try:
+            if not isinstance(name, six.string_types):
+                raise KeyError()
+            _ = self[name]
+        except KeyError:
+            return False
+        else:
+            return True
 
     @abc.abstractmethod
     def _init(self, init_values):

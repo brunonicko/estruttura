@@ -1,12 +1,12 @@
 import collections
 
 import six
-from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value
-from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, Protocol, overload, cast
+from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value, namespace
+from tippo import Any, Callable, TypeVar, Iterable, Generic, TypeAlias, Type, Tuple, Mapping, Protocol, Literal, MutableMapping, overload, cast
 
 from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED, DEFAULT
-from ._dict import BaseDict
-from ._bases import BaseHashable
+from ._dict import BaseDict, BaseMutableDict
+from ._bases import Base, BaseHashable
 from ._relationship import Relationship
 
 
@@ -47,15 +47,21 @@ class Attribute(BaseHashable, Generic[T_co]):
         "_name",
         "_default",
         "_factory",
-        "_init",
         "_required",
-        "_settable",
+        "_init",
+        "_updatable",
         "_deletable",
-        "_delegated",
         "_repr",
         "_eq",
         "_hash",
         "_relationship",
+        "_dependencies",
+        "_recursive_dependencies",
+        "_dependents",
+        "_recursive_dependents",
+        "_fget",
+        "_fset",
+        "_fdel",
         "_metadata",
         "_extra_paths",
         "_builtin_paths",
@@ -66,11 +72,10 @@ class Attribute(BaseHashable, Generic[T_co]):
         self,
         default=MISSING,  # type: Any
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
-        init=True,  # type: bool
         required=True,  # type: bool
-        settable=True,  # type: bool
-        deletable=True,  # type: bool
-        delegated=True,  # type: bool
+        init=None,  # type: bool | None
+        updatable=None,  # type: bool | None
+        deletable=None,  # type: bool | None
         repr=True,  # type: bool
         eq=True,  # type: bool
         hash=None,  # type: bool | None
@@ -99,15 +104,21 @@ class Attribute(BaseHashable, Generic[T_co]):
         self._name = None  # type: str | None
         self._default = default
         self._factory = factory
-        self._init = bool(init)
         self._required = bool(required)
-        self._settable = bool(settable)
-        self._deletable = bool(deletable)
-        self._delegated = bool(delegated)
+        self._init = bool(init) if init is not None else None
+        self._updatable = bool(updatable) if updatable is not None else None
+        self._deletable = bool(deletable) if deletable is not None else None
         self._repr = bool(repr)
         self._eq = bool(eq)
         self._hash = bool(hash)
         self._relationship = relationship
+        self._dependencies = ()  # type: tuple[Attribute, ...]
+        self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
+        self._dependents = ()  # type: tuple[Attribute, ...]
+        self._recursive_dependents = None  # type: tuple[Attribute, ...] | None
+        self._fget = None  # type: Callable[[ClassProtocol], T_co] | None
+        self._fset = None  # type: Callable[[ClassProtocol, T_co], None] | None
+        self._fdel = None  # type: Callable[[ClassProtocol], None] | None
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
@@ -162,6 +173,8 @@ class Attribute(BaseHashable, Generic[T_co]):
 
     def __set_name__(self, owner, name):
         # type: (Type[ClassProtocol], str) -> None
+
+        # Checks.
         if self._name is not None and self._name != name:
             error = "attribute already named {!r}, can't rename it to {!r}".format(self._name, name)
             raise TypeError(error)
@@ -170,24 +183,63 @@ class Attribute(BaseHashable, Generic[T_co]):
                 self._owner.__name__, owner.__name__
             )
             raise TypeError(error)
+
+        # Resolve automatic parameters.
+        if self.delegated:
+            if self.init is None:
+                self._init = False
+            if self.updatable is None:
+                self._updatable = self.fset is not None
+            if self.deletable is None:
+                self._deletable = self.fdel is not None
+        else:
+            if self.init is None:
+                self._init = True
+            if self.updatable is None:
+                self._updatable = True
+            if self.deletable is None:
+                self._deletable = False
+        assert not any(p is None for p in (self._init, self._updatable, self._deletable))
+
+        # More checks.
+        if self.delegated:
+            if self.fset is None and self.init:
+                error = "delegated attribute {!r} is in __init__ but has no setter delegate was defined".format(name)
+                raise TypeError(error)
+            if self.fset is None:
+                if self.updatable:
+                    error = "delegated attribute {!r} is updatable but has no setter delegate was defined".format(name)
+                    raise TypeError(error)
+                if self.has_default:
+                    error = "delegated attribute {!r} has no setter but has a default".format(name)
+                    raise TypeError(error)
+            if self.fdel is None and self.deletable:
+                error = "delegated attribute {!r} is deletable but has no deleter delegate was defined".format(name)
+                raise TypeError(error)
+
+        # Set owner and name.
         self._owner = owner
         self._name = name
 
     def to_items(self):
         # type: () -> tuple[tuple[str, Any], ...]
         return (
-            ("name", self.name),
             ("default", self.default),
             ("factory", self.factory),
-            ("init", self.init),
             ("required", self.required),
-            ("settable", self.settable),
+            ("init", self.init),
+            ("updatable", self.updatable),
             ("deletable", self.deletable),
             ("delegated", self.delegated),
             ("repr", self.repr),
             ("eq", self.eq),
             ("hash", self.hash),
             ("relationship", self.relationship),
+            ("dependencies", self.dependencies),
+            ("dependents", self.dependents),
+            ("fget", self.fget),
+            ("fset", self.fset),
+            ("fdel", self.fdel),
             ("metadata", self.metadata),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
@@ -245,6 +297,105 @@ class Attribute(BaseHashable, Generic[T_co]):
             return self.relationship.process(value)
         return value
 
+    def getter(self, *dependencies):
+        # type: (A, *Attribute) -> Callable[[Callable[[ClassProtocol], T_co]], A]
+        """
+        Define a getter delegate method by using a decorator.
+
+        :param dependencies: Attribute dependencies.
+        :return: Getter method decorator.
+        :raises ValueError: Cannot define a getter for a non-delegated attribute.
+        :raises ValueError: Attribute already named and owned by a class.
+        :raises ValueError: Getter delegate already defined.
+        :raises TypeError: Invalid delegate type.
+        """
+
+        def decorator(func):
+            # type: (Callable[[ClassProtocol], T_co]) -> A
+            if self.owned:
+                error = "attribute {!r} already named and owned by a class".format(self.name)
+                raise ValueError(error)
+            if self.fget is not None:
+                error = "getter delegate already defined"
+                raise ValueError(error)
+            assert not self._dependencies
+
+            for dependency in dependencies:
+                if dependency.owned:
+                    error = "dependency attribute {!r} already named and owned by a class".format(dependency.name)
+                    raise ValueError(error)
+                dependency._dependents += (self,)  # noqa
+
+            self._dependencies = dependencies
+            self._fget = func
+            return self
+
+        return decorator
+
+    def setter(self):
+        # type: (A) -> Callable[[Callable[[ClassProtocol, T_co], None]], A]
+        """
+        Define a setter delegate method by using a decorator.
+
+        :return: Setter method decorator.
+        :raises ValueError: Cannot define a setter for a non-delegated attribute.
+        :raises ValueError: Attribute already named and owned by a class.
+        :raises ValueError: Attribute is not updatable.
+        :raises ValueError: Need to define a getter before defining a setter.
+        :raises ValueError: Setter delegate already defined.
+        :raises TypeError: Invalid delegate type.
+        """
+
+        def decorator(func):
+            if self.owned:
+                error = "attribute {!r} already named and owned by a class".format(self.name)
+                raise ValueError(error)
+            if self.updatable is False:
+                error = "attribute is not updatable, can't define setter delegate"
+                raise ValueError(error)
+            if self.fget is None:
+                error = "need to define a getter delegate before defining a setter delegate"
+                raise ValueError(error)
+            if self.fset is not None:
+                error = "setter delegate already defined"
+                raise ValueError(error)
+            self._fset = func
+            return self
+
+        return decorator
+
+    def deleter(self):
+        # type: (A) -> Callable[[Callable[[ClassProtocol], None]], A]
+        """
+        Define a deleter delegate method by using a decorator.
+
+        :return: Deleter method decorator.
+        :raises ValueError: Cannot define a deleter for a non-delegated attribute.
+        :raises ValueError: Attribute already named and owned by a class.
+        :raises ValueError: Attribute is not deletable.
+        :raises ValueError: Need to define a getter before defining a deleter.
+        :raises ValueError: Deleter delegate already defined.
+        :raises TypeError: Invalid delegate type.
+        """
+
+        def decorator(func):
+            if self.owned:
+                error = "attribute {!r} already named and owned by a class".format(self.name)
+                raise ValueError(error)
+            if self.deletable is False:
+                error = "attribute is not deletable, can't define deleter delegate"
+                raise ValueError(error)
+            if self.fget is None:
+                error = "need to define a getter delegate before defining a deleter delegate"
+                raise ValueError(error)
+            if self.fdel is not None:
+                error = "deleter delegate already defined"
+                raise ValueError(error)
+            self._fdel = func
+            return self
+
+        return decorator
+
     @property
     def name(self):
         # type: () -> str | None
@@ -254,6 +405,13 @@ class Attribute(BaseHashable, Generic[T_co]):
     def owner(self):
         # type: () -> Type[ClassProtocol] | None
         return self._owner
+
+    @property
+    def owned(self):
+        # type: () -> bool
+        owned = self._owner is not None
+        assert self._name is not None if owned else self._name is None
+        return owned
 
     @property
     def default(self):
@@ -266,30 +424,30 @@ class Attribute(BaseHashable, Generic[T_co]):
         return self._factory
 
     @property
-    def init(self):
+    def required(self):
         # type: () -> bool
+        return self._required
+
+    @property
+    def init(self):
+        # type: () -> bool | None
         """Whether to include in the `__init__` method."""
         return self._init
 
     @property
-    def required(self):
-        # type: () -> bool
-        return self._init
-
-    @property
-    def settable(self):
-        # type: () -> bool
-        return self._settable
+    def updatable(self):
+        # type: () -> bool | None
+        return self._updatable
 
     @property
     def deletable(self):
-        # type: () -> bool
+        # type: () -> bool | None
         return self._deletable
 
     @property
     def delegated(self):
         # type: () -> bool
-        return self._delegated
+        return any(d is not None for d in (self.fget, self.fset, self.fdel))
 
     @property
     def repr(self):
@@ -313,6 +471,51 @@ class Attribute(BaseHashable, Generic[T_co]):
     def relationship(self):
         # type: () -> Relationship | None
         return self._relationship
+
+    @property
+    def dependencies(self):
+        # type: () -> tuple[Attribute, ...]
+        return self._dependencies
+
+    @property
+    def recursive_dependencies(self):
+        # type: () -> tuple[Attribute, ...]
+        if self._recursive_dependencies is not None:
+            return self._recursive_dependencies
+        recursive_dependencies = _traverse(self, direction="dependencies")
+        if self.owned:
+            self._recursive_dependencies = recursive_dependencies
+        return recursive_dependencies
+
+    @property
+    def dependents(self):
+        # type: () -> tuple[Attribute, ...]
+        return self._dependents
+
+    @property
+    def recursive_dependents(self):
+        # type: () -> tuple[Attribute, ...]
+        if self._recursive_dependents is not None:
+            return self._recursive_dependents
+        recursive_dependents = _traverse(self, direction="dependents")
+        if self.owned:
+            self._recursive_dependents = recursive_dependents
+        return recursive_dependents
+
+    @property
+    def fget(self):
+        # type: () -> Callable[[ClassProtocol], T_co] | None
+        return self._fget
+
+    @property
+    def fset(self):
+        # type: () -> Callable[[ClassProtocol, T_co], None] | None
+        return self._fset
+
+    @property
+    def fdel(self):
+        # type: () -> Callable[[ClassProtocol], None] | None
+        return self._fdel
 
     @property
     def metadata(self):
@@ -435,29 +638,28 @@ class AttributeMap(BaseDict[str, AT_co]):
         # Go through each attribute.
         i = 0
         reached_kwargs = False
-        internal_attribute_names = set()
-        initial_values = {}
-        for attribute_name, attribute in six.iteritems(self):
+        internal_names = set()
+        initial_values = {}  # type: dict[str, Any]
+        for name, attribute in six.iteritems(self):
 
             # Skip non-init attributes.
             if not attribute.init:
 
                 # Can't get its value from the init.
-                if attribute_name in kwargs:
-                    error = "attribute {!r} can't be set externally".format(attribute_name)
+                if name in kwargs:
+                    error = "attribute {!r} can't be set externally".format(name)
                     raise TypeError(error)
 
                 if attribute.has_default:
 
                     # Has a default value.
-                    value = attribute.get_default_value()
-                    initial_values[attribute_name] = value
-                    continue
+                    value = attribute.get_default_value(process=False)
+                    initial_values[name] = value
 
                 elif attribute.required:
 
                     # Keep track of non-init, required attribute names (internal attributes).
-                    internal_attribute_names.add(attribute_name)
+                    internal_names.add(name)
 
                 continue
 
@@ -472,22 +674,22 @@ class AttributeMap(BaseDict[str, AT_co]):
                         if attribute.has_default:
                             value = attribute.get_default_value(process=False)
                         else:
-                            error = "missing value for attribute {!r}".format(attribute_name)
+                            error = "missing value for attribute {!r}".format(name)
                             raise ValueError(error)
                     i += 1
-                    initial_values[attribute_name] = attribute.process(value)
+                    initial_values[name] = value
                     continue
 
             # Get value for keyword argument.
             try:
-                value = kwargs[attribute_name]
+                value = kwargs[name]
                 if value is DEFAULT:
                     raise KeyError()
             except KeyError:
                 if attribute.has_default:
                     value = attribute.get_default_value(process=False)
                 elif attribute.required:
-                    error = "missing value for required attribute {!r}".format(attribute_name)
+                    error = "missing value for required attribute {!r}".format(name)
                     exc = TypeError(error)
                     six.raise_from(exc, None)
                     raise exc
@@ -495,7 +697,7 @@ class AttributeMap(BaseDict[str, AT_co]):
                     continue
 
             # Set attribute value.
-            initial_values[attribute_name] = attribute.process(value)
+            initial_values[name] = value
 
         # Invalid kwargs.
         invalid_kwargs = set(kwargs).difference(self)
@@ -511,4 +713,205 @@ class AttributeMap(BaseDict[str, AT_co]):
             )
             raise TypeError(error)
 
+        # Compile updates.
+        initial_values = self.get_update_values(initial_values)
+
+        # Check for required internal attributes.
+        missing = internal_names.difference(initial_values)
+        if missing:
+            error = "missing values for internal required attributes {!r}".format(", ".join(repr(k) for k in missing))
+            raise RuntimeError(error)
+
         return initial_values
+
+    def get_update_values(self, updates, value_getter=None):
+        updates = dict(updates)
+        state = {}
+        compiled_updates = {}
+
+        def callback(name):
+            try:
+                _ = self[name]
+            except KeyError:
+                error = "no attribute named {!r}".format(name)
+                raise AttributeError(error)
+            if name in state:
+                error = "attribute {!r} was not declared as a getter dependency".format(name)
+                raise AttributeError(error)
+            if value_getter is not None:
+                value = value_getter(name)
+                if value is not MISSING:
+                    state[name] = value
+                    return True
+            while name not in state and updates:
+                update(*updates.popitem())
+            return name in state
+
+        def set_value(name, value):
+            if name in compiled_updates:
+                error = "attribute {!r} can't be set more than once".format(name)
+                raise AttributeError(error)
+            attribute = self[name]
+            delete = value is DELETED
+            if not delete:
+                state[name] = compiled_updates[name] = attribute.process(value)
+                print("set_value", name, value)
+            else:
+                del state[name]
+                compiled_updates[name] = DELETED
+                print("delete_value", name)
+            for dependent in attribute.recursive_dependents:
+                dependent_state = FilteredDict(state, {a.name for a in dependent.dependencies})
+                lazy_namespace = LazyNamespace(dependent_state, callback)
+                value = attribute.process(dependent.fget(lazy_namespace))
+                state[dependent.name] = compiled_updates[dependent.name] = value
+                print("set_dependent_value", dependent.name, compiled_updates[dependent.name])
+
+        lazy_mutable_namespace = LazyMutableNamespace(SetterDict(state, set_value), callback)
+
+        def update(name, value):
+            attribute = self[name]
+            delete = value is DELETED
+            if not attribute.delegated:
+                if not delete:
+                    if attribute.updatable or name not in state:
+                        set_value(name, value)
+                        return
+                elif attribute.deletable:
+                    if name not in state and not callback(name):
+                        error = "no value set for attribute {!r}".format(name)
+                        raise AttributeError(error)
+                    set_value(name, value)
+
+            elif attribute.fset is not None:
+                if not delete:
+                    attribute.fset(lazy_mutable_namespace, value)
+                    print("running setter", name)
+                    return
+                elif attribute.deletable:
+                    attribute.fdel(lazy_mutable_namespace)
+                    print("running deleter", name)
+                    return
+
+            error = "attribute {!r} is not {}".format(name, "deletable" if delete else "updatable")
+            raise AttributeError(error)
+
+        while updates:
+            update(*updates.popitem())
+
+        print("COMPILED UPDATES", compiled_updates)
+        return compiled_updates
+
+
+class LazyNamespace(namespace.Namespace[Any]):
+    __slots__ = ("__callback__",)
+
+    def __init__(self, wrapped=None, callback=None):
+        # type: (Mapping[str, Any] | namespace.Namespace[Any] | None, Callable[[str], bool]) -> None
+        super(LazyNamespace, self).__init__(wrapped=wrapped)
+        self.__callback__ = callback
+
+    def __getattr__(self, name):
+        if self.__callback__(name):
+            return self.__getattribute__(name)
+        else:
+            error = "no attribute named {!r}".format(name)
+            raise AttributeError(error)
+
+
+class LazyMutableNamespace(LazyNamespace, namespace.MutableNamespace[Any]):
+    __slots__ = ()
+
+
+class FilteredDict(BaseDict[str, Any]):
+    __slots__ = ("__wrapped", "__allowed_keys")
+    __hash__ = None  # type: ignore
+
+    def __init__(self, wrapped, allowed_keys):
+        self.__wrapped = wrapped
+        self.__allowed_keys = allowed_keys
+
+    def __repr__(self):
+        return repr(dict(self))
+
+    def __eq__(self, other):
+        return isinstance(other, Mapping) and dict(self) == dict(other)
+
+    def __getitem__(self, name):
+        if name not in self.__allowed_keys:
+            raise KeyError(name)
+        return self.__wrapped[name]
+
+    def __contains__(self, name):
+        return name in self.__allowed_keys and name in self.__wrapped
+
+    def get(self, name, fallback=None):
+        if name not in self.__allowed_keys:
+            return fallback
+        return self.__wrapped.get(name, fallback)
+
+    def iteritems(self):
+        for name, attribute in six.iteritems(self.__wrapped):
+            if name not in self.__allowed_keys:
+                continue
+            yield (name, attribute)
+
+    def iterkeys(self):
+        for name in six.iterkeys(self.__wrapped):
+            if name not in self.__allowed_keys:
+                continue
+            yield name
+
+    def itervalues(self):
+        for name, attribute in six.iteritems(self.__wrapped):
+            if name not in self.__allowed_keys:
+                continue
+            yield attribute
+
+    def __len__(self):
+        return len(self.__allowed_keys.intersection(self.__wrapped))
+
+    def __iter__(self):
+        for name in six.iterkeys(self.__wrapped):
+            if name not in self.__allowed_keys:
+                continue
+            yield name
+
+
+class SetterDict(MutableMapping[str, Any]):
+    __slots__ = ("__wrapped", "__setter")
+    __hash__ = None  # type: ignore
+
+    def __init__(self, wrapped, setter):
+        self.__wrapped = wrapped
+        self.__setter = setter
+
+    def __getitem__(self, name):
+        return self.__wrapped[name]
+
+    def __setitem__(self, name, value):
+        self.__setter(name, value)
+
+    def __delitem__(self, name):
+        self.__setter(name, DELETED)
+
+    def __len__(self):
+        return len(self.__wrapped)
+
+    def __iter__(self):
+        for name in six.iterkeys(self.__wrapped):
+            yield name
+
+
+def _traverse(attribute, direction):
+    # type: (Attribute, Literal["dependencies", "dependents"]) -> tuple[Attribute, ...]
+    unvisited = dict((id(d), d) for d in getattr(attribute, direction))
+    visited = {}
+    while unvisited:
+        dep_id, dep = unvisited.popitem()
+        if dep_id in visited:
+            continue
+        visited[dep_id] = dep
+        for sub_dep in getattr(dep, direction):
+            unvisited[id(sub_dep)] = sub_dep
+    return tuple(sorted(six.itervalues(visited), key=lambda d: d.order))

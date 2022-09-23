@@ -1,9 +1,11 @@
 import copy
+import functools
 
 import six
 
 from basicco import mangling, runtime_final, state
 from estruttura import (
+    MISSING,
     DELETED,
     SupportsKeysAndGetItem,
     AttributeMap,
@@ -108,20 +110,18 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         cls = type(self)
         self_copy = copy.copy(self)
 
+        def value_getter(name_):
+            return getattr(self, name_, MISSING)
+
+        updates = cls.__attributes__.get_update_values(updates, value_getter)
+        if not updates:
+            return self
+
         for name, value in six.iteritems(updates):
             if value is DELETED:
-                if cls.__attributes__[name].required or not cls.__attributes__[name].deletable:
-                    error = "attribute {!r} can't be deleted".format(name)
-                    raise AttributeError(error)
-                elif not hasattr(self_copy, name):
-                    error = "no value set for attribute {!r}, can't delete".format(value)
-                    raise AttributeError(error)
                 object.__delattr__(self_copy, name)
-            elif cls.__attributes__[name].settable or not hasattr(self_copy, name):
-                object.__setattr__(self_copy, name, value)
             else:
-                error = "attribute {!r} can't be set".format(name)
-                raise AttributeError(error)
+                object.__setattr__(self_copy, name, value)
 
         return self_copy
 

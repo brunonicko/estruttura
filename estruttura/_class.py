@@ -98,9 +98,10 @@ class BaseClassMeta(BaseMeta, type):
         # Build class.
         cls = super(BaseClassMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
 
-        # Name attributes.
+        # Name and claim attributes.
         for attribute_name, attribute in six.iteritems(this_attributes):
             attribute.__set_name__(cls, attribute_name)
+            assert attribute.owner is cls
             assert attribute.name == attribute_name
 
         # Store attribute map.
@@ -209,6 +210,13 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
         else:
             return True
 
+    def __getattr__(self, name):
+        cls = type(self)
+        if name in cls.__attributes__:
+            error = "{!r} object has no value for attribute {!r}".format(cls.__fullname__, name)
+            raise AttributeError(error)
+        return self.__getattribute__(name)
+
     @abc.abstractmethod
     def _init(self, init_values):
         # type: (dict[str, Any]) -> None
@@ -276,13 +284,7 @@ class BaseInteractiveClass(BasePrivateClass):
 
         :return: Transformed.
         """
-        updates = {}
-        for name, value in six.iteritems(dict(*args, **kwargs)):
-            if value is not DELETED:
-                attribute = type(self).__attributes__[name]
-                value = attribute.relationship.process(value)
-            updates[name] = value
-        return self._update(updates)
+        return self._update(*args, **kwargs)
 
 
 BC = TypeVar("BC", bound=BaseClass)  # base class type

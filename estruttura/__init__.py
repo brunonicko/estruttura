@@ -68,6 +68,7 @@ from ._attribute import (
     Attribute,
     MutableAttribute,
     AttributeMap,
+    StateReader,
 )
 from ._class import (
     BaseClassMeta,
@@ -140,6 +141,7 @@ __all__ = [
     "Attribute",
     "MutableAttribute",
     "AttributeMap",
+    "StateReader",
     "BaseClassMeta",
     "BaseClass",
     "BasePrivateClass",

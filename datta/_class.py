@@ -1,14 +1,14 @@
 import copy
-import functools
 
 import six
 
-from basicco import mangling, runtime_final, state
+from basicco import mangling, runtime_final
 from estruttura import (
     MISSING,
     DELETED,
     SupportsKeysAndGetItem,
     AttributeMap,
+    StateReader,
     BaseClassMeta,
     BasePrivateClass,
     BaseInteractiveClass,
@@ -62,7 +62,12 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         if name not in type(self).__attributes__:
             error = "no attribute named {!r}".format(name)
             raise KeyError(error)
-        return getattr(self, name)
+        try:
+            return getattr(self, name)
+        except AttributeError:
+            pass
+        error = "no value for attribute {!r}".format(name)
+        raise KeyError(error)
 
     def __setattr__(self, name, value):
         if name in type(self).__attributes__:
@@ -113,11 +118,18 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         def value_getter(name_):
             return getattr(self, name_, MISSING)
 
-        updates = cls.__attributes__.get_update_values(updates, value_getter)
-        if not updates:
+        def keys_iter():
+            for key in cls.__attributes__:
+                if hasattr(self, key):
+                    yield key
+
+        state_reader = StateReader(value_getter, keys_iter())
+
+        new_values, old_values = cls.__attributes__.get_update_values(updates, state_reader)
+        if not new_values:
             return self
 
-        for name, value in six.iteritems(updates):
+        for name, value in six.iteritems(new_values):
             if value is DELETED:
                 object.__delattr__(self_copy, name)
             else:

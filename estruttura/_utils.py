@@ -23,3 +23,9 @@ def attributes(cls):
 def attribute_type(cls):
     # type: (Type[BaseClass]) -> Type[Attribute]
     return cls.__attribute_type__
+
+
+# TODO: make_base
+# TODO: make_class
+# TODO: make_dict, make_list, make_set
+# TODO: is_class

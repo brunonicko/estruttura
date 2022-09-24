@@ -36,7 +36,7 @@ Item = Tuple[str, Any]  # type: TypeAlias
 _attribute_counter = 0
 
 
-class Attribute(BaseHashable, Generic[T_co]):
+class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
     """Attribute descriptor."""
 
     __slots__ = (
@@ -730,41 +730,48 @@ class AttributeMap(BaseDict[str, AT_co]):
         return initial_values
 
     def get_update_values(self, updates, state_reader=None):
-        if state_reader is None:
-            state = {}
-            state_reader = StateReader(state.__getitem__, state.keys())
+
+        # Compile update values.
         delegate_self = DelegateSelf(self, state_reader)
-        for name, value in six.iteritems(updates):
+        sorting_key = lambda i: len(self[i[0]].recursive_dependencies)
+        for name, value in sorted(six.iteritems(updates), key=sorting_key, reverse=True):
             setattr(delegate_self, name, value)
         new_values, old_values = delegate_self.__.get_results()
 
-        # TODO: ensure required attributes have a value
+        # Ensure no required attributes are being deleted.
+        for name, value in six.iteritems(new_values):
+            if value is DELETED and self[name].required:
+                error = "can't delete required attribute {!r}".format(name)
+                raise AttributeError(error)
 
-        print("-------------------------")
-        print("new_values", new_values)
-        print("old_values", old_values)
-        print("-------------------------")
         return new_values, old_values
 
 
 @runtime_final.final
 class StateReader(Base):
-    __slots__ = ("__value_getter", "__keys_iter")
+    __slots__ = ("__instance",)
 
-    def __init__(self, value_getter, keys_iter):
-        self.__value_getter = value_getter
-        self.__keys_iter = keys_iter
+    def __init__(self, instance=None):
+        # type: (ClassProtocol | None) -> None
+        self.__instance = instance
 
     def __getitem__(self, name):
-        try:
-            return self.__value_getter(name)
-        except (AttributeError, KeyError):
-            pass
+        if self.instance is not None:
+            try:
+                return self.instance[name]
+            except KeyError:
+                pass
         raise KeyError(name)
 
     def keys(self):
-        for name in self.__keys_iter:
-            yield name
+        if self.instance is not None:
+            for name, _ in self.instance:
+                yield name
+
+    @property
+    def instance(self):
+        # type: () -> ClassProtocol | None
+        return self.__instance
 
 
 @runtime_final.final
@@ -773,12 +780,14 @@ class DelegateSelf(Base):
 
     __slots__ = ("__",)
 
-    def __init__(self, attribute_map, state):
-        # type: (AttributeMap, SupportsKeysAndGetItem) -> None
+    def __init__(self, attribute_map, state=None):
+        # type: (AttributeMap, SupportsKeysAndGetItem | None) -> None
         """
         :param attribute_map: Attribute map.
-        :param state: State.
+        :param state: State/state reader.
         """
+        if state is None:
+            state = StateReader()
         internals = DelegateSelfInternals(self, attribute_map, state)  # noqa
         object.__setattr__(self, "__", internals)
 

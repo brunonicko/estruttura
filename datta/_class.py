@@ -47,14 +47,18 @@ class DataMeta(BaseDataMeta, BaseClassMeta):
 
 class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
     __slots__ = ("__mutable",)
-    __kwargs__ = {"gen_init": True}
+    __kwargs__ = {
+        "frozen": True,
+        "gen_init": True,
+        "gen_hash": True,
+        "gen_eq": True,
+        "gen_repr": True,
+    }
 
-    def __hash__(self):
-        # type: () -> int
-        return hash(tuple(self))  # FIXME: generated
-
-    def __eq__(self, other):
-        return type(other) is type(self) and tuple(other) == tuple(self)  # FIXME: generated
+    # Trick auto completion.
+    if False:
+        def __hash__(self):  # noqa
+            return 0
 
     @runtime_final.final
     def __getitem__(self, name):
@@ -69,66 +73,24 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         error = "no value for attribute {!r}".format(name)
         raise KeyError(error)
 
-    def __setattr__(self, name, value):
-        if name in type(self).__attributes__:
-            error = "{!r} attributes are read-only".format(type(self).__fullname__)
-            raise AttributeError(error)
-        return super(PrivateData, self).__setattr__(name, value)
-
-    def __delattr__(self, name):
-        if name in type(self).__attributes__:
-            error = "{!r} attributes are read-only".format(type(self).__fullname__)
-            raise AttributeError(error)
-        return super(PrivateData, self).__delattr__(name)
-
-    def _init(self, init_values):
+    @runtime_final.final
+    def __init_state__(self, new_values):
         # type: (dict[str, Any]) -> None
-        for name, value in six.iteritems(init_values):
+        for name, value in six.iteritems(new_values):
             object.__setattr__(self, name, value)
 
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (PD, SupportsKeysAndGetItem[str, Any], **Any) -> PD
-        pass
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (PD, Iterable[Item], **Any) -> PD
-        pass
-
-    @overload
-    def _update(self, **kwargs):
-        # type: (PD, **Any) -> PD
-        pass
-
     @runtime_final.final
-    def _update(self, *args, **kwargs):
+    def __update_state__(self, new_values, old_values):
+        # type: (PD, dict[str, Any], dict[str, Any]) -> PD
         """
         Update attribute values.
 
         :return: Transformed.
         """
-        updates = dict(*args, **kwargs)
-        if not updates:
-            return self
-
-        cls = type(self)
-        self_copy = copy.copy(self)
-
-        def value_getter(name_):
-            return getattr(self, name_, MISSING)
-
-        def keys_iter():
-            for key in cls.__attributes__:
-                if hasattr(self, key):
-                    yield key
-
-        state_reader = StateReader(value_getter, keys_iter())
-
-        new_values, old_values = cls.__attributes__.get_update_values(updates, state_reader)
         if not new_values:
             return self
 
+        self_copy = copy.copy(self)
         for name, value in six.iteritems(new_values):
             if value is DELETED:
                 object.__delattr__(self_copy, name)

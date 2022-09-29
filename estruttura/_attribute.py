@@ -5,6 +5,7 @@ import contextlib
 import six
 import slotted
 from basicco import (
+    BaseMeta,
     Base,
     custom_repr,
     runtime_final,
@@ -358,7 +359,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             assert not self._dependencies
 
             self._dependencies = ()
-            for dependency in unique_iterator.unique_iterator(dependencies):
+            for dependency in dependencies:
                 if dependency.owned:
                     error = "dependency attribute {!r} already named and owned by a class".format(dependency.name)
                     raise ValueError(error)
@@ -655,8 +656,12 @@ class MutableAttribute(Attribute[T]):
         del instance[self.name]
 
 
+class AttributeMapMeta(slotted.SlottedABCMeta, BaseMeta):
+    """Metaclass for :class:`AttributeMap`."""
+
+
 @runtime_final.final
-class AttributeMap(slotted.SlottedMapping[str, AT_co]):
+class AttributeMap(six.with_metaclass(AttributeMapMeta, slotted.SlottedMapping[str, AT_co], Base)):
     """Maps attributes by name."""
 
     __slots__ = ("__attribute_dict",)

@@ -89,7 +89,7 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
         """
         return custom_repr.mapping_repr(
             self._internal,
-            prefix="{}({{".format(type(self).__fullname__),
+            prefix="{}({{".format(type(self).__qualname__),
             suffix="})",
             sorting=True,
             sort_key=lambda i: hash(i[0]),

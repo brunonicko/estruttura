@@ -24,3 +24,12 @@ Estruttura
 Overview
 --------
 Abstract data structure classes.
+
+
+Example
+-------
+
+.. code:: python
+
+    >>> import estruttura
+    >>> pass

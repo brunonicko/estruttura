@@ -1,18 +1,16 @@
-from basicco import runtime_final, fabricate_value, recursive_repr, custom_repr, type_checking
-from tippo import Any, Callable, Type, TypeVar, Iterable, Generic, cast, overload
-
-from ._constants import SupportsKeysAndGetItem
-from ._bases import BaseHashable
+from basicco import fabricate_value, type_checking, basic_data
+from tippo import Any, Callable, Type, TypeVar, Iterable, Generic, SupportsKeysAndGetItem, cast, overload
 
 
 T = TypeVar("T")  # value type
 
 
-class Relationship(BaseHashable, Generic[T]):
-    """Describes a relationship with values."""
+class Relationship(basic_data.ImmutableBasicData, Generic[T]):
+    """Describes a relationship between a structure and its values."""
 
     __slots__ = (
         "_converter",
+        "_validator",
         "_types",
         "_subtypes",
         "_serializer",
@@ -24,6 +22,7 @@ class Relationship(BaseHashable, Generic[T]):
     def __init__(
         self,
         converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
+        validator=None,  # type: Callable[[Any], None] | str | None
         types=(),  # type: Iterable[Type[T] | Type | str | None] | Type[T] | Type | str | None
         subtypes=False,  # type: bool
         serializer=None,  # type: Callable[[T], Any] | str | None
@@ -34,6 +33,7 @@ class Relationship(BaseHashable, Generic[T]):
         # type: (...) -> None
         """
         :param converter: Callable value converter.
+        :param validator: Callable value validator.
         :param types: Types for runtime checking.
         :param subtypes: Whether to accept subtypes.
         :param serializer: Callable value serializer.
@@ -42,6 +42,7 @@ class Relationship(BaseHashable, Generic[T]):
         :param builtin_paths: Builtin module paths in fallback order.
         """
         self._converter = fabricate_value.format_factory(converter)
+        self._validator = fabricate_value.format_factory(validator)
         self._types = type_checking.format_types(types)
         self._subtypes = bool(subtypes)
         self._serializer = fabricate_value.format_factory(serializer)
@@ -49,29 +50,19 @@ class Relationship(BaseHashable, Generic[T]):
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
 
-    @recursive_repr.recursive_repr
-    def __repr__(self):
-        items = self.to_items()
-        return custom_repr.mapping_repr(
-            mapping=dict(items),
-            prefix="{}(".format(type(self).__fullname__),
-            template="{key}={value}",
-            suffix=")",
-            sorting=True,
-            sort_key=lambda i, _s=self, _i=items: next(iter(zip(*_i))).index(i[0]),
-            key_repr=str,
-        )
-
-    def __hash__(self):
-        return hash(self.to_items())
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and self.to_items() == other.to_items()
-
     def convert(self, value):
         # type: (Any) -> T
         return fabricate_value.fabricate_value(
-            self._converter,
+            self.converter,
+            value,
+            extra_paths=self._extra_paths,
+            builtin_paths=self._builtin_paths,
+        )
+
+    def validate(self, value):
+        # type: (Any) -> None
+        fabricate_value.fabricate_value(
+            self.validator,
             value,
             extra_paths=self._extra_paths,
             builtin_paths=self._builtin_paths,
@@ -81,21 +72,21 @@ class Relationship(BaseHashable, Generic[T]):
         # type: (Any) -> bool
         return type_checking.is_instance(
             value,
-            self._types,
-            subtypes=self._subtypes,
-            extra_paths=self._extra_paths,
-            builtin_paths=self._builtin_paths,
+            self.types,
+            subtypes=self.subtypes,
+            extra_paths=self.extra_paths,
+            builtin_paths=self.builtin_paths,
         )
 
     def check_type(self, value):
         # type: (Any) -> T
-        if self._types:
+        if self.types:
             return type_checking.assert_is_instance(
                 value,
-                self._types,
-                subtypes=self._subtypes,
-                extra_paths=self._extra_paths,
-                builtin_paths=self._builtin_paths,
+                self.types,
+                subtypes=self.subtypes,
+                extra_paths=self.extra_paths,
+                builtin_paths=self.builtin_paths,
             )
         else:
             return value
@@ -107,41 +98,37 @@ class Relationship(BaseHashable, Generic[T]):
     def serialize(self, value, *args, **kwargs):
         # type: (T, *Any, **Any) -> Any
         return fabricate_value.fabricate_value(
-            self._serializer,
+            self.serializer,
             value,
             args=args,
             kwargs=kwargs,
-            extra_paths=self._extra_paths,
-            builtin_paths=self._builtin_paths,
+            extra_paths=self.extra_paths,
+            builtin_paths=self.builtin_paths,
         )
 
     def deserialize(self, serialized, *args, **kwargs):
         # type: (Any, *Any, **Any) -> T
         return fabricate_value.fabricate_value(
-            self._deserializer,
+            self.deserializer,
             serialized,
             args=args,
             kwargs=kwargs,
-            extra_paths=self._extra_paths,
-            builtin_paths=self._builtin_paths,
+            extra_paths=self.extra_paths,
+            builtin_paths=self.builtin_paths,
         )
 
-    def to_items(self):
-        # type: () -> tuple[tuple[str, Any], ...]
-        return (
+    def to_items(self, usecase=None):
+        # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
+        return [
             ("converter", self.converter),
+            ("validator", self.validator),
             ("types", self.types),
             ("subtypes", self.subtypes),
             ("serializer", self.serializer),
             ("deserializer", self.deserializer),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
-        )
-
-    @runtime_final.final
-    def to_dict(self):
-        # type: () -> dict[str, Any]
-        return dict(self.to_items())
+        ]
 
     @overload
     def update(self, __m, **kwargs):
@@ -159,14 +146,21 @@ class Relationship(BaseHashable, Generic[T]):
         pass
 
     def update(self, *args, **kwargs):
-        updated_kwargs = self.to_dict()
-        updated_kwargs.update(*args, **kwargs)
-        return cast(R, type(self)(**updated_kwargs))
+        init_args = self.to_dict(usecase=basic_data.ItemUsecase.INIT)
+        init_args.update(*args, **kwargs)
+        return cast(R, type(self)(**init_args))
 
     @property
     def converter(self):
         # type: () -> Callable[[Any], T] | Type[T] | str | None
+        """Callable value converter."""
         return self._converter
+
+    @property
+    def validator(self):
+        # type: () -> Callable[[Any], None] | str | None
+        """Callable value validator."""
+        return self._validator
 
     @property
     def types(self):
@@ -205,4 +199,4 @@ class Relationship(BaseHashable, Generic[T]):
         return self._builtin_paths
 
 
-R = TypeVar("R", bound=Relationship)  # relationship type
+R = TypeVar("R", bound=Relationship)

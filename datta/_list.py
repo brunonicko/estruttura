@@ -71,7 +71,7 @@ class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
         """
         return custom_repr.iterable_repr(
             self._internal,
-            prefix="{}([".format(type(self).__fullname__),
+            prefix="{}([".format(type(self).__qualname__),
             suffix="])",
         )
 

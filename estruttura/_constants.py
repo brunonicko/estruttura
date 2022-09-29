@@ -1,6 +1,6 @@
 from enum import Enum
 
-from tippo import Protocol, TypeVar, Iterable, final
+from tippo import TypeVar, final
 
 
 KT = TypeVar("KT")  # key type
@@ -29,14 +29,3 @@ class DefaultType(Enum):
 
 
 DEFAULT = DefaultType.DEFAULT
-
-
-@final
-class SupportsKeysAndGetItem(Protocol[KT, VT_co]):
-    def keys(self):
-        # type: () -> Iterable[KT]
-        pass
-
-    def __getitem__(self, __k):
-        # type: (KT) -> VT_co
-        pass

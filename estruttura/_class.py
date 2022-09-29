@@ -64,7 +64,7 @@ class BaseClassMeta(BaseMeta, type):
                             mcs.__name__,
                             name,
                             mcs.__attribute_type__.__name__,
-                            base.__fullname__,
+                            base.__qualname__,
                             base.__attribute_type__,
                         )
                         raise TypeError(error)
@@ -279,7 +279,7 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
     def __getattr__(self, name):
         cls = type(self)
         if name in cls.__attributes__:
-            error = "{!r} object has no value for attribute {!r}".format(cls.__fullname__, name)
+            error = "{!r} object has no value for attribute {!r}".format(cls.__qualname__, name)
             raise AttributeError(error)
         return self.__getattribute__(name)
 
@@ -446,7 +446,7 @@ def _make_init(cls):
         "__init__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__init__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__init__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 
@@ -474,7 +474,7 @@ def _make_hash(cls):
         "__hash__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__hash__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__hash__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 
@@ -505,7 +505,7 @@ def _make_eq(cls):
         "__eq__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__eq__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__eq__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 
@@ -530,7 +530,7 @@ def _make_repr(cls):
         (
             "@recursive_repr.recursive_repr",
             "def __repr__(self):",
-            "    repr_text = '{{}}('.format(type(self).__fullname__)",
+            "    repr_text = '{{}}('.format(type(self).__qualname__)",
             "    parts = []",
             "    for name, value in six.iteritems(dict((n, self[n]) for n in [{args}] if n in self)):",
             "        parts.append(repr(value))",
@@ -550,7 +550,7 @@ def _make_repr(cls):
         "__repr__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__repr__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__repr__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 
@@ -562,7 +562,7 @@ def _make_frozen_setattr(cls):
         (
             "def __setattr__(self, name, value):",
             "    if name in type(self).__attributes__:",
-            "        error = '{!r} attributes are read-only'.format(type(self).__fullname__)",
+            "        error = '{!r} attributes are read-only'.format(type(self).__qualname__)",
             "        raise AttributeError(error)",
             "    return super(cls, self).__setattr__(name, value)",
         )
@@ -571,7 +571,7 @@ def _make_frozen_setattr(cls):
         "__setattr__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__setattr__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__setattr__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 
@@ -583,7 +583,7 @@ def _make_frozen_delattr(cls):
         (
             "def __delattr__(self, name):",
             "    if name in type(self).__attributes__:",
-            "        error = '{!r} attributes are read-only'.format(type(self).__fullname__)",
+            "        error = '{!r} attributes are read-only'.format(type(self).__qualname__)",
             "        raise AttributeError(error)",
             "    return super(cls, self).__delattr__(name)",
         )
@@ -592,6 +592,6 @@ def _make_frozen_delattr(cls):
         "__delattr__",
         script,
         globs=globs,
-        filename=dynamic_code.generate_unique_filename("__delattr__", cls.__module__, cls.__fullname__),
+        filename=dynamic_code.generate_unique_filename("__delattr__", cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )

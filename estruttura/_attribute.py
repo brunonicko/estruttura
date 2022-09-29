@@ -3,10 +3,21 @@ import collections
 import contextlib
 
 import six
-from basicco import custom_repr, runtime_final, recursive_repr, fabricate_value
+import slotted
+from basicco import (
+    Base,
+    custom_repr,
+    runtime_final,
+    recursive_repr,
+    fabricate_value,
+    safe_repr,
+    basic_data,
+    unique_iterator,
+)
 from tippo import (
     Any,
     Callable,
+    SupportsKeysAndGetItem,
     TypeVar,
     Iterable,
     Generic,
@@ -21,9 +32,7 @@ from tippo import (
     cast,
 )
 
-from ._constants import SupportsKeysAndGetItem, MissingType, MISSING, DELETED, DEFAULT
-from ._dict import BaseDict
-from ._bases import Base, BaseHashable
+from ._constants import MissingType, MISSING, DELETED, DEFAULT
 from ._relationship import Relationship
 
 
@@ -36,7 +45,7 @@ Item = Tuple[str, Any]  # type: TypeAlias
 _attribute_counter = 0
 
 
-class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
+class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     """Attribute descriptor."""
 
     __slots__ = (
@@ -62,6 +71,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         "_metadata",
         "_extra_paths",
         "_builtin_paths",
+        "_constant",
         "_order",
     )
 
@@ -119,6 +129,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
+        self._constant = False
 
         # Increment order counter.
         _attribute_counter += 1
@@ -128,24 +139,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         if not self.owned:
             error = "can't get hash, attribute is not owned yet"
             raise TypeError(error)
-        return hash(self.to_items())
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and self.to_items() == other.to_items()
-
-    @recursive_repr.recursive_repr
-    def __repr__(self):
-        items = self.to_items()
-        return custom_repr.mapping_repr(
-            mapping=dict(items),
-            prefix="{}(".format(type(self).__fullname__),
-            template="{key}={value}",
-            separator=", ",
-            suffix=")",
-            sorting=True,
-            sort_key=lambda i, _s=self, _i=items: next(iter(zip(*_i))).index(i[0]),
-            key_repr=str,
-        )
+        return super(Attribute, self).__hash__()
 
     @overload
     def __get__(self, instance, owner):
@@ -154,7 +148,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
 
     @overload
     def __get__(self, instance, owner):
-        # type: (A, None, Type[ClassProtocol]) -> A
+        # type: (A, None, Type[ClassProtocol]) -> A | T_co
         pass
 
     @overload
@@ -163,6 +157,8 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         pass
 
     def __get__(self, instance, owner):
+        if self.constant:
+            return self.default
         if instance is not None:
             if self.name is None:
                 assert self.owner is None
@@ -221,33 +217,66 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         self._owner = owner
         self._name = name
 
-    def to_items(self):
-        # type: () -> tuple[tuple[str, Any], ...]
-        return (
+        # If attribute is a constant, set flag and process value.
+        if all(
+            (
+                self.default is not MISSING,
+                not self.init,
+                not self.repr,
+                not self.eq,
+                not self.hash,
+                not self.updatable,
+                not self.deletable,
+                not self.delegated,
+            )
+        ):
+            self.process(self.default)
+            self._constant = True
+
+    def to_items(self, usecase=None):
+        # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
+        items = [
             ("default", self.default),
             ("factory", self.factory),
             ("required", self.required),
             ("init", self.init),
             ("updatable", self.updatable),
             ("deletable", self.deletable),
-            ("delegated", self.delegated),
             ("repr", self.repr),
             ("eq", self.eq),
             ("hash", self.hash),
             ("relationship", self.relationship),
-            ("dependencies", self.dependencies),
-            ("dependents", self.dependents),
-            ("fget", self.fget),
-            ("fset", self.fset),
-            ("fdel", self.fdel),
             ("metadata", self.metadata),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
-        )
-
-    def to_dict(self):
-        # type: () -> dict[str, Any]
-        return dict(self.to_items())
+        ]
+        if usecase is not basic_data.ItemUsecase.INIT:
+            items.extend(
+                [
+                    ("name", self.name),
+                    ("owner", self.owner),
+                    ("delegated", self.delegated),
+                    ("constant", self.constant),
+                    ("order", self.order),
+                ]
+            )
+            if usecase is not basic_data.ItemUsecase.REPR:
+                items.extend(
+                    [
+                        ("dependencies", self.dependencies),
+                        ("dependents", self.dependents),
+                        ("fget", self.fget),
+                        ("fset", self.fset),
+                        ("fdel", self.fdel),
+                    ]
+                )
+            elif self.owned and all(d.owned for d in self.dependencies):
+                items.extend(
+                    [
+                        ("dependencies", [d.name for d in self.dependencies]),
+                    ]
+                )
+        return items
 
     @overload
     def update(self, __m, **kwargs):
@@ -265,9 +294,9 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         pass
 
     def update(self, *args, **kwargs):
-        updated_kwargs = self.to_dict()
-        updated_kwargs.update(*args, **kwargs)
-        return cast(A, type(self)(**updated_kwargs))
+        init_args = self.to_dict(basic_data.ItemUsecase.INIT)
+        init_args.update(*args, **kwargs)
+        return cast(A, type(self)(**init_args))
 
     def get_default_value(self, process=True):
         # type: (bool) -> T_co
@@ -292,13 +321,22 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         return default_value
 
     def process(self, value):
-        # type: (Any) -> T
+        # type: (Any) -> T_co
         if self.relationship is not None:
             return self.relationship.process(value)
         return value
 
+    @overload
+    def getter(self, maybe_func):
+        # type: (A, Callable[[ClassProtocol], T_co]) -> A
+        pass
+
+    @overload
     def getter(self, *dependencies):
-        # type: (A, *Attribute) -> Callable[[Callable[[ClassProtocol], T_co]], A]
+        # type: (A, *Attribute) -> A
+        pass
+
+    def getter(self, *dependencies):
         """
         Define a getter delegate method by using a decorator.
 
@@ -310,10 +348,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         :raises TypeError: Invalid delegate type.
         """
 
-        # TODO: better decorator (callable with parameters or not)
-
-        def decorator(func):
-            # type: (Callable[[ClassProtocol], T_co]) -> A
+        def getter_decorator(func):
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -322,20 +357,33 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
                 raise ValueError(error)
             assert not self._dependencies
 
-            for dependency in dependencies:
+            self._dependencies = ()
+            for dependency in unique_iterator.unique_iterator(dependencies):
                 if dependency.owned:
                     error = "dependency attribute {!r} already named and owned by a class".format(dependency.name)
                     raise ValueError(error)
                 dependency._dependents += (self,)  # noqa
+                self._dependencies += (dependency,)
 
-            self._dependencies = dependencies
             self._fget = func
             return self
 
-        return decorator
+        if len(dependencies) == 1 and not isinstance(dependencies[0], Attribute) and callable(dependencies[0]):
+            return getter_decorator(dependencies[0])
+        else:
+            return getter_decorator
 
-    def setter(self):
-        # type: (A) -> Callable[[Callable[[ClassProtocol, T_co], None]], A]
+    @overload
+    def setter(self, maybe_func=None):
+        # type: (A, None) -> Callable[[Callable[[ClassProtocol, T_co], None]], A]
+        pass
+
+    @overload
+    def setter(self, maybe_func):
+        # type: (A, Callable[[ClassProtocol, T_co], None]) -> A
+        pass
+
+    def setter(self, maybe_func=None):
         """
         Define a setter delegate method by using a decorator.
 
@@ -348,9 +396,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         :raises TypeError: Invalid delegate type.
         """
 
-        # TODO: better decorator (callable or not)
-
-        def decorator(func):
+        def setter_decorator(func):
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -366,10 +412,22 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
             self._fset = func
             return self
 
-        return decorator
+        if maybe_func is not None:
+            return setter_decorator(maybe_func)
+        else:
+            return setter_decorator
 
-    def deleter(self):
-        # type: (A) -> Callable[[Callable[[ClassProtocol], None]], A]
+    @overload
+    def deleter(self, maybe_func=None):
+        # type: (A, None) -> Callable[[Callable[[ClassProtocol], None]], A]
+        pass
+
+    @overload
+    def deleter(self, maybe_func):
+        # type: (A, Callable[[ClassProtocol], None]) -> A
+        pass
+
+    def deleter(self, maybe_func=None):
         """
         Define a deleter delegate method by using a decorator.
 
@@ -382,9 +440,7 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         :raises TypeError: Invalid delegate type.
         """
 
-        # TODO: better decorator (callable or not)
-
-        def decorator(func):
+        def deleter_decorator(func):
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -400,7 +456,10 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
             self._fdel = func
             return self
 
-        return decorator
+        if maybe_func is not None:
+            return deleter_decorator(maybe_func)
+        else:
+            return deleter_decorator
 
     @property
     def name(self):
@@ -489,8 +548,11 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         if self._recursive_dependencies is not None:
             return self._recursive_dependencies
         recursive_dependencies = _traverse(self, direction="dependencies")
+
+        # Cache only if owned already.
         if self.owned:
             self._recursive_dependencies = recursive_dependencies
+
         return recursive_dependencies
 
     @property
@@ -504,8 +566,11 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
         if self._recursive_dependents is not None:
             return self._recursive_dependents
         recursive_dependents = _traverse(self, direction="dependents")
+
+        # Cache only if owned already.
         if self.owned:
             self._recursive_dependents = recursive_dependents
+
         return recursive_dependents
 
     @property
@@ -550,7 +615,12 @@ class Attribute(BaseHashable, Generic[T_co]):  # TODO: Constant
     @property
     def has_default(self):
         # type: () -> bool
-        return self._default is not MISSING or self._factory is not MISSING
+        return self.default is not MISSING or self.factory is not MISSING
+
+    @property
+    def constant(self):
+        # type: () -> bool
+        return self._constant
 
 
 A = TypeVar("A", bound=Attribute)  # attribute type
@@ -568,6 +638,9 @@ class MutableAttribute(Attribute[T]):
             assert self.owner is None
             error = "attribute not named/owned"
             raise RuntimeError(error)
+        if self.constant:
+            error = "can't change constant class attribute {!r}".format(self.name)
+            raise AttributeError(error)
         instance[self.name] = value
 
     def __delete__(self, instance):
@@ -576,11 +649,14 @@ class MutableAttribute(Attribute[T]):
             assert self.owner is None
             error = "attribute not named/owned"
             raise RuntimeError(error)
+        if self.constant:
+            error = "can't delete constant class attribute {!r}".format(self.name)
+            raise AttributeError(error)
         del instance[self.name]
 
 
 @runtime_final.final
-class AttributeMap(BaseDict[str, AT_co]):
+class AttributeMap(slotted.SlottedMapping[str, AT_co]):
     """Maps attributes by name."""
 
     __slots__ = ("__attribute_dict",)
@@ -594,35 +670,22 @@ class AttributeMap(BaseDict[str, AT_co]):
         for name, attribute in attribute_items:
             self.__attribute_dict[name] = attribute
 
+    @safe_repr.safe_repr
+    @recursive_repr.recursive_repr
     def __repr__(self):
-        return "{}({})".format(type(self).__fullname__, custom_repr.iterable_repr(self.items()))
+        return "{}({})".format(type(self).__name__, custom_repr.iterable_repr(self.items()))
 
     def __hash__(self):
         return hash(tuple(self.__attribute_dict.items()))
 
     def __eq__(self, other):
-        return isinstance(other, AttributeMap) and self.__attribute_dict == other.__attribute_dict
+        return type(other) is type(self) and self.__attribute_dict == other.__attribute_dict
 
     def __getitem__(self, name):
         return self.__attribute_dict[name]
 
     def __contains__(self, name):
         return name in self.__attribute_dict
-
-    def get(self, name, fallback=None):
-        return self.__attribute_dict.get(name, fallback)
-
-    def iteritems(self):
-        for name, attribute in six.iteritems(self.__attribute_dict):
-            yield (name, attribute)
-
-    def iterkeys(self):
-        for name in six.iterkeys(self.__attribute_dict):
-            yield name
-
-    def itervalues(self):
-        for attribute in six.itervalues(self.__attribute_dict):
-            yield attribute
 
     def __len__(self):
         return len(self.__attribute_dict)
@@ -1127,7 +1190,6 @@ class DelegateSelfInternals(Base):
 
 # noinspection PyAbstractClass
 class ClassProtocol(Protocol):
-    __attributes__ = AttributeMap()  # type: AttributeMap
 
     def __getitem__(self, name):
         # type: (str) -> Any

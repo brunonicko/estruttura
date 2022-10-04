@@ -2,7 +2,6 @@ from enum import Enum
 
 from tippo import TypeVar, final
 
-
 KT = TypeVar("KT")  # key type
 VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
 

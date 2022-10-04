@@ -1,40 +1,41 @@
 import abc
 
+import six
 import slotted
 from basicco import runtime_final
 from tippo import (
     Any,
-    TypeVar,
-    Iterator,
     ItemsView,
-    KeysView,
-    ValuesView,
     Iterable,
+    Iterator,
+    KeysView,
     MutableMapping,
-    overload,
+    SupportsKeysAndGetItem,
+    TypeVar,
+    ValuesView,
     cast,
+    overload,
 )
 
-from ._constants import MISSING, SupportsKeysAndGetItem
-from ._collections import (
-    BaseCollection,
-    BaseInteractiveCollection,
-    BaseMutableCollection,
-    BasePrivateCollection,
-    ProxyCollection,
-    InteractiveProxyCollection,
-    MutableProxyCollection,
-    PrivateProxyCollection,
+from ._constants import DELETED, MISSING
+from ._structures import (
+    InteractiveProxyUniformStructure,
+    InteractiveUniformStructure,
+    MutableProxyUniformStructure,
+    MutableUniformStructure,
+    PrivateProxyUniformStructure,
+    PrivateUniformStructure,
+    ProxyUniformStructure,
+    UniformStructure,
 )
-
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
 
 
-class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
-    """Base dictionary collection."""
+class DictStructure(UniformStructure[KT], slotted.SlottedMapping[KT, VT_co]):
+    """Dictionary structure."""
 
     __slots__ = ()
 
@@ -123,25 +124,28 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT_co]):
         return ValuesView(self)
 
 
-class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):
-    """Base private dictionary collection."""
+class PrivateDictStructure(DictStructure[KT, VT], PrivateUniformStructure[KT]):
+    """Private dictionary structure."""
 
     __slots__ = ()
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _discard(self, key):
-        # type: (BPD, KT) -> BPD
+        # type: (PDS, KT) -> PDS
         """
         Discard key if it exists.
 
         :param key: Key.
         :return: Transformed.
         """
-        raise NotImplementedError()
+        try:
+            return self._remove(key)
+        except KeyError:
+            return self
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _remove(self, key):
-        # type: (BPD, KT) -> BPD
+        # type: (PDS, KT) -> PDS
         """
         Delete existing key.
 
@@ -149,11 +153,11 @@ class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):
         :return: Transformed.
         :raises KeyError: Key is not present.
         """
-        raise NotImplementedError()
+        return self._update({key: DELETED})
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _set(self, key, value):
-        # type: (BPD, KT, VT) -> BPD
+        # type: (PDS, KT, VT) -> PDS
         """
         Set value for key.
 
@@ -161,21 +165,21 @@ class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):
         :param value: Value.
         :return: Transformed.
         """
-        raise NotImplementedError()
+        return self._update({key: value})
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPD, SupportsKeysAndGetItem[KT, VT], **VT) -> BPD
+        # type: (PDS, SupportsKeysAndGetItem[KT, VT], **VT) -> PDS
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPD, Iterable[tuple[KT, VT]], **VT) -> BPD
+        # type: (PDS, Iterable[tuple[KT, VT]], **VT) -> PDS
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BPD, **VT) -> BPD
+        # type: (PDS, **VT) -> PDS
         pass
 
     @abc.abstractmethod
@@ -189,18 +193,18 @@ class BasePrivateDict(BaseDict[KT, VT], BasePrivateCollection[KT]):
         raise NotImplementedError()
 
 
-BPD = TypeVar("BPD", bound=BasePrivateDict)  # base private dict type
+PDS = TypeVar("PDS", bound=PrivateDictStructure)
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]):
-    """Base interactive dictionary collection."""
+class InteractiveDictStructure(PrivateDictStructure[KT, VT], InteractiveUniformStructure[KT]):
+    """Interactive dictionary structure."""
 
     __slots__ = ()
 
     @runtime_final.final
     def discard(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDS, KT) -> IDS
         """
         Discard key if it exists.
 
@@ -211,7 +215,7 @@ class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]
 
     @runtime_final.final
     def remove(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDS, KT) -> IDS
         """
         Delete existing key.
 
@@ -223,7 +227,7 @@ class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]
 
     @runtime_final.final
     def set(self, key, value):
-        # type: (BID, KT, VT) -> BID
+        # type: (IDS, KT, VT) -> IDS
         """
         Set value for key.
 
@@ -235,17 +239,17 @@ class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, SupportsKeysAndGetItem[KT, VT], **VT) -> BID
+        # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, Iterable[tuple[KT, VT]], **VT) -> BID
+        # type: (IDS, Iterable[tuple[KT, VT]], **VT) -> IDS
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BID, **VT) -> BID
+        # type: (IDS, **VT) -> IDS
         pass
 
     @runtime_final.final
@@ -259,11 +263,14 @@ class BaseInteractiveDict(BasePrivateDict[KT, VT], BaseInteractiveCollection[KT]
         return self._update(*args, **kwargs)
 
 
-BID = TypeVar("BID", bound=BaseInteractiveDict)  # base interactive dict type
+IDS = TypeVar("IDS", bound=InteractiveDictStructure)
 
 
-class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
-    """Base mutable dictionary collection."""
+# noinspection PyAbstractClass
+class MutableDictStructure(
+    PrivateDictStructure[KT, VT], MutableUniformStructure[KT], slotted.SlottedMutableMapping[KT, VT]
+):
+    """Mutable dictionary structure."""
 
     __slots__ = ()
 
@@ -289,7 +296,7 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         """
         self._remove(key)
 
-    @abc.abstractmethod
+    @runtime_final.final
     def pop(self, key, fallback=MISSING):
         # type: (KT, Any) -> Any
         """
@@ -300,9 +307,16 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         :return: Value or fallback value.
         :raises KeyError: Key is not present and fallback value not provided.
         """
-        raise NotImplementedError()
+        try:
+            value = self[key]
+        except KeyError:
+            if fallback is not MISSING:
+                return fallback
+            raise
+        del self[key]
+        return value
 
-    @abc.abstractmethod
+    @runtime_final.final
     def popitem(self):
         # type: () -> tuple[KT, VT]
         """
@@ -311,7 +325,13 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         :return: Item.
         :raises KeyError: Dictionary is empty.
         """
-        raise NotImplementedError()
+        try:
+            key = next(iter(self))
+        except StopIteration:
+            exc = KeyError("{!r} is empty".format(type(self).__name__))
+            six.raise_from(exc, None)
+            raise exc
+        return (key, self.pop(key))
 
     @overload
     def setdefault(self, key):  # noqa
@@ -323,7 +343,7 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         # type: (KT, VT) -> VT
         pass
 
-    @abc.abstractmethod
+    @runtime_final.final
     def setdefault(self, key, default=None):
         """
         Get the value for the specified key, insert key with default if not present.
@@ -332,7 +352,11 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         :param default: Default value.
         :return: Existing or default value.
         """
-        raise NotImplementedError()
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+            return default
 
     @runtime_final.final
     def discard(self, key):
@@ -390,42 +414,17 @@ class BaseMutableDict(BasePrivateDict[KT, VT], BaseMutableCollection[KT], slotte
         self._update(*args, **kwargs)
 
 
-class ProxyDict(BaseDict[KT, VT_co], ProxyCollection[KT]):
-    """
-    Proxy dictionary.
-
-    Features:
-      - Wraps a private/interactive/mutable dictionary.
-    """
+class ProxyDict(DictStructure[KT, VT_co], ProxyUniformStructure[KT]):
+    """Proxy dictionary."""
 
     __slots__ = ()
 
     def __init__(self, wrapped):
-        # type: (BasePrivateDict[KT, VT_co]) -> None
+        # type: (PrivateDictStructure[KT, VT_co]) -> None
         """
-        :param wrapped: Base private/interactive/mutable dictionary.
+        :param wrapped: Dictionary structure to be wrapped.
         """
         super(ProxyDict, self).__init__(wrapped)
-
-    @runtime_final.final
-    def __hash__(self):
-        """
-        Get hash.
-
-        :raises TypeError: Not hashable.
-        """
-        return hash((type(self), self._wrapped))
-
-    @runtime_final.final
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        return isinstance(other, type(self)) and self._wrapped == other._wrapped
 
     @runtime_final.final
     def __getitem__(self, key):
@@ -486,56 +485,15 @@ class ProxyDict(BaseDict[KT, VT_co], ProxyCollection[KT]):
 
     @property
     def _wrapped(self):
-        # type: () -> BasePrivateDict[KT, VT_co]
-        """Wrapped base private/interactive/mutable dictionary."""
-        return cast(BasePrivateDict[KT, VT_co], super(ProxyDict, self)._wrapped)
+        # type: () -> PrivateDictStructure[KT, VT_co]
+        """Wrapped dictionary collection."""
+        return cast(PrivateDictStructure[KT, VT_co], super(ProxyDict, self)._wrapped)
 
 
-class ProxyPrivateDict(ProxyDict[KT, VT], BasePrivateDict[KT, VT], PrivateProxyCollection[KT]):
-    """
-    Private proxy dictionary.
-
-    Features:
-      - Has private transformation methods.
-      - Transformations return a transformed version (immutable) or self (mutable).
-    """
+class PrivateProxyDict(ProxyDict[KT, VT], PrivateDictStructure[KT, VT], PrivateProxyUniformStructure[KT]):
+    """Private proxy dictionary."""
 
     __slots__ = ()
-
-    @runtime_final.final
-    def _discard(self, key):
-        # type: (PPD, KT) -> PPD
-        """
-        Discard key if it exists.
-
-        :param key: Key.
-        :return: Transformed.
-        """
-        return self._transform_wrapped(self._wrapped._discard(key))  # noqa
-
-    @runtime_final.final
-    def _remove(self, key):
-        # type: (PPD, KT) -> PPD
-        """
-        Delete existing key.
-
-        :param key: Key.
-        :return: Transformed.
-        :raises KeyError: Key is not present.
-        """
-        return self._transform_wrapped(self._wrapped._remove(key))  # noqa
-
-    @runtime_final.final
-    def _set(self, key, value):
-        # type: (PPD, KT, VT) -> PPD
-        """
-        Set value for key.
-
-        :param key: Key.
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._transform_wrapped(self._wrapped._set(key, value))  # noqa
 
     @overload
     def _update(self, __m, **kwargs):
@@ -563,85 +521,31 @@ class ProxyPrivateDict(ProxyDict[KT, VT], BasePrivateDict[KT, VT], PrivateProxyC
         return self._transform_wrapped(self._wrapped._update(*args, **kwargs))  # noqa
 
 
-PPD = TypeVar("PPD", bound=ProxyPrivateDict)  # private proxy dictionary type
+PPD = TypeVar("PPD", bound=PrivateProxyDict)  # private proxy dictionary type
 
 
-class ProxyInteractiveDict(ProxyPrivateDict[KT, VT], BaseInteractiveDict[KT, VT], InteractiveProxyCollection[KT]):
-    """
-    Proxy interactive dictionary.
-
-    Features:
-      - Has public transformation methods.
-      - Transformations return a transformed version (immutable) or self (mutable).
-    """
+class InteractiveProxyDict(
+    PrivateProxyDict[KT, VT], InteractiveDictStructure[KT, VT], InteractiveProxyUniformStructure[KT]
+):
+    """Interactive proxy dictionary."""
 
     __slots__ = ()
 
 
-class ProxyMutableDict(ProxyPrivateDict[KT, VT], BaseMutableDict[KT, VT], MutableProxyCollection[KT]):
-    """
-    Proxy mutable dictionary.
-
-    Features:
-      - Has public mutable transformation methods.
-    """
+class MutableProxyDict(PrivateProxyDict[KT, VT], MutableDictStructure[KT, VT], MutableProxyUniformStructure[KT]):
+    """Mutable proxy dictionary."""
 
     __slots__ = ()
 
     def __init__(self, wrapped):
-        # type: (BaseMutableDict[KT, VT]) -> None
+        # type: (MutableDictStructure[KT, VT]) -> None
         """
-        :param wrapped: Base mutable dict.
+        :param wrapped: Mutable dictionary structure.
         """
-        super(ProxyMutableDict, self).__init__(wrapped)
-
-    @runtime_final.final
-    def pop(self, key, fallback=MISSING):
-        # type: (KT, Any) -> Any
-        """
-        Get value for key and remove it, return fallback value if key is not present.
-
-        :param key: Key.
-        :param fallback: Fallback value.
-        :return: Value or fallback value.
-        :raises KeyError: Key is not present and fallback value not provided.
-        """
-        return self._wrapped.pop(key, fallback=fallback)
-
-    @runtime_final.final
-    def popitem(self):
-        # type: () -> tuple[KT, VT]
-        """
-        Get item and discard key.
-
-        :return: Item.
-        :raises KeyError: Dictionary is empty.
-        """
-        return self._wrapped.popitem()
-
-    @overload
-    def setdefault(self, key):  # noqa
-        # type: (MutableMapping[KT, VT | None], KT) -> VT | None
-        pass
-
-    @overload
-    def setdefault(self, key, default):  # noqa
-        # type: (KT, VT) -> VT
-        pass
-
-    @runtime_final.final
-    def setdefault(self, key, default=None):
-        """
-        Get the value for the specified key, insert key with default if not present.
-
-        :param key: Key.
-        :param default: Default value.
-        :return: Existing or default value.
-        """
-        return self._wrapped.setdefault(key, default=default)
+        super(MutableProxyDict, self).__init__(wrapped)
 
     @property
     def _wrapped(self):
-        # type: () -> BaseMutableDict[KT, VT]
-        """Wrapped base mutable dict."""
-        return cast(BaseMutableDict[KT, VT], super(MutableProxyCollection, self)._wrapped)
+        # type: () -> MutableDictStructure[KT, VT]
+        """Wrapped mutable dict structure."""
+        return cast(MutableDictStructure[KT, VT], super(MutableProxyDict, self)._wrapped)

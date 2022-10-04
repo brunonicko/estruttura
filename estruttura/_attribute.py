@@ -1,41 +1,40 @@
-import weakref
 import collections
 import contextlib
+import weakref
 
 import six
 import slotted
 from basicco import (
-    BaseMeta,
     Base,
-    custom_repr,
-    runtime_final,
-    recursive_repr,
-    fabricate_value,
-    safe_repr,
+    BaseMeta,
     basic_data,
+    custom_repr,
+    fabricate_value,
+    recursive_repr,
+    runtime_final,
+    safe_repr,
     unique_iterator,
 )
 from tippo import (
     Any,
     Callable,
-    SupportsKeysAndGetItem,
-    TypeVar,
-    Iterable,
     Generic,
-    TypeAlias,
-    Type,
-    Tuple,
+    Iterable,
+    Iterator,
+    Literal,
     Mapping,
     Protocol,
-    Literal,
-    Iterator,
-    overload,
+    SupportsKeysAndGetItem,
+    Tuple,
+    Type,
+    TypeAlias,
+    TypeVar,
     cast,
+    overload,
 )
 
-from ._constants import MissingType, MISSING, DELETED, DEFAULT
+from ._constants import DEFAULT, DELETED, MISSING, MissingType
 from ._relationship import Relationship
-
 
 T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
@@ -137,10 +136,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._order = _attribute_counter
 
     def __hash__(self):
-        if not self.owned:
-            error = "can't get hash, attribute is not owned yet"
-            raise TypeError(error)
-        return super(Attribute, self).__hash__()
+        # type: () -> int
+        return object.__hash__(self)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        return self is other
 
     @overload
     def __get__(self, instance, owner):
@@ -324,7 +325,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     def process(self, value):
         # type: (Any) -> T_co
         if self.relationship is not None:
-            return self.relationship.process(value)
+            try:
+                return self.relationship.process(value)
+            except Exception as e:
+                exc = type(e)("{!r} attribute; {}".format(self.name, e))
+                six.raise_from(exc, None)
+                raise exc
         return value
 
     @overload
@@ -359,7 +365,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             assert not self._dependencies
 
             self._dependencies = ()
-            for dependency in dependencies:
+            for dependency in unique_iterator.unique_iterator(dependencies):
                 if dependency.owned:
                     error = "dependency attribute {!r} already named and owned by a class".format(dependency.name)
                     raise ValueError(error)
@@ -550,7 +556,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             return self._recursive_dependencies
         recursive_dependencies = _traverse(self, direction="dependencies")
 
-        # Cache only if owned already.
+        # Cache only if already owned.
         if self.owned:
             self._recursive_dependencies = recursive_dependencies
 
@@ -568,7 +574,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             return self._recursive_dependents
         recursive_dependents = _traverse(self, direction="dependents")
 
-        # Cache only if owned already.
+        # Cache only if already owned.
         if self.owned:
             self._recursive_dependents = recursive_dependents
 
@@ -656,12 +662,12 @@ class MutableAttribute(Attribute[T]):
         del instance[self.name]
 
 
-class AttributeMapMeta(slotted.SlottedABCMeta, BaseMeta):
+class AttributeMapMeta(BaseMeta, slotted.SlottedABCGenericMeta):
     """Metaclass for :class:`AttributeMap`."""
 
 
 @runtime_final.final
-class AttributeMap(six.with_metaclass(AttributeMapMeta, slotted.SlottedMapping[str, AT_co], Base)):
+class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMapping[str, AT_co])):
     """Maps attributes by name."""
 
     __slots__ = ("__attribute_dict",)
@@ -678,25 +684,32 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, slotted.SlottedMapping[s
     @safe_repr.safe_repr
     @recursive_repr.recursive_repr
     def __repr__(self):
+        # type: () -> str
         return "{}({})".format(type(self).__name__, custom_repr.iterable_repr(self.items()))
 
     def __hash__(self):
+        # type: () -> int
         return hash(tuple(self.__attribute_dict.items()))
 
     def __eq__(self, other):
-        return type(other) is type(self) and self.__attribute_dict == other.__attribute_dict
+        # type: (object) -> bool
+        return type(other) is type(self) and self.__attribute_dict == other.__attribute_dict  # type: ignore  # noqa
 
     def __getitem__(self, name):
+        # type: (str) -> AT_co
         return self.__attribute_dict[name]
 
     def __contains__(self, name):
+        # type: (object) -> bool
         return name in self.__attribute_dict
 
     def __len__(self):
+        # type: () -> int
         return len(self.__attribute_dict)
 
     def __iter__(self):
-        for name in six.iterkeys(self.__attribute_dict):
+        # type: () -> Iterator[str]
+        for name in self.__attribute_dict:
             yield name
 
     def get_initial_values(self, *args, **kwargs):
@@ -798,6 +811,7 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, slotted.SlottedMapping[s
         return initial_values
 
     def get_update_values(self, updates, state_reader=None):
+        # type: (Mapping[str, Any], SupportsKeysAndGetItem | None) -> tuple[dict[str, Any], dict[str, Any]]
 
         # Compile update values.
         delegate_self = DelegateSelf(self, state_reader)
@@ -833,7 +847,7 @@ class StateReader(Base):
 
     def keys(self):
         if self.instance is not None:
-            for name, _ in self.instance:
+            for name in self.instance:
                 yield name
 
     @property
@@ -856,7 +870,7 @@ class DelegateSelf(Base):
         """
         if state is None:
             state = StateReader()
-        internals = DelegateSelfInternals(self, attribute_map, state)  # noqa
+        internals = _DelegateSelfInternals(self, attribute_map, state)  # noqa
         object.__setattr__(self, "__", internals)
 
     def __dir__(self):
@@ -934,7 +948,7 @@ class DelegateSelf(Base):
 
 
 @runtime_final.final
-class DelegateSelfInternals(Base):
+class _DelegateSelfInternals(Base):
     """Internals for :class:`DelegateSelf`."""
 
     __slots__ = (
@@ -1143,7 +1157,7 @@ class DelegateSelfInternals(Base):
         raise AttributeError(error)
 
     def get_results(self):
-        # type: () -> tuple[Mapping[str, Any], Mapping[str, Any]]
+        # type: () -> tuple[dict[str, Any], dict[str, Any]]
         """
         Get results.
 
@@ -1195,7 +1209,6 @@ class DelegateSelfInternals(Base):
 
 # noinspection PyAbstractClass
 class ClassProtocol(Protocol):
-
     def __getitem__(self, name):
         # type: (str) -> Any
         raise NotImplementedError()
@@ -1214,13 +1227,13 @@ class MutableClassProtocol(ClassProtocol):
 
 def _traverse(attribute, direction):
     # type: (Attribute, Literal["dependencies", "dependents"]) -> tuple[Attribute, ...]
-    unvisited = dict((id(d), d) for d in getattr(attribute, direction))
-    visited = {}
+    unvisited = set(getattr(attribute, direction))  # type: set[Attribute]
+    visited = set()  # type: set[Attribute]
     while unvisited:
-        dep_id, dep = unvisited.popitem()
-        if dep_id in visited:
+        dep = unvisited.pop()
+        if dep in visited:
             continue
-        visited[dep_id] = dep
+        visited.add(dep)
         for sub_dep in getattr(dep, direction):
-            unvisited[id(sub_dep)] = sub_dep
-    return tuple(sorted(six.itervalues(visited), key=lambda d: d.order))
+            unvisited.add(sub_dep)
+    return tuple(sorted(visited, key=lambda d: d.order))

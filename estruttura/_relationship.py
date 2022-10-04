@@ -1,6 +1,15 @@
-from basicco import fabricate_value, type_checking, basic_data
-from tippo import Any, Callable, Type, TypeVar, Iterable, Generic, SupportsKeysAndGetItem, cast, overload
-
+from basicco import basic_data, fabricate_value, type_checking
+from tippo import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    SupportsKeysAndGetItem,
+    Type,
+    TypeVar,
+    cast,
+    overload,
+)
 
 T = TypeVar("T")  # value type
 

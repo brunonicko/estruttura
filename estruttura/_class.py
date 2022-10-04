@@ -1,14 +1,24 @@
 import abc
 
 import six
-from basicco import runtime_final, recursive_repr, dynamic_code
-from tippo import Any, Callable, TypeVar, Iterable, TypeAlias, Type, Tuple, Iterator, overload
+from basicco import dynamic_code, get_mro, recursive_repr, runtime_final, safe_repr
+from tippo import (
+    Any,
+    Callable,
+    Iterable,
+    Iterator,
+    SupportsKeysAndGetItem,
+    Tuple,
+    Type,
+    TypeAlias,
+    TypeVar,
+    overload,
+)
 
-from ._constants import SupportsKeysAndGetItem, DELETED, DEFAULT
-from ._bases import BaseMeta, BaseIterable, BaseContainer
+from ._attribute import Attribute, AttributeMap, MutableAttribute, StateReader
+from ._constants import DEFAULT, DELETED
 from ._relationship import Relationship
-from ._attribute import Attribute, MutableAttribute, AttributeMap, StateReader
-
+from ._structures import CollectionStructure, CollectionStructureMeta
 
 T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
@@ -16,11 +26,12 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-class BaseClassMeta(BaseMeta, type):
-    """Metaclass for :class:`BaseClass`."""
+class ClassStructureMeta(CollectionStructureMeta):
+    """Metaclass for :class:`ClassStructure`."""
 
     __attribute_type__ = Attribute  # type: Type[Attribute]
     __relationship_type__ = Relationship  # type: Type[Relationship]
+
     __kw_only__ = False  # type: bool
     __frozen__ = False  # type: bool
     __gen_init__ = False  # type: bool
@@ -36,23 +47,26 @@ class BaseClassMeta(BaseMeta, type):
         # Scrape bases.
         base_attributes = {}  # type: dict[str, Attribute]
         attribute_orders = {}  # type: dict[str, int]
-        for base in reversed(bases):
+        for base in reversed(get_mro.preview_mro(*bases)):
+            if base is object:
+                continue
 
             # Prevent overriding attributes with non-attributes.
             for attribute_name in base_attributes:
-                if (isinstance(base, BaseClassMeta) and attribute_name not in base.__attributes__) or (
+                if (isinstance(base, ClassStructureMeta) and attribute_name not in base.__attributes__) or (
                     hasattr(base, attribute_name)
                     and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
                 ):
-                    error = "{!r} overrides {!r} attribute with non attribute {!r} object".format(
+                    error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
                         base.__name__,
                         attribute_name,
                         type(getattr(base, attribute_name)).__name__,
+                        mcs.__attribute_type__.__name__,
                     )
                     raise TypeError(error)
 
             # Collect base's attributes.
-            if isinstance(base, BaseClassMeta):
+            if isinstance(base, ClassStructureMeta):
                 for attribute_name, attribute in six.iteritems(base.__attributes__):
 
                     # Attribute type changed and it's not compatible anymore.
@@ -100,7 +114,7 @@ class BaseClassMeta(BaseMeta, type):
             dct_copy = edited_dct
 
         # Build class.
-        cls = super(BaseClassMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
+        cls = super(ClassStructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
 
         # Name and claim attributes.
         for attribute_name, attribute in six.iteritems(this_attributes):
@@ -178,6 +192,7 @@ class BaseClassMeta(BaseMeta, type):
 
         return cls
 
+    # noinspection PyUnusedLocal
     @staticmethod
     def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
         # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
@@ -190,8 +205,8 @@ class BaseClassMeta(BaseMeta, type):
         return cls.__attributes
 
 
-class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContainer[str])):
-    """Base class."""
+class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[str])):
+    """Class structure."""
 
     __slots__ = ()
 
@@ -246,7 +261,7 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
                 raise TypeError(error)
             cls.__gen_repr__ = bool(gen_repr)
 
-        super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
+        super(ClassStructure, cls).__init_subclass__(**kwargs)  # noqa
 
     @abc.abstractmethod
     def __getitem__(self, name):
@@ -255,13 +270,10 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
 
     @runtime_final.final
     def __iter__(self):
-        # type: () -> Iterator[Item]
-        for name, attribute in six.iteritems(type(self).__attributes__):
-            try:
-                value = self[name]
-            except KeyError:
-                continue
-            yield name, value
+        # type: () -> Iterator[str]
+        for name in type(self).__attributes__:
+            if hasattr(self, name):
+                yield name
 
     @runtime_final.final
     def __contains__(self, name):
@@ -274,6 +286,10 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
             return False
         else:
             return True
+
+    @runtime_final.final
+    def __len__(self):
+        return len(self.keys())
 
     @runtime_final.final
     def __getattr__(self, name):
@@ -293,25 +309,79 @@ class BaseClass(six.with_metaclass(BaseClassMeta, BaseIterable[Item], BaseContai
         """
         raise NotImplementedError()
 
+    @runtime_final.final
+    def keys(self):
+        # type: () -> tuple[str, ...]
+        return tuple(self.__iter__())
 
-class BasePrivateClass(BaseClass):
-    """Base private class."""
+
+class PrivateClassStructure(ClassStructure):
+    """Private class structure."""
 
     __slots__ = ()
 
+    @abc.abstractmethod
+    def __update_state__(self, new_values, old_values):
+        # type: (PCS, dict[str, Any], dict[str, Any]) -> PCS
+        """
+        Initialize state.
+
+        :param new_values: New values.
+        :param old_values: Old values.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _discard(self, name):
+        # type: (PCS, str) -> PCS
+        """
+        Discard attribute value if it exists.
+
+        :param name: Attribute name.
+        :return: Transformed.
+        :raises AttributeError: Attribute is invalid or not deletable.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _remove(self, name):
+        # type: (PCS, str) -> PCS
+        """
+        Delete existing attribute value.
+
+        :param name: Attribute name.
+        :return: Transformed.
+        :raises AttributeError: Attribute is invalid, not deletable, or has no value.
+        """
+        raise NotImplementedError()
+
+    @abc.abstractmethod
+    def _set(self, name, value):
+        # type: (PCS, str, Any) -> PCS
+        """
+        Set value for key.
+
+        :param name: Attribute name.
+        :param value: Value.
+        :return: Transformed.
+        :raises AttributeError: Attribute is invalid, not settable, or has no value.
+        """
+        raise NotImplementedError()
+
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPC, SupportsKeysAndGetItem[str, Any], **Any) -> BPC
+        # type: (PCS, SupportsKeysAndGetItem[str, Any], **Any) -> PCS
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BPC, Iterable[Item], **Any) -> BPC
+        # type: (PCS, Iterable[Item], **Any) -> PCS
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BPC, **Any) -> BPC
+        # type: (PCS, **Any) -> PCS
         pass
 
     @runtime_final.final
@@ -324,41 +394,29 @@ class BasePrivateClass(BaseClass):
         new_values, old_values = type(self).__attributes__.get_update_values(dict(*args, **kwargs), StateReader(self))
         return self.__update_state__(new_values, old_values)
 
-    @abc.abstractmethod
-    def __update_state__(self, new_values, old_values):
-        # type: (BPC, dict[str, Any], dict[str, Any]) -> BPC
-        """
-        Initialize state.
 
-        :param new_values: New values.
-        :param old_values: Old values.
-        :return: Transformed.
-        """
-        raise NotImplementedError()
-
-
-BPC = TypeVar("BPC", bound=BasePrivateClass)  # base private class type
+PCS = TypeVar("PCS", bound=PrivateClassStructure)
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveClass(BasePrivateClass):
-    """Base interactive class."""
+class InteractiveClassStructure(PrivateClassStructure):
+    """Interactive class structure."""
 
     __slots__ = ()
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BC, SupportsKeysAndGetItem[str, Any], **Any) -> BC
+        # type: (ICS, SupportsKeysAndGetItem[str, Any], **Any) -> ICS
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BC, Iterable[Item], **Any) -> BC
+        # type: (ICS, Iterable[Item], **Any) -> ICS
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BC, **Any) -> BC
+        # type: (ICS, **Any) -> ICS
         pass
 
     @runtime_final.final
@@ -371,18 +429,18 @@ class BaseInteractiveClass(BasePrivateClass):
         return self._update(*args, **kwargs)
 
 
-BC = TypeVar("BC", bound=BaseClass)  # base class type
+ICS = TypeVar("ICS", bound=InteractiveClassStructure)
 
 
-class BaseMutableClassMeta(BaseClassMeta):
-    """Metaclass for :class:`BaseMutableClass`."""
+class MutableClassStructureMeta(ClassStructureMeta):
+    """Metaclass for :class:`MutableClassStructure`."""
 
     __attribute_type__ = MutableAttribute  # type: Type[Attribute]
 
 
 # noinspection PyAbstractClass
-class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BasePrivateClass)):
-    """Base mutable class."""
+class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, PrivateClassStructure)):
+    """Mutable class structure."""
 
     __slots__ = ()
 
@@ -418,7 +476,7 @@ class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BasePrivateClass
 
 
 def _make_init(cls):
-    # type: (Type[BaseClass]) -> Callable
+    # type: (Type[ClassStructure]) -> Callable
     globs = {"DEFAULT": DEFAULT}  # type: dict[str, Any]
     args = []
     arg_names = []
@@ -452,7 +510,7 @@ def _make_init(cls):
 
 
 def _make_hash(cls):
-    # type: (Type[BaseClass]) -> Callable
+    # type: (Type[ClassStructure]) -> Callable
     globs = {}  # type: dict[str, Any]
     args = []
     for name, attribute in six.iteritems(cls.__attributes__):
@@ -480,7 +538,7 @@ def _make_hash(cls):
 
 
 def _make_eq(cls):
-    # type: (Type[BaseClass]) -> Callable
+    # type: (Type[ClassStructure]) -> Callable
     globs = {}  # type: dict[str, Any]
     args = []
     for name, attribute in six.iteritems(cls.__attributes__):
@@ -491,6 +549,8 @@ def _make_eq(cls):
     script = "\n".join(
         (
             "def __eq__(self, other):",
+            "    if self is other:",
+            "        return True",
             "    if type(self) is not type(other):",
             "        return False",
             "    eq_values = dict((n, self[n]) for n in [{args}] if n in self)",
@@ -511,8 +571,8 @@ def _make_eq(cls):
 
 
 def _make_repr(cls):
-    # type: (Type[BaseClass]) -> Callable
-    globs = {"six": six, "recursive_repr": recursive_repr}  # type: dict[str, Any]
+    # type: (Type[ClassStructure]) -> Callable
+    globs = {"six": six, "recursive_repr": recursive_repr, "safe_repr": safe_repr}  # type: dict[str, Any]
     args = []
     kwargs = []
     delegated = []
@@ -526,8 +586,9 @@ def _make_repr(cls):
         else:
             args.append(name)
 
-    script = "\n".join(  # TODO: safe_repr decorator
+    script = "\n".join(
         (
+            "@safe_repr.safe_repr",
             "@recursive_repr.recursive_repr",
             "def __repr__(self):",
             "    repr_text = '{{}}('.format(type(self).__qualname__)",
@@ -556,7 +617,7 @@ def _make_repr(cls):
 
 
 def _make_frozen_setattr(cls):
-    # type: (Type[BaseClass]) -> Callable
+    # type: (Type[ClassStructure]) -> Callable
     globs = {"cls": cls}  # type: dict[str, Any]
     script = "\n".join(
         (
@@ -577,7 +638,7 @@ def _make_frozen_setattr(cls):
 
 
 def _make_frozen_delattr(cls):
-    # type: (Type[BaseClass]) -> Callable
+    # type: (Type[ClassStructure]) -> Callable
     globs = {"cls": cls}  # type: dict[str, Any]
     script = "\n".join(
         (

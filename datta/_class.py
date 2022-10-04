@@ -4,28 +4,24 @@ import six
 
 from basicco import mangling, runtime_final
 from estruttura import (
-    MISSING,
     DELETED,
-    SupportsKeysAndGetItem,
     AttributeMap,
-    StateReader,
-    BaseClassMeta,
-    BasePrivateClass,
-    BaseInteractiveClass,
+    ClassStructureMeta,
+    ClassStructure,
+    PrivateClassStructure,
+    InteractiveClassStructure,
 )
-from tippo import Any, TypeVar, Type, Iterable, Tuple, TypeAlias, overload
+from tippo import Any, TypeVar, Type
 
-from ._bases import BaseDataMeta, BaseData
+from ._data import DataMeta, Data
 from ._relationship import DataRelationship
 from ._attribute import DataAttribute
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
-Item = Tuple[str, Any]  # type: TypeAlias
 
-
-class DataMeta(BaseDataMeta, BaseClassMeta):
+class DataClassMeta(DataMeta, ClassStructureMeta):
     __attribute_type__ = DataAttribute  # type: Type[DataAttribute]
     __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
 
@@ -45,8 +41,11 @@ class DataMeta(BaseDataMeta, BaseClassMeta):
         return dct_copy
 
 
-class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
-    __slots__ = ("__mutable",)
+# noinspection PyAbstractClass
+class ProtectedDataClass(six.with_metaclass(DataClassMeta, ClassStructure, Data)):
+    """Protected data class."""
+
+    __slots__ = ()
     __kwargs__ = {
         "frozen": True,
         "gen_init": True,
@@ -54,11 +53,6 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         "gen_eq": True,
         "gen_repr": True,
     }
-
-    # Trick auto completion.
-    if False:
-        def __hash__(self):  # noqa
-            return 0
 
     @runtime_final.final
     def __getitem__(self, name):
@@ -79,9 +73,16 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         for name, value in six.iteritems(new_values):
             object.__setattr__(self, name, value)
 
+
+# noinspection PyAbstractClass
+class PrivateDataClass(ProtectedDataClass, PrivateClassStructure):
+    """Private data class."""
+
+    __slots__ = ()
+
     @runtime_final.final
     def __update_state__(self, new_values, old_values):
-        # type: (PD, dict[str, Any], dict[str, Any]) -> PD
+        # type: (PDC, dict[str, Any], dict[str, Any]) -> PDC
         """
         Update attribute values.
 
@@ -100,8 +101,11 @@ class PrivateData(six.with_metaclass(DataMeta, BaseData, BasePrivateClass)):
         return self_copy
 
 
-PD = TypeVar("PD", bound=PrivateData)  # private data type
+PDC = TypeVar("PDC", bound=PrivateDataClass)
 
 
-class Data(PrivateData, BaseInteractiveClass):
+# noinspection PyAbstractClass
+class DataClass(PrivateDataClass, InteractiveClassStructure):
+    """Data class."""
+
     __slots__ = ()

@@ -1,20 +1,20 @@
 import six
 import pyrsistent
-from basicco import recursive_repr, custom_repr
-from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, overload
+from basicco import recursive_repr, custom_repr, safe_repr
+from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, SupportsKeysAndGetItem, overload
 from pyrsistent.typing import PMap
 
-from estruttura import SupportsKeysAndGetItem, BasePrivateDict, BaseInteractiveDict
+from estruttura import DELETED, DictStructure, PrivateDictStructure, InteractiveDictStructure, relationship
 
-from ._collections import BasePrivateDataCollection, BaseDataCollection
+from ._data import UniformData, PrivateUniformData, InteractiveUniformData
 
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 
 
-class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDict[KT, VT]):
-    """Private dictionary data."""
+class ProtectedDataDict(UniformData[PMap[KT, VT], KT], DictStructure[KT, VT]):
+    """Protected data dictionary."""
 
     __slots__ = ()
 
@@ -26,7 +26,7 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
 
         :param initial: Initial values.
         """
-        return pyrsistent.pmap(initial)
+        return pyrsistent.pmap(initial or ())
 
     @overload
     def __init__(self, __m, **kwargs):
@@ -44,11 +44,21 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
         pass
 
     def __init__(self, *args, **kwargs):
-        if len(args) == 1 and not kwargs:
-            initial = args[0]
-        else:
-            initial = dict(*args, **kwargs)
-        super(PrivateDataDict, self).__init__(initial)
+        initial = dict(*args, **kwargs)
+        rel = relationship(self)
+        for key, value in six.iteritems(initial):
+            if value is DELETED:
+                error = "{!r}; DELETED is not a valid initial value".format(key)
+                raise ValueError(error)
+            if rel is not None:
+                try:
+                    value = rel.process(value)
+                except Exception as e:
+                    exc = type(e)("{!r}; {}".format(key, e))
+                    six.raise_from(exc, None)
+                    raise exc
+            initial[key] = value
+        super(ProtectedDataDict, self).__init__(initial)
 
     def __contains__(self, key):
         # type: (Any) -> bool
@@ -79,6 +89,7 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
         """
         return len(self._internal)
 
+    @safe_repr.safe_repr
     @recursive_repr.recursive_repr
     def __repr__(self):
         # type: () -> str
@@ -105,73 +116,6 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
         :raises KeyError: Key is not present.
         """
         return self._internal[key]
-
-    def _clear(self):
-        # type: (PDD) -> PDD
-        """
-        Clear.
-
-        :return: Transformed.
-        """
-        return self._make(pyrsistent.pmap())
-
-    def _discard(self, key):
-        # type: (PDD, KT) -> PDD
-        """
-        Discard key if it exists.
-
-        :param key: Key.
-        :return: Transformed.
-        """
-        return self._make(self._internal.discard(key))
-
-    def _remove(self, key):
-        # type: (PDD, KT) -> PDD
-        """
-        Delete existing key.
-
-        :param key: Key.
-        :return: Transformed.
-        :raises KeyError: Key is not present.
-        """
-        return self._make(self._internal.remove(key))
-
-    def _set(self, key, value):
-        # type: (PDD, KT, VT) -> PDD
-        """
-        Set value for key.
-
-        :param key: Key.
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._make(self._internal.set(key, value))
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (PDD, SupportsKeysAndGetItem[KT, VT], **VT) -> PDD
-        pass
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (PDD, Iterable[tuple[KT, VT]], **VT) -> PDD
-        pass
-
-    @overload
-    def _update(self, **kwargs):
-        # type: (PDD, **VT) -> PDD
-        pass
-
-    def _update(self, *args, **kwargs):
-        """
-        Update keys and values.
-        Same parameters as :meth:`dict.update`.
-
-        :return: Transformed.
-        """
-        if not args and not kwargs:
-            return self
-        return self._make(self._internal.update(dict(*args, **kwargs)))
 
     def get(self, key, fallback=None):
         # type: (KT, Any) -> Union[VT, Any]
@@ -215,10 +159,65 @@ class PrivateDataDict(BasePrivateDataCollection[PMap[KT, VT], KT], BasePrivateDi
             yield value
 
 
+class PrivateDataDict(ProtectedDataDict[KT, VT], PrivateUniformData[PMap[KT, VT], KT], PrivateDictStructure[KT, VT]):
+    """Private data dictionary."""
+
+    __slots__ = ()
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (PDD, SupportsKeysAndGetItem[KT, VT], **VT) -> PDD
+        pass
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (PDD, Iterable[tuple[KT, VT]], **VT) -> PDD
+        pass
+
+    @overload
+    def _update(self, **kwargs):
+        # type: (PDD, **VT) -> PDD
+        pass
+
+    def _update(self, *args, **kwargs):
+        """
+        Update keys and values.
+        Same parameters as :meth:`dict.update`.
+
+        :return: Transformed.
+        """
+        if not args and not kwargs:
+            return self
+
+        updates = dict(*args, **kwargs)
+        deletes = set()
+        rel = relationship(self)
+        for key, value in six.iteritems(updates):
+            if value is DELETED:
+                deletes.add(key)
+                continue
+            if rel is not None:
+                try:
+                    value = rel.process(value)
+                except Exception as e:
+                    exc = type(e)("{!r}; {}".format(key, e))
+                    six.raise_from(exc, None)
+                    raise exc
+            updates[key] = value
+
+        internal = self._internal
+        if updates:
+            internal = internal.update(updates)
+        if deletes:
+            internal = internal.transform([lambda k: k in deletes], pyrsistent.discard)
+
+        return self._make(internal)
+
+
 PDD = TypeVar("PDD", bound=PrivateDataDict)
 
 
-class DataDict(PrivateDataDict[KT, VT], BaseDataCollection[PMap[KT, VT], KT], BaseInteractiveDict[KT, VT]):
-    """Dictionary data."""
+class DataDict(PrivateDataDict[KT, VT], InteractiveUniformData[PMap[KT, VT], KT], InteractiveDictStructure[KT, VT]):
+    """Data dictionary."""
 
     __slots__ = ()

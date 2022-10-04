@@ -1,20 +1,20 @@
 import itertools
 
 import pyrsistent
-from basicco import recursive_repr, custom_repr
+from basicco import recursive_repr, custom_repr, safe_repr
 from tippo import Any, TypeVar, Iterable, Iterator, overload
 from pyrsistent.typing import PVector
 
-from estruttura import BasePrivateList, BaseInteractiveList, resolve_index, resolve_continuous_slice, pre_move
+from estruttura import ListStructure, PrivateListStructure, InteractiveListStructure, relationship
 
-from ._collections import BasePrivateDataCollection, BaseDataCollection
+from ._data import UniformData, PrivateUniformData, InteractiveUniformData
 
 
 T = TypeVar("T")  # value type
 
 
-class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[T]):
-    """Private list data."""
+class ProtectedDataList(UniformData[PVector[T], T], ListStructure[T]):
+    """Protected data list."""
 
     __slots__ = ()
 
@@ -26,11 +26,16 @@ class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
 
         :param initial: Initial values.
         """
-        return pyrsistent.pvector(initial)
+        return pyrsistent.pvector(initial or ())
 
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
-        super(PrivateDataList, self).__init__(initial)
+
+        rel = relationship(self)
+        if rel is not None:
+            initial = tuple(rel.process(v) for v in initial)
+
+        super(ProtectedDataList, self).__init__(initial)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -61,6 +66,7 @@ class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
         """
         return len(self._internal)
 
+    @safe_repr.safe_repr
     @recursive_repr.recursive_repr
     def __repr__(self):
         # type: () -> str
@@ -105,134 +111,6 @@ class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
         else:
             return self._internal[index]
 
-    def _clear(self):
-        # type: (PLD) -> PLD
-        """
-        Clear.
-
-        :return: Transformed.
-        """
-        return self._make(pyrsistent.pvector())
-
-    def _insert(self, index, *values):
-        # type: (PLD, int, T) -> PLD
-        """
-        Insert value(s) at index.
-
-        :param index: Index.
-        :param values: Value(s).
-        :return: Transformed.
-        :raises ValueError: No values provided.
-        """
-        if not values:
-            error = "no values provided"
-            raise ValueError(error)
-        index = self.resolve_index(index, clamp=True)
-        if index == len(self._internal):
-            return self.extend(values)
-        elif index == 0:
-            return self._make(pyrsistent.pvector(values) + self._internal)
-        else:
-            return self._make(self._internal[:index] + pyrsistent.pvector(values) + self._internal[index:])
-
-    def _append(self, value):
-        # type: (PLD, T) -> PLD
-        """
-        Append value at the end.
-
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._make(self._internal.append(value))
-
-    def _extend(self, iterable):
-        # type: (PLD, Iterable[T]) -> PLD
-        """
-        Extend at the end with iterable.
-
-        :param iterable: Iterable.
-        :return: Transformed.
-        """
-        return self._make(self._internal.extend(iterable))
-
-    def _remove(self, value):
-        # type: (PLD, T) -> PLD
-        """
-        Remove first occurrence of value.
-
-        :param value: Value.
-        :return: Transformed.
-        :raises ValueError: Value is not present.
-        """
-        return self._make(self._internal.remove(value))
-
-    def _reverse(self):
-        # type: (PLD) -> PLD
-        """
-        Reverse values.
-
-        :return: Transformed.
-        """
-        return self._make(pyrsistent.pvector(reversed(self._internal)))
-
-    def _move(self, item, target_index):
-        # type: (PLD, slice | int, int) -> PLD
-        """
-        Move values internally.
-
-        :param item: Index/slice.
-        :param target_index: Target index.
-        :return: Transformed.
-        """
-        result = pre_move(len(self._internal), item, target_index)
-        if result is None:
-            return self
-        index, stop, target_index, post_index = result
-
-        values = self._internal[index:stop]
-        internal = self._internal.delete(index, stop)
-
-        if post_index == len(internal):
-            return self._make(internal.extend(values))
-        elif post_index == 0:
-            return self._make(pyrsistent.pvector(values) + internal)
-        else:
-            return self._make(internal[:post_index] + pyrsistent.pvector(values) + internal[post_index:])
-
-    def _delete(self, item):
-        # type: (PLD, slice | int) -> PLD
-        """
-        Delete values at index/slice.
-
-        :param item: Index/slice.
-        :return: Transformed.
-        """
-        if isinstance(item, slice):
-            index, stop = self.resolve_continuous_slice(item)
-            return self._make(self._internal.delete(index, stop))
-        else:
-            index = self.resolve_index(item)
-            return self._make(self._internal.delete(index, None))
-
-    def _update(self, index, *values):
-        # type: (PLD, int, T) -> PLD
-        """
-        Update value(s) starting at index.
-
-        :param index: Index.
-        :param values: Value(s).
-        :return: Transformed.
-        :raises ValueError: No values provided.
-        """
-        if not values:
-            error = "no values provided"
-            raise ValueError(error)
-        index = self.resolve_index(index)
-        stop = self.resolve_index(index + len(values) - 1) + 1
-        pairs = itertools.chain.from_iterable(zip(range(index, stop), values))
-        new_internal = self._internal.mset(*pairs)  # type: ignore
-        return self._make(new_internal)
-
     def count(self, value):
         # type: (Any) -> int
         """
@@ -265,34 +143,117 @@ class PrivateDataList(BasePrivateDataCollection[PVector[T], T], BasePrivateList[
             raise ValueError(error)
         return self._internal.index(*args)
 
-    def resolve_index(self, index, clamp=False):
-        # type: (int, bool) -> int
+
+class PrivateDataList(ProtectedDataList[T], PrivateUniformData[PVector[T], T], PrivateListStructure[T]):
+    """Private data list."""
+
+    __slots__ = ()
+
+    def _insert(self, index, *values):
+        # type: (PDL, int, T) -> PDL
         """
-        Resolve index to a positive number.
+        Insert value(s) at index.
 
-        :param index: Input index.
-        :param clamp: Whether to clamp between zero and the length.
-        :return: Resolved index.
-        :raises IndexError: Index out of range.
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
         """
-        return resolve_index(len(self._internal), index, clamp=clamp)
+        if not values:
+            error = "no values provided"
+            raise ValueError(error)
 
-    def resolve_continuous_slice(self, slc):
-        # type: (slice) -> tuple[int, int]
+        index = self.resolve_index(index, clamp=True)
+
+        rel = relationship(self)
+        if rel is not None:
+            values = tuple(rel.process(v) for v in values)
+
+        if index == len(self._internal):
+            return self._extend(values)
+        elif index == 0:
+            return self._make(pyrsistent.pvector(values) + self._internal)
+        else:
+            return self._make(self._internal[:index] + pyrsistent.pvector(values) + self._internal[index:])
+
+    def _move(self, item, target_index):
+        # type: (PDL, slice | int, int) -> PDL
         """
-        Resolve continuous slice according to length.
+        Move values internally.
 
-        :param slc: Continuous slice.
-        :return: Index and stop.
-        :raises IndexError: Slice is noncontinuous.
+        :param item: Index/slice.
+        :param target_index: Target index.
+        :return: Transformed.
         """
-        return resolve_continuous_slice(len(self._internal), slc)
+        result = self.pre_move(item, target_index)
+        if result is None:
+            return self
+        index, stop, target_index, post_index = result
+
+        values = self._internal[index:stop]
+        internal = self._internal.delete(index, stop)
+
+        if post_index == len(internal):
+            return self._make(internal.extend(values))
+        elif post_index == 0:
+            return self._make(pyrsistent.pvector(values) + internal)
+        else:
+            return self._make(internal[:post_index] + pyrsistent.pvector(values) + internal[post_index:])
+
+    def _delete(self, item):
+        # type: (PDL, slice | int) -> PDL
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        :return: Transformed.
+        """
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            return self._make(self._internal.delete(index, stop))
+        else:
+            index = self.resolve_index(item)
+            return self._make(self._internal.delete(index, None))
+
+    @overload
+    def _update(self, item, value):
+        # type: (PDL, int, T) -> PDL
+        pass
+
+    @overload
+    def _update(self, item, value):
+        # type: (PDL, slice, Iterable[T]) -> PDL
+        pass
+
+    def _update(self, item, value):
+        """
+        Update value(s).
+
+        :param item: Index/slice.
+        :param value: Value(s).
+        :return: Transformed.
+        """
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            values = value
+        else:
+            index = self.resolve_index(item)
+            stop = self.resolve_index(item) + 1
+            values = (value,)
+
+        rel = relationship(self)
+        if rel is not None:
+            values = tuple(rel.process(v) for v in values)
+
+        pairs = itertools.chain.from_iterable(zip(range(index, stop), values))
+        new_internal = self._internal.mset(*pairs)  # type: ignore
+        return self._make(new_internal)
 
 
-PLD = TypeVar("PLD", bound=PrivateDataList)
+PDL = TypeVar("PDL", bound=PrivateDataList)
 
 
-class DataList(PrivateDataList[T], BaseDataCollection[PVector[T], T], BaseInteractiveList[T]):
-    """List data."""
+class DataList(PrivateDataList[T], InteractiveUniformData[PVector[T], T], InteractiveListStructure[T]):
+    """Data list."""
 
     __slots__ = ()

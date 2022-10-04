@@ -2,26 +2,25 @@ import abc
 
 import slotted
 from basicco import runtime_final
-from tippo import TypeVar, AbstractSet, Iterable, cast
+from tippo import AbstractSet, Iterable, TypeVar, cast
 
-from ._collections import (
-    BaseCollection,
-    BaseInteractiveCollection,
-    BaseMutableCollection,
-    BasePrivateCollection,
-    ProxyCollection,
-    InteractiveProxyCollection,
-    MutableProxyCollection,
-    PrivateProxyCollection,
+from ._structures import (
+    InteractiveProxyUniformStructure,
+    InteractiveUniformStructure,
+    MutableProxyUniformStructure,
+    MutableUniformStructure,
+    PrivateProxyUniformStructure,
+    PrivateUniformStructure,
+    ProxyUniformStructure,
+    UniformStructure,
 )
-
 
 T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
-class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
-    """Base set collection."""
+class SetStructure(UniformStructure[T_co], slotted.SlottedSet[T_co]):
+    """Set structure."""
 
     __slots__ = ()
 
@@ -87,7 +86,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __and__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get intersection: `self & other`.
 
@@ -100,7 +99,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __rand__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get intersection: `other & self`.
 
@@ -111,7 +110,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __sub__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get difference: `self - other`.
 
@@ -124,7 +123,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __rsub__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get inverse difference: `other - self`.
 
@@ -137,7 +136,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __or__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get union: `self | other`.
 
@@ -150,7 +149,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __ror__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get union: `other | self`.
 
@@ -161,7 +160,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __xor__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get symmetric difference: `self ^ other`.
 
@@ -174,7 +173,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @runtime_final.final
     def __rxor__(self, other):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get symmetric difference: `other ^ self`.
 
@@ -218,7 +217,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @abc.abstractmethod
     def intersection(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get intersection.
 
@@ -229,7 +228,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @abc.abstractmethod
     def symmetric_difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get symmetric difference.
 
@@ -240,7 +239,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @abc.abstractmethod
     def union(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get union.
 
@@ -251,7 +250,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @abc.abstractmethod
     def difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get difference.
 
@@ -262,7 +261,7 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
 
     @abc.abstractmethod
     def inverse_difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get an iterable's difference to this.
 
@@ -272,37 +271,25 @@ class BaseSet(BaseCollection[T_co], slotted.SlottedSet[T_co]):
         raise NotImplementedError()
 
 
-class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):
-    """Base private set collection."""
+class PrivateSetStructure(SetStructure[T], PrivateUniformStructure[T]):
+    """Private set structure."""
 
     __slots__ = ()
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _add(self, value):
-        # type: (BPS, T) -> BPS
+        # type: (PSS, T) -> PSS
         """
         Add value.
 
         :param value: Value.
         :return: Transformed.
         """
-        raise NotImplementedError()
+        return self._update((value,))
 
-    @abc.abstractmethod
-    def _discard(self, *values):
-        # type: (BPS, T) -> BPS
-        """
-        Discard value(s).
-
-        :param values: Value(s).
-        :return: Transformed.
-        :raises ValueError: No values provided.
-        """
-        raise NotImplementedError()
-
-    @abc.abstractmethod
+    @runtime_final.final
     def _remove(self, *values):
-        # type: (BPS, T) -> BPS
+        # type: (PSS, T) -> PSS
         """
         Remove existing value(s).
 
@@ -313,11 +300,35 @@ class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):
         :raises ValueError: No values provided.
         :raises KeyError: Value is not present.
         """
+        if not values:
+            error = "no values provided"
+            raise ValueError(error)
+
+        missing = set(values).difference(self.intersection(values))
+        if len(missing) == 1:
+            error = "value {!r} is not in the set".format(next(iter(missing)))
+            raise KeyError(error)
+        elif missing:
+            error = "values {} are not in the set".format(", ".join(repr(v) for v in missing))
+            raise KeyError(error)
+
+        return self._discard(*values)
+
+    @abc.abstractmethod
+    def _discard(self, *values):
+        # type: (PSS, T) -> PSS
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        :raises ValueError: No values provided.
+        """
         raise NotImplementedError()
 
     @abc.abstractmethod
     def _replace(self, old_value, new_value):
-        # type: (BPS, T, T) -> BPS
+        # type: (PSS, T, T) -> PSS
         """
         Replace existing value with a new one.
 
@@ -330,7 +341,7 @@ class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):
 
     @abc.abstractmethod
     def _update(self, iterable):
-        # type: (BPS, Iterable[T]) -> BPS
+        # type: (PSS, Iterable[T]) -> PSS
         """
         Update with iterable.
 
@@ -340,12 +351,12 @@ class BasePrivateSet(BaseSet[T], BasePrivateCollection[T]):
         raise NotImplementedError()
 
 
-BPS = TypeVar("BPS", bound=BasePrivateSet)  # base private set type
+PSS = TypeVar("PSS", bound=PrivateSetStructure)
 
 
 # noinspection PyAbstractClass
-class BaseInteractiveSet(BasePrivateSet[T], BaseInteractiveCollection[T]):
-    """Base interactive set collection."""
+class InteractiveSetStructure(PrivateSetStructure[T], InteractiveUniformStructure[T]):
+    """Interactive set structure."""
 
     __slots__ = ()
 
@@ -410,11 +421,11 @@ class BaseInteractiveSet(BasePrivateSet[T], BaseInteractiveCollection[T]):
         return self._update(iterable)
 
 
-BIS = TypeVar("BIS", bound=BaseInteractiveSet)  # base interactive set type
+BIS = TypeVar("BIS", bound=InteractiveSetStructure)
 
 
-class BaseMutableSet(BasePrivateSet[T], BaseMutableCollection[T], slotted.SlottedMutableSet[T]):
-    """Base mutable set collection."""
+class MutableSetStructure(PrivateSetStructure[T], MutableUniformStructure[T], slotted.SlottedMutableSet[T]):
+    """Mutable set structure."""
 
     __slots__ = ()
 
@@ -561,20 +572,15 @@ class BaseMutableSet(BasePrivateSet[T], BaseMutableCollection[T], slotted.Slotte
         self._update(iterable)
 
 
-class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
-    """
-    Proxy set.
-
-    Features:
-      - Wraps a private/interactive/mutable set.
-    """
+class ProxySet(SetStructure[T_co], ProxyUniformStructure[T_co]):
+    """Proxy set."""
 
     __slots__ = ()
 
     def __init__(self, wrapped):
-        # type: (BasePrivateSet[T_co]) -> None
+        # type: (PrivateSetStructure[T_co]) -> None
         """
-        :param wrapped: Base private/interactive/mutable set.
+        :param wrapped: Set structure to be wrapped.
         """
         super(ProxySet, self).__init__(wrapped)
 
@@ -633,7 +639,7 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @runtime_final.final
     def intersection(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get intersection.
 
@@ -644,7 +650,7 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @runtime_final.final
     def symmetric_difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get symmetric difference.
 
@@ -655,7 +661,7 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @runtime_final.final
     def union(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get union.
 
@@ -666,7 +672,7 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @runtime_final.final
     def difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get difference.
 
@@ -677,7 +683,7 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @runtime_final.final
     def inverse_difference(self, iterable):
-        # type: (Iterable) -> BaseSet
+        # type: (Iterable) -> SetStructure
         """
         Get an iterable's difference to this.
 
@@ -688,32 +694,15 @@ class ProxySet(BaseSet[T_co], ProxyCollection[T_co]):
 
     @property
     def _wrapped(self):
-        # type: () -> BasePrivateSet[T_co]
-        """Wrapped base private/interactive/mutable set."""
-        return cast(BasePrivateSet[T_co], super(ProxySet, self)._wrapped)
+        # type: () -> PrivateSetStructure[T_co]
+        """Wrapped set collection."""
+        return cast(PrivateSetStructure[T_co], super(ProxySet, self)._wrapped)
 
 
-class ProxyPrivateSet(ProxySet[T], BasePrivateSet[T], PrivateProxyCollection[T]):
-    """
-    Private proxy set.
-
-    Features:
-      - Has private transformation methods.
-      - Transformations return a transformed version (immutable) or self (mutable).
-    """
+class PrivateProxySet(ProxySet[T], PrivateSetStructure[T], PrivateProxyUniformStructure[T]):
+    """Private proxy set."""
 
     __slots__ = ()
-
-    @runtime_final.final
-    def _add(self, value):
-        # type: (PPS, T) -> PPS
-        """
-        Add value.
-
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._transform_wrapped(self._wrapped._add(value))
 
     @runtime_final.final
     def _discard(self, *values):
@@ -726,21 +715,6 @@ class ProxyPrivateSet(ProxySet[T], BasePrivateSet[T], PrivateProxyCollection[T])
         :raises ValueError: No values provided.
         """
         return self._transform_wrapped(self._wrapped._discard(*values))
-
-    @runtime_final.final
-    def _remove(self, *values):
-        # type: (PPS, T) -> PPS
-        """
-        Remove existing value(s).
-
-        :param values: Value(s).
-
-        :return: Transformed.
-
-        :raises ValueError: No values provided.
-        :raises KeyError: Value is not present.
-        """
-        return self._transform_wrapped(self._wrapped._remove(*values))
 
     @runtime_final.final
     def _replace(self, old_value, new_value):
@@ -767,37 +741,26 @@ class ProxyPrivateSet(ProxySet[T], BasePrivateSet[T], PrivateProxyCollection[T])
         return self._transform_wrapped(self._wrapped._update(iterable))
 
 
-PPS = TypeVar("PPS", bound=ProxyPrivateSet)  # private proxy set type
+PPS = TypeVar("PPS", bound=PrivateProxySet)
 
 
-class ProxyInteractiveSet(ProxyPrivateSet[T], BaseInteractiveSet[T], InteractiveProxyCollection[T]):
-    """
-    Proxy interactive set.
-
-    Features:
-      - Has public transformation methods.
-      - Transformations return a transformed version (immutable) or self (mutable).
-    """
+class InteractiveProxySet(PrivateProxySet[T], InteractiveSetStructure[T], InteractiveProxyUniformStructure[T]):
+    """Interactive proxy set."""
 
     __slots__ = ()
 
 
-class ProxyMutableSet(ProxyPrivateSet[T], BaseMutableSet[T], MutableProxyCollection[T]):
-    """
-    Proxy mutable set.
-
-    Features:
-      - Has public mutable transformation methods.
-    """
+class MutableProxySet(PrivateProxySet[T], MutableSetStructure[T], MutableProxyUniformStructure[T]):
+    """Mutable proxy set."""
 
     __slots__ = ()
 
     def __init__(self, wrapped):
-        # type: (BaseMutableSet[T]) -> None
+        # type: (MutableSetStructure[T]) -> None
         """
-        :param wrapped: Base mutable set.
+        :param wrapped: Mutable set structure.
         """
-        super(ProxyMutableSet, self).__init__(wrapped)
+        super(MutableProxySet, self).__init__(wrapped)
 
     @runtime_final.final
     def pop(self):
@@ -842,6 +805,6 @@ class ProxyMutableSet(ProxyPrivateSet[T], BaseMutableSet[T], MutableProxyCollect
 
     @property
     def _wrapped(self):
-        # type: () -> BaseMutableSet[T]
-        """Wrapped base mutable set."""
-        return cast(BaseMutableSet[T], super(MutableProxyCollection, self)._wrapped)
+        # type: () -> MutableSetStructure[T]
+        """Wrapped mutable set structure."""
+        return cast(MutableSetStructure[T], super(MutableProxySet, self)._wrapped)

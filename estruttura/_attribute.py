@@ -42,7 +42,7 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-_attribute_counter = 0
+_attribute_count = 0
 
 
 class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
@@ -59,6 +59,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_deletable",
         "_repr",
         "_eq",
+        "_order",
         "_hash",
         "_relationship",
         "_dependencies",
@@ -72,7 +73,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_extra_paths",
         "_builtin_paths",
         "_constant",
-        "_order",
+        "_count",
     )
 
     def __init__(
@@ -85,6 +86,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         deletable=None,  # type: bool | None
         repr=True,  # type: bool
         eq=True,  # type: bool
+        order=None,  # type: bool | None
         hash=None,  # type: bool | None
         relationship=None,  # type: Relationship | None
         metadata=None,  # type: Any
@@ -92,7 +94,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         builtin_paths=None,  # type: Iterable[str] | None
     ):
         # type: (...) -> None
-        global _attribute_counter
+        global _attribute_count
 
         # Ensure single default source.
         if default is not MISSING and factory is not MISSING:
@@ -106,6 +108,16 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             error = "can't contribute to the hash if it's not contributing to the eq"
             raise ValueError(error)
 
+        # Ensure safe order.
+        if order is None:
+            order = eq and required
+        if order and not eq:
+            error = "can't contribute to order if it's not contributing to the eq"
+            raise ValueError(error)
+        if order and not required:
+            error = "can't contribute to order if it's not required"
+            raise ValueError(error)
+
         # Set attributes.
         self._owner = None  # type: Type[ClassProtocol] | None
         self._name = None  # type: str | None
@@ -117,6 +129,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._deletable = bool(deletable) if deletable is not None else None
         self._repr = bool(repr)
         self._eq = bool(eq)
+        self._order = bool(order)
         self._hash = bool(hash)
         self._relationship = relationship
         self._dependencies = ()  # type: tuple[Attribute, ...]
@@ -131,9 +144,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
         self._constant = False
 
-        # Increment order counter.
-        _attribute_counter += 1
-        self._order = _attribute_counter
+        # Increment count.
+        _attribute_count += 1
+        self._count = _attribute_count
 
     def __hash__(self):
         # type: () -> int
@@ -246,6 +259,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("deletable", self.deletable),
             ("repr", self.repr),
             ("eq", self.eq),
+            ("order", self.order),
             ("hash", self.hash),
             ("relationship", self.relationship),
             ("metadata", self.metadata),
@@ -259,7 +273,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
                     ("owner", self.owner),
                     ("delegated", self.delegated),
                     ("constant", self.constant),
-                    ("order", self.order),
+                    ("countcount", self.count),
                 ]
             )
             if usecase is not basic_data.ItemUsecase.REPR:
@@ -534,6 +548,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._eq
 
     @property
+    def order(self):
+        # type: () -> bool
+        """Whether to include in the `__lt__`, `__le__`, `__gt__`, `__ge__` methods."""
+        return self._order
+
+    @property
     def hash(self):
         # type: () -> bool
         """Whether to include in the `__hash__` method."""
@@ -615,9 +635,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     @runtime_final.final
-    def order(self):
+    def count(self):
         # type: () -> int
-        return self._order
+        return self._count
 
     @property
     def has_default(self):
@@ -1236,4 +1256,4 @@ def _traverse(attribute, direction):
         visited.add(dep)
         for sub_dep in getattr(dep, direction):
             unvisited.add(sub_dep)
-    return tuple(sorted(visited, key=lambda d: d.order))
+    return tuple(sorted(visited, key=lambda d: d.count))

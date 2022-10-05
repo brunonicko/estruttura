@@ -1,3 +1,5 @@
+# type: ignore
+
 import os
 import sys
 
@@ -7,11 +9,39 @@ sys.path.insert(0, root_path)
 
 # Project information.
 project = "Estruttura"
-copyright = "2022, Bruno Nicko"
+copyright = "2022, Bruno Nicko"  # noqa
 author = "Bruno Nicko"
 
 # Sphinx extensions.
-extensions = ["sphinx_rtd_theme"]
+extensions = [
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.autosectionlabel",
+    "sphinx.ext.autodoc",
+    "sphinx_rtd_theme",
+]
+
+# Intersphinx configuration.
+intersphinx_mapping = {
+    "tippo": ("https://tippo.readthedocs.io/en/stable/", None),
+    "basicco": ("https://basicco.readthedocs.io/en/stable/", None),
+    "slotted": ("https://slotted.readthedocs.io/en/stable/", None),
+    "six": ("https://six.readthedocs.io/", None),
+    "pyrsistent": ("https://pyrsistent.readthedocs.io/en/stable/", None),
+    "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
+    "python": ("https://docs.python.org/3.10", None),
+}
+
+# Autodoc configuration.
+autoclass_content = "class"
+autodoc_typehints = "description"
+autodoc_member_order = "bysource"
+autodoc_default_options = {
+    "members": True,
+    "show-inheritance": True,
+}
+
+# Templates' paths.
+templates_path = ["_templates"]
 
 # The suffix(es) of source filenames.
 source_suffix = [".rst"]
@@ -31,5 +61,8 @@ pygments_style = "monokai"
 
 # HTML options.
 html_theme = "sphinx_rtd_theme"
-html_theme_options = {}
+html_theme_options = {
+    "style_external_links": False,
+    "style_nav_header_background": "#3AAD60",
+}
 html_static_path = ["_static"]

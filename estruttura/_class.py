@@ -7,6 +7,7 @@ from tippo import (
     Callable,
     Iterable,
     Iterator,
+    Literal,
     SupportsKeysAndGetItem,
     Tuple,
     Type,
@@ -16,7 +17,7 @@ from tippo import (
 )
 
 from ._attribute import Attribute, AttributeMap, MutableAttribute, StateReader
-from ._constants import DEFAULT, DELETED
+from ._constants import DEFAULT, DELETED, MISSING
 from ._relationship import Relationship
 from ._structures import CollectionStructure, CollectionStructureMeta
 
@@ -37,16 +38,17 @@ class ClassStructureMeta(CollectionStructureMeta):
     __gen_init__ = False  # type: bool
     __gen_hash__ = False  # type: bool
     __gen_eq__ = False  # type: bool
+    __gen_order__ = False  # type: bool
     __gen_repr__ = False  # type: bool
 
     __attributes = AttributeMap()  # type: AttributeMap
 
     @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):
+    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
 
         # Scrape bases.
         base_attributes = {}  # type: dict[str, Attribute]
-        attribute_orders = {}  # type: dict[str, int]
+        attribute_counts = {}  # type: dict[str, int]
         for base in reversed(get_mro.preview_mro(*bases)):
             if base is object:
                 continue
@@ -85,10 +87,10 @@ class ClassStructureMeta(CollectionStructureMeta):
 
                     assert attribute.name == attribute_name
 
-                    # Collect attribute and remember order only if not seen before.
+                    # Collect attribute and remember count only if not seen before.
                     base_attributes[attribute_name] = attribute
-                    if attribute_name not in attribute_orders:
-                        attribute_orders[attribute_name] = attribute.order
+                    if attribute_name not in attribute_counts:
+                        attribute_counts[attribute_name] = attribute.count
 
         # Collect attributes for this class.
         this_attributes = {}  # type: dict[str, Attribute]
@@ -97,11 +99,11 @@ class ClassStructureMeta(CollectionStructureMeta):
 
                 # Collect attribute.
                 base_attributes[member_name] = this_attributes[member_name] = member
-                if member_name not in attribute_orders:
-                    attribute_orders[member_name] = member.order
+                if member_name not in attribute_counts:
+                    attribute_counts[member_name] = member.count
 
-        # Build ordered attribute map.
-        attribute_items = sorted(six.iteritems(base_attributes), key=lambda i: attribute_orders[i[0]])
+        # Build counted attribute map.
+        attribute_items = sorted(six.iteritems(base_attributes), key=lambda i: attribute_counts[i[0]])
         attribute_map = AttributeMap(attribute_items)
 
         this_attribute_items = [(n, a) for n, a in attribute_items if n in this_attributes]
@@ -157,8 +159,6 @@ class ClassStructureMeta(CollectionStructureMeta):
                 raise TypeError(error)
             type.__setattr__(cls, "__init__", _make_init(cls))
 
-        # TODO: match_args
-
         if cls.__gen_hash__:
             if not cls.__frozen__:
                 error = "class {!r} can't be mutable and hashable at the same time"
@@ -179,10 +179,26 @@ class ClassStructureMeta(CollectionStructureMeta):
                 raise TypeError(error)
             type.__setattr__(cls, "__eq__", _make_eq(cls))
 
-        # TODO: generate order __lt__(), __le__(), __gt__(), and __ge__()
-        # TODO: These compare the class as if it were a tuple of its fields, in order.
-        # TODO: Both instances in the comparison must be of the identical type.
-        # TODO: If order is true and eq is false, a ValueError is raised.
+        if cls.__gen_order__:
+            if not cls.__gen_eq__:
+                error = "'gen_order' is set to True but 'gen_eq' is not"
+                raise ValueError(error)
+            if "__lt__" in dct:
+                error = "can't manually define __lt__"
+                raise TypeError(error)
+            if "__le__" in dct:
+                error = "can't manually define __le__"
+                raise TypeError(error)
+            if "__gt__" in dct:
+                error = "can't manually define __gt__"
+                raise TypeError(error)
+            if "__ge__" in dct:
+                error = "can't manually define __ge__"
+                raise TypeError(error)
+            type.__setattr__(cls, "__lt__", _make_order(cls, "lt"))
+            type.__setattr__(cls, "__le__", _make_order(cls, "le"))
+            type.__setattr__(cls, "__gt__", _make_order(cls, "gt"))
+            type.__setattr__(cls, "__ge__", _make_order(cls, "ge"))
 
         if cls.__gen_repr__:
             if "__repr__" in dct:
@@ -200,7 +216,7 @@ class ClassStructureMeta(CollectionStructureMeta):
 
     @property
     @runtime_final.final
-    def __attributes__(cls):
+    def __attributes__(cls):  # noqa
         # type: () -> AttributeMap
         return cls.__attributes
 
@@ -217,6 +233,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[
         gen_init=None,  # type: bool | None
         gen_hash=None,  # type: bool | None
         gen_eq=None,  # type: bool | None
+        gen_order=None,  # type: bool | None
         gen_repr=None,  # type: bool | None
         **kwargs
     ):
@@ -254,6 +271,12 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[
                 error = "gen_eq is already on for {!r} base class(es), can't turn it off".format(cls.__name__)
                 raise TypeError(error)
             cls.__gen_eq__ = bool(gen_eq)
+
+        if gen_order is not None:
+            if cls.__gen_order__ and not gen_order:
+                error = "gen_order is already on for {!r} base class(es), can't turn it off".format(cls.__name__)
+                raise TypeError(error)
+            cls.__gen_order__ = bool(gen_order)
 
         if gen_repr is not None:
             if cls.__gen_repr__ and not gen_repr:
@@ -332,7 +355,7 @@ class PrivateClassStructure(ClassStructure):
         """
         raise NotImplementedError()
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _discard(self, name):
         # type: (PCS, str) -> PCS
         """
@@ -340,11 +363,13 @@ class PrivateClassStructure(ClassStructure):
 
         :param name: Attribute name.
         :return: Transformed.
-        :raises AttributeError: Attribute is invalid or not deletable.
         """
-        raise NotImplementedError()
+        try:
+            return self._remove(name)
+        except AttributeError:
+            return self
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _remove(self, name):
         # type: (PCS, str) -> PCS
         """
@@ -352,22 +377,21 @@ class PrivateClassStructure(ClassStructure):
 
         :param name: Attribute name.
         :return: Transformed.
-        :raises AttributeError: Attribute is invalid, not deletable, or has no value.
+        :raises AttributeError: Invalid attribute or no value set.
         """
-        raise NotImplementedError()
+        return self._update({name: DELETED})
 
-    @abc.abstractmethod
+    @runtime_final.final
     def _set(self, name, value):
         # type: (PCS, str, Any) -> PCS
         """
-        Set value for key.
+        Set attribute value.
 
         :param name: Attribute name.
         :param value: Value.
         :return: Transformed.
-        :raises AttributeError: Attribute is invalid, not settable, or has no value.
         """
-        raise NotImplementedError()
+        return self._update({name: value})
 
     @overload
     def _update(self, __m, **kwargs):
@@ -403,6 +427,41 @@ class InteractiveClassStructure(PrivateClassStructure):
     """Interactive class structure."""
 
     __slots__ = ()
+
+    @runtime_final.final
+    def discard(self, name):
+        # type: (ICS, str) -> ICS
+        """
+        Discard attribute value if it exists.
+
+        :param name: Attribute name.
+        :return: Transformed.
+        """
+        return self._discard(name)
+
+    @runtime_final.final
+    def remove(self, name):
+        # type: (ICS, str) -> ICS
+        """
+        Delete existing attribute value.
+
+        :param name: Attribute name.
+        :return: Transformed.
+        :raises AttributeError: Invalid attribute or no value set.
+        """
+        return self._remove(name)
+
+    @runtime_final.final
+    def set(self, name, value):
+        # type: (ICS, str, Any) -> ICS
+        """
+        Set attribute value.
+
+        :param name: Attribute name.
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._set(name, value)
 
     @overload
     def update(self, __m, **kwargs):
@@ -453,6 +512,38 @@ class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, Privat
     def __delitem__(self, name):
         # type: (str) -> None
         self._update({name: DELETED})
+
+    @runtime_final.final
+    def discard(self, name):
+        # type: (str) -> None
+        """
+        Discard attribute value if it exists.
+
+        :param name: Attribute name.
+        """
+        self._discard(name)
+
+    @runtime_final.final
+    def remove(self, name):
+        # type: (str) -> None
+        """
+        Delete existing attribute value.
+
+        :param name: Attribute name.
+        :raises AttributeError: Invalid attribute or no value set.
+        """
+        self._remove(name)
+
+    @runtime_final.final
+    def set(self, name, value):
+        # type: (str, Any) -> None
+        """
+        Set attribute value.
+
+        :param name: Attribute name.
+        :param value: Value.
+        """
+        self._set(name, value)
 
     @overload
     def update(self, __m, **kwargs):
@@ -566,6 +657,48 @@ def _make_eq(cls):
         script,
         globs=globs,
         filename=dynamic_code.generate_unique_filename("__eq__", cls.__module__, cls.__qualname__),
+        module=cls.__module__,
+    )
+
+
+def _make_order(cls, method):
+    # type: (Type[ClassStructure], Literal["lt", "le", "gt", "ge"]) -> Callable
+    globs = {"MISSING": MISSING}  # type: dict[str, Any]
+    args = []
+    for name, attribute in six.iteritems(cls.__attributes__):
+        if not attribute.order:
+            continue
+        args.append(name)
+
+    operators = {
+        "lt": "<",
+        "le": "<=",
+        "gt": ">",
+        "ge": ">=",
+    }
+    operator = operators[method]
+
+    method_name = "__{}__".format(method)
+    script = "\n".join(
+        (
+            "def {method_name}(self, other):",
+            "    if type(self) is not type(other):",
+            "        return False",
+            "    order_values = tuple(self[n] for n in [{args}])",
+            "    other_order_values = tuple(other[n] for n in [{args}])",
+            "    return order_values {operator} other_order_values",
+        )
+    ).format(
+        method_name=method_name,
+        args=(", ".join(repr(a) for a in args)) if args else "",
+        operator=operator,
+    )
+
+    return dynamic_code.make_function(
+        method_name,
+        script,
+        globs=globs,
+        filename=dynamic_code.generate_unique_filename(method_name, cls.__module__, cls.__qualname__),
         module=cls.__module__,
     )
 

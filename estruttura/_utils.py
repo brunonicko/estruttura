@@ -1,6 +1,6 @@
 from tippo import Any, Type
 
-from ._class import Attribute, AttributeMap, ClassStructure
+from ._class import Attribute, AttributeMap, ClassStructure, ClassStructureMeta
 from ._relationship import Relationship
 from ._structures import UniformStructure, UniformStructureMeta
 
@@ -19,11 +19,15 @@ def relationship_type(structure):
 
 def attributes(cls):
     # type: (Type[ClassStructure] | ClassStructure) -> AttributeMap
+    if not isinstance(cls, ClassStructureMeta):
+        cls = type(cls)
     return cls.__attributes__
 
 
 def attribute_type(cls):
     # type: (Type[ClassStructure] | ClassStructure) -> Type[Attribute]
+    if not isinstance(cls, ClassStructureMeta):
+        cls = type(cls)
     return cls.__attribute_type__
 
 

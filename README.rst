@@ -1,5 +1,18 @@
-Estruttura
-==========
+.. logo_start
+.. raw:: html
+
+   <p align="center">
+     <a href="https://github.com/brunonicko/estruttura">
+         <picture>
+            <object data="./_static/estruttura.svg" type="image/png">
+                <source srcset="./docs/source/_static/estruttura_white.svg" media="(prefers-color-scheme: dark)">
+                <img src="./docs/source/_static/estruttura.svg" width="60%" alt="estruttura" />
+            </object>
+         </picture>
+     </a>
+   </p>
+.. logo_end
+
 .. image:: https://github.com/brunonicko/estruttura/workflows/MyPy/badge.svg
    :target: https://github.com/brunonicko/estruttura/actions?query=workflow%3AMyPy
 

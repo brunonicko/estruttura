@@ -69,13 +69,14 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         )
 
     def validate(self, value):
-        # type: (Any) -> None
+        # type: (Any) -> T
         fabricate_value.fabricate_value(
             self.validator,
             value,
             extra_paths=self._extra_paths,
             builtin_paths=self._builtin_paths,
         )
+        return value
 
     def accepts_type(self, value):
         # type: (Any) -> bool
@@ -102,26 +103,22 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     def process(self, value):
         # type: (Any) -> T
-        return self.check_type(self.convert(value))
+        return self.validate(self.check_type(self.convert(value)))
 
-    def serialize(self, value, *args, **kwargs):
-        # type: (T, *Any, **Any) -> Any
+    def serialize(self, value):
+        # type: (T) -> Any
         return fabricate_value.fabricate_value(
             self.serializer,
             value,
-            args=args,
-            kwargs=kwargs,
             extra_paths=self.extra_paths,
             builtin_paths=self.builtin_paths,
         )
 
-    def deserialize(self, serialized, *args, **kwargs):
-        # type: (Any, *Any, **Any) -> T
+    def deserialize(self, serialized):
+        # type: (Any) -> T
         return fabricate_value.fabricate_value(
             self.deserializer,
             serialized,
-            args=args,
-            kwargs=kwargs,
             extra_paths=self.extra_paths,
             builtin_paths=self.builtin_paths,
         )

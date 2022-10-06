@@ -3,9 +3,9 @@ from basicco import recursive_repr, custom_repr, safe_repr
 from tippo import Any, TypeVar, Iterable, Iterator
 from pyrsistent.typing import PSet
 
-from estruttura import SetStructure, PrivateSetStructure, InteractiveSetStructure, relationship
+from estruttura import SetStructure, PrivateSetStructure, InteractiveSetStructure, get_relationship
 
-from ._data import UniformData, PrivateUniformData, InteractiveUniformData
+from ._bases import UniformData, PrivateUniformData, InteractiveUniformData
 
 
 T = TypeVar("T")  # value type
@@ -29,7 +29,7 @@ class ProtectedDataSet(UniformData[PSet[T], T], SetStructure[T]):
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
 
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             initial = tuple(rel.process(v) for v in initial)
 
@@ -191,7 +191,7 @@ class PrivateDataSet(ProtectedDataSet[T], PrivateUniformData[PSet[T], T], Privat
         :return: Transformed.
         :raises KeyError: Value is not present.
         """
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             new_value = rel.process(new_value)
         return self._make(self._internal.remove(old_value).add(new_value))
@@ -204,7 +204,7 @@ class PrivateDataSet(ProtectedDataSet[T], PrivateUniformData[PSet[T], T], Privat
         :param iterable: Iterable.
         :return: Transformed.
         """
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             iterable = tuple(rel.process(v) for v in iterable)
         return self._make(self._internal.update(iterable))

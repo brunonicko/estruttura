@@ -1,38 +1,39 @@
 from tippo import Any, Type
 
-from ._class import Attribute, AttributeMap, ClassStructure, ClassStructureMeta
+from ._bases import UniformStructure, UniformStructureMeta
 from ._relationship import Relationship
-from ._structures import UniformStructure, UniformStructureMeta
+from ._attribute import Attribute, AttributeMap
+from ._structure import Structure, StructureMeta
 
 
-def relationship(structure):
+def get_relationship(structure):
     # type: (Type[UniformStructure] | UniformStructure) -> Relationship | None
     return structure.__relationship__
 
 
-def relationship_type(structure):
+def get_relationship_type(structure):
     # type: (Type[UniformStructure] | UniformStructure) -> Type[Relationship]
     if not isinstance(structure, UniformStructureMeta):
         structure = type(structure)
     return structure.__relationship_type__
 
 
-def attributes(cls):
-    # type: (Type[ClassStructure] | ClassStructure) -> AttributeMap
-    if not isinstance(cls, ClassStructureMeta):
+def get_attributes(cls):
+    # type: (Type[Structure] | Structure) -> AttributeMap
+    if not isinstance(cls, StructureMeta):
         cls = type(cls)
     return cls.__attributes__
 
 
-def attribute_type(cls):
-    # type: (Type[ClassStructure] | ClassStructure) -> Type[Attribute]
-    if not isinstance(cls, ClassStructureMeta):
+def get_attribute_type(cls):
+    # type: (Type[Structure] | Structure) -> Type[Attribute]
+    if not isinstance(cls, StructureMeta):
         cls = type(cls)
     return cls.__attribute_type__
 
 
 def to_items(obj):
-    # type: (ClassStructure) -> list[tuple[str, Any]]
+    # type: (Structure) -> list[tuple[str, Any]]
     return [(n, obj[n]) for n in obj if hasattr(obj, n)]
 
 

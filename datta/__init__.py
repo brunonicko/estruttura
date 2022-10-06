@@ -12,27 +12,25 @@ from estruttura import (
     MutableProxySet,
     PrivateProxySet,
     ProxySet,
-    attribute_type,
-    attributes,
-    pre_move,
-    relationship,
-    relationship_type,
-    resolve_continuous_slice,
-    resolve_index,
+    get_relationship,
+    get_attributes,
     to_items,
+    resolve_index,
+    resolve_continuous_slice,
+    pre_move,
 )
 from ._attribute import (
     DataAttribute,
 )
-from ._class import (
-    DataClassMeta,
-    ProtectedDataClass,
-    PrivateDataClass,
-    DataClass,
-)
 from ._data import (
     DataMeta,
+    ProtectedData,
+    PrivateData,
     Data,
+)
+from ._bases import (
+    BaseDataMeta,
+    BaseData,
     UniformDataMeta,
     UniformData,
     PrivateUniformData,
@@ -56,6 +54,9 @@ from ._set import (
 from ._relationship import (
     DataRelationship,
 )
+from ._utils import (
+    attribute,
+)
 
 __all__ = [
     "DELETED",
@@ -71,21 +72,19 @@ __all__ = [
     "MutableProxySet",
     "PrivateProxySet",
     "ProxySet",
-    "attribute_type",
-    "attributes",
-    "pre_move",
-    "relationship",
-    "relationship_type",
-    "resolve_continuous_slice",
-    "resolve_index",
+    "get_relationship",
+    "get_attributes",
     "to_items",
+    "resolve_index",
+    "resolve_continuous_slice",
+    "pre_move",
     "DataAttribute",
-    "DataClassMeta",
-    "ProtectedDataClass",
-    "PrivateDataClass",
-    "DataClass",
     "DataMeta",
+    "ProtectedData",
+    "PrivateData",
     "Data",
+    "BaseDataMeta",
+    "BaseData",
     "UniformDataMeta",
     "UniformData",
     "PrivateUniformData",
@@ -100,4 +99,9 @@ __all__ = [
     "PrivateDataSet",
     "DataSet",
     "DataRelationship",
+    "relationship",
+    "attribute",
 ]
+
+
+relationship = DataRelationship

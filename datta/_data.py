@@ -1,158 +1,103 @@
-import abc
+import copy
 
 import six
-from basicco import runtime_final, obj_state
-from tippo import Any, Type, Generic, TypeVar, Hashable, cast
 
-from estruttura import (
-    StructureMeta,
-    HashableStructure,
-    UniformStructureMeta,
-    UniformStructure,
-    PrivateUniformStructure,
-    InteractiveUniformStructure,
-)
+from basicco import mangling, runtime_final
+from estruttura import DELETED, AttributeMap, StructureMeta, Structure, PrivateStructure, InteractiveStructure
+from tippo import Any, TypeVar, Type
 
+from ._bases import BaseDataMeta, BaseData
 from ._relationship import DataRelationship
+from ._attribute import DataAttribute
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
-IT = TypeVar("IT", bound=Hashable)  # internal type
 
 
-class DataMeta(StructureMeta):
-    """Metaclass for :class:`Data`."""
+# @dataclass_transform(field_descriptors=(DataAttribute, attribute_))
+class DataMeta(BaseDataMeta, StructureMeta):
+    __attribute_type__ = DataAttribute  # type: Type[DataAttribute]
+    __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
+
+    # noinspection PyUnusedLocal
+    @staticmethod
+    def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
+        # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
+
+        # Convert attributes to slots.
+        slots = list(dct.get("__slots__", ()))
+        dct_copy = dict(dct)
+        for attribute_name, attribute in six.iteritems(this_attribute_map):
+            del dct_copy[attribute_name]
+            slot_name = mangling.unmangle(attribute_name, name)
+            slots.append(slot_name)
+        dct_copy["__slots__"] = tuple(slots)
+
+        return dct_copy
 
 
-class Data(HashableStructure):
-    """Data."""
+class ProtectedData(six.with_metaclass(DataMeta, Structure, BaseData)):
+    """Protected data."""
+
+    __slots__ = ()
+    __kwargs__ = {
+        "frozen": True,
+        "gen_init": True,
+        "gen_hash": True,
+        "gen_eq": True,
+        "gen_repr": True,
+    }
+
+    @runtime_final.final
+    def __getitem__(self, name):
+        # type: (str) -> Any
+        if name not in type(self).__attributes__:
+            error = "no attribute named {!r}".format(name)
+            raise KeyError(error)
+        try:
+            return getattr(self, name)
+        except AttributeError:
+            pass
+        error = "no value for attribute {!r}".format(name)
+        raise KeyError(error)
+
+    @runtime_final.final
+    def __init_state__(self, new_values):
+        # type: (dict[str, Any]) -> None
+        for name, value in six.iteritems(new_values):
+            object.__setattr__(self, name, value)
+
+
+class PrivateData(ProtectedData, PrivateStructure):
+    """Private data."""
 
     __slots__ = ()
 
-    @abc.abstractmethod
-    def __hash__(self):
-        # type: () -> int
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __eq__(self, other):
-        # type: (object) -> bool
-        raise NotImplementedError()
-
-    def __copy__(self):
-        cls = type(self)
-        new_self = cls.__new__(cls)
-        obj_state.update_state(new_self, obj_state.get_state(self))
-        return new_self
-
-
-class UniformDataMeta(DataMeta, UniformStructureMeta):
-    """Metaclass for :class:`UniformData`."""
-
-    __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
-
-
-class UniformData(six.with_metaclass(UniformDataMeta, Data, UniformStructure[T_co], Generic[IT, T_co])):
-    """Uniform data."""
-
-    __slots__ = ("__hash", "__internal")
-    __relationship__ = None  # type: DataRelationship | None
-
-    @staticmethod
     @runtime_final.final
-    def __new__(cls, initial=None, *args, **kwargs):
-        if type(initial) is cls and not args and not kwargs:
-            return initial
-        else:
-            return super(UniformData, cls).__new__(cls)
-
-    @classmethod
-    @runtime_final.final
-    def _make(cls, internal):
-        # type: (Type[UD], IT) -> UD
+    def __update_state__(self, new_values, old_values):
+        # type: (PDC, dict[str, Any], dict[str, Any]) -> PDC
         """
-        Build new uniform data by directly setting the internal value.
-
-        :param internal: Internal state.
-        :return: Uniform data.
-        """
-        self = cast(UD, cls.__new__(cls))
-        self.__internal = internal
-        self.__hash = None
-        return self
-
-    @staticmethod
-    @abc.abstractmethod
-    def _init_internal(initial):
-        # type: (Any) -> IT
-        """Initialize internal."""
-        raise NotImplementedError()
-
-    @abc.abstractmethod
-    def __init__(self, initial=None):
-        self.__internal = self._init_internal(initial=initial)
-        self.__hash = None  # type: int | None
-
-    @runtime_final.final
-    def __hash__(self):
-        # type: () -> int
-        """
-        Get hash.
-
-        :return: Hash.
-        """
-        if self.__hash is None:
-            self.__hash = hash(self._internal)
-        return self.__hash
-
-    @runtime_final.final
-    def __eq__(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        if type(self) is type(other):
-            return self.__internal == other.__internal  # type: ignore  # noqa
-        try:
-            hash(other)
-        except TypeError:
-            return self.__internal == other
-        else:
-            return False
-
-    @property
-    @runtime_final.final
-    def _internal(self):
-        # type: () -> IT
-        """Internal values."""
-        return self.__internal
-
-
-UD = TypeVar("UD", bound=UniformData)
-
-
-# noinspection PyAbstractClass
-class PrivateUniformData(UniformData[IT, T_co], PrivateUniformStructure[T_co]):
-    """Private uniform data."""
-
-    def _clear(self):
-        # type: (PUD) -> PUD
-        """
-        Clear.
+        Update attribute values.
 
         :return: Transformed.
         """
-        return self._make(self._init_internal(initial=None))
+        if not new_values:
+            return self
+
+        self_copy = copy.copy(self)
+        for name, value in six.iteritems(new_values):
+            if value is DELETED:
+                object.__delattr__(self_copy, name)
+            else:
+                object.__setattr__(self_copy, name, value)
+
+        return self_copy
 
 
-PUD = TypeVar("PUD", bound=PrivateUniformData)
+PDC = TypeVar("PDC", bound=PrivateData)
 
 
-# noinspection PyAbstractClass
-class InteractiveUniformData(PrivateUniformData[IT, T_co], InteractiveUniformStructure[T_co]):
-    """Interactive uniform data."""
+class Data(PrivateData, InteractiveStructure):
+    """Data."""
 
     __slots__ = ()

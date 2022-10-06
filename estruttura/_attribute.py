@@ -119,7 +119,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             raise ValueError(error)
 
         # Set attributes.
-        self._owner = None  # type: Type[ClassProtocol] | None
+        self._owner = None  # type: Type[_Subscriptable] | None
         self._name = None  # type: str | None
         self._default = default
         self._factory = factory
@@ -136,9 +136,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
         self._dependents = ()  # type: tuple[Attribute, ...]
         self._recursive_dependents = None  # type: tuple[Attribute, ...] | None
-        self._fget = None  # type: Callable[[ClassProtocol], T_co] | None
-        self._fset = None  # type: Callable[[ClassProtocol, T_co], None] | None
-        self._fdel = None  # type: Callable[[ClassProtocol], None] | None
+        self._fget = None  # type: Callable[[_Subscriptable], T_co] | None
+        self._fset = None  # type: Callable[[_Subscriptable, T_co], None] | None
+        self._fdel = None  # type: Callable[[_Subscriptable], None] | None
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
@@ -163,12 +163,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def __get__(self, instance, owner):
-        # type: (A, None, Type[ClassProtocol]) -> A | T_co
+        # type: (A, None, Type[_Subscriptable]) -> A | T_co
         pass
 
     @overload
     def __get__(self, instance, owner):
-        # type: (ClassProtocol, Type[ClassProtocol]) -> T_co
+        # type: (_Subscriptable, Type[_Subscriptable]) -> T_co
         pass
 
     def __get__(self, instance, owner):
@@ -183,7 +183,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self
 
     def __set_name__(self, owner, name):
-        # type: (Type[ClassProtocol], str) -> None
+        # type: (Type[_Subscriptable], str) -> None
 
         # Checks.
         if self._name is not None and self._name != name:
@@ -349,12 +349,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def getter(self, maybe_func):
-        # type: (A, Callable[[ClassProtocol], T_co]) -> A
+        # type: (A, Callable[[_Subscriptable], T_co]) -> A
         pass
 
     @overload
     def getter(self, *dependencies):
-        # type: (A, *Attribute) -> A
+        # type: (A, *Attribute) -> Callable[[Callable[[_Subscriptable], T_co]], A]
         pass
 
     def getter(self, *dependencies):
@@ -396,12 +396,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def setter(self, maybe_func=None):
-        # type: (A, None) -> Callable[[Callable[[ClassProtocol, T_co], None]], A]
+        # type: (A, None) -> Callable[[Callable[[_Subscriptable, T_co], None]], A]
         pass
 
     @overload
     def setter(self, maybe_func):
-        # type: (A, Callable[[ClassProtocol, T_co], None]) -> A
+        # type: (A, Callable[[_Subscriptable, T_co], None]) -> A
         pass
 
     def setter(self, maybe_func=None):
@@ -440,12 +440,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def deleter(self, maybe_func=None):
-        # type: (A, None) -> Callable[[Callable[[ClassProtocol], None]], A]
+        # type: (A, None) -> Callable[[Callable[[_Subscriptable], None]], A]
         pass
 
     @overload
     def deleter(self, maybe_func):
-        # type: (A, Callable[[ClassProtocol], None]) -> A
+        # type: (A, Callable[[_Subscriptable], None]) -> A
         pass
 
     def deleter(self, maybe_func=None):
@@ -489,7 +489,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def owner(self):
-        # type: () -> Type[ClassProtocol] | None
+        # type: () -> Type[_Subscriptable] | None
         return self._owner
 
     @property
@@ -602,17 +602,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def fget(self):
-        # type: () -> Callable[[ClassProtocol], T_co] | None
+        # type: () -> Callable[[_Subscriptable], T_co] | None
         return self._fget
 
     @property
     def fset(self):
-        # type: () -> Callable[[ClassProtocol, T_co], None] | None
+        # type: () -> Callable[[_Subscriptable, T_co], None] | None
         return self._fset
 
     @property
     def fdel(self):
-        # type: () -> Callable[[ClassProtocol], None] | None
+        # type: () -> Callable[[_Subscriptable], None] | None
         return self._fdel
 
     @property
@@ -660,7 +660,7 @@ class MutableAttribute(Attribute[T]):
     __slots__ = ()
 
     def __set__(self, instance, value):
-        # type: (MutableClassProtocol, T) -> None
+        # type: (_MutableSubscriptable, T) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
@@ -671,7 +671,7 @@ class MutableAttribute(Attribute[T]):
         instance[self.name] = value
 
     def __delete__(self, instance):
-        # type: (MutableClassProtocol) -> None
+        # type: (_MutableSubscriptable) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
@@ -854,7 +854,7 @@ class StateReader(Base):
     __slots__ = ("__instance",)
 
     def __init__(self, instance=None):
-        # type: (ClassProtocol | None) -> None
+        # type: (_Subscriptable | None) -> None
         self.__instance = instance
 
     def __getitem__(self, name):
@@ -872,7 +872,7 @@ class StateReader(Base):
 
     @property
     def instance(self):
-        # type: () -> ClassProtocol | None
+        # type: () -> _Subscriptable | None
         return self.__instance
 
 
@@ -1228,14 +1228,14 @@ class _DelegateSelfInternals(Base):
 
 
 # noinspection PyAbstractClass
-class ClassProtocol(Protocol):
+class _Subscriptable(Protocol):
     def __getitem__(self, name):
         # type: (str) -> Any
         raise NotImplementedError()
 
 
 # noinspection PyAbstractClass
-class MutableClassProtocol(ClassProtocol):
+class _MutableSubscriptable(_Subscriptable):
     def __setitem__(self, name, value):
         # type: (str, Any) -> None
         raise NotImplementedError()

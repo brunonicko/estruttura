@@ -14,12 +14,13 @@ from tippo import (
     TypeAlias,
     TypeVar,
     overload,
+    dataclass_transform,
 )
 
 from ._attribute import Attribute, AttributeMap, MutableAttribute, StateReader
+from ._bases import CollectionStructure, CollectionStructureMeta
 from ._constants import DEFAULT, DELETED, MISSING
 from ._relationship import Relationship
-from ._structures import CollectionStructure, CollectionStructureMeta
 
 T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
@@ -27,8 +28,9 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-class ClassStructureMeta(CollectionStructureMeta):
-    """Metaclass for :class:`ClassStructure`."""
+# @dataclass_transform(field_descriptors=(Attribute,))
+class StructureMeta(CollectionStructureMeta):
+    """Metaclass for :class:`Structure`."""
 
     __attribute_type__ = Attribute  # type: Type[Attribute]
     __relationship_type__ = Relationship  # type: Type[Relationship]
@@ -55,7 +57,7 @@ class ClassStructureMeta(CollectionStructureMeta):
 
             # Prevent overriding attributes with non-attributes.
             for attribute_name in base_attributes:
-                if (isinstance(base, ClassStructureMeta) and attribute_name not in base.__attributes__) or (
+                if (isinstance(base, StructureMeta) and attribute_name not in base.__attributes__) or (
                     hasattr(base, attribute_name)
                     and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
                 ):
@@ -68,7 +70,7 @@ class ClassStructureMeta(CollectionStructureMeta):
                     raise TypeError(error)
 
             # Collect base's attributes.
-            if isinstance(base, ClassStructureMeta):
+            if isinstance(base, StructureMeta):
                 for attribute_name, attribute in six.iteritems(base.__attributes__):
 
                     # Attribute type changed and it's not compatible anymore.
@@ -116,7 +118,7 @@ class ClassStructureMeta(CollectionStructureMeta):
             dct_copy = edited_dct
 
         # Build class.
-        cls = super(ClassStructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
+        cls = super(StructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
 
         # Name and claim attributes.
         for attribute_name, attribute in six.iteritems(this_attributes):
@@ -221,8 +223,8 @@ class ClassStructureMeta(CollectionStructureMeta):
         return cls.__attributes
 
 
-class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[str])):
-    """Class structure."""
+class Structure(six.with_metaclass(StructureMeta, CollectionStructure[str])):
+    """Structure."""
 
     __slots__ = ()
 
@@ -284,7 +286,19 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[
                 raise TypeError(error)
             cls.__gen_repr__ = bool(gen_repr)
 
-        super(ClassStructure, cls).__init_subclass__(**kwargs)  # noqa
+        super(Structure, cls).__init_subclass__(**kwargs)  # noqa
+
+    # Trick IDEs into thinking that we have these methods defined (they can be auto generated).
+    if False:
+        # noqa
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __hash__(self):
+            return 0
+
+        def __eq__(self, other):
+            return False
 
     @abc.abstractmethod
     def __getitem__(self, name):
@@ -338,8 +352,8 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, CollectionStructure[
         return tuple(self.__iter__())
 
 
-class PrivateClassStructure(ClassStructure):
-    """Private class structure."""
+class PrivateStructure(Structure):
+    """Private structure."""
 
     __slots__ = ()
 
@@ -364,10 +378,15 @@ class PrivateClassStructure(ClassStructure):
         :param name: Attribute name.
         :return: Transformed.
         """
-        try:
+        if name in self:
             return self._remove(name)
-        except AttributeError:
-            return self
+        if name not in type(self).__attributes__:
+            error = "no attribute named {!r}".format(name)
+            raise AttributeError(error)
+        if not type(self).__attributes__[name].deletable:
+            error = "attribute {!r} is not deletable".format(name)
+            raise AttributeError(error)
+        return self
 
     @runtime_final.final
     def _remove(self, name):
@@ -419,12 +438,12 @@ class PrivateClassStructure(ClassStructure):
         return self.__update_state__(new_values, old_values)
 
 
-PCS = TypeVar("PCS", bound=PrivateClassStructure)
+PCS = TypeVar("PCS", bound=PrivateStructure)
 
 
 # noinspection PyAbstractClass
-class InteractiveClassStructure(PrivateClassStructure):
-    """Interactive class structure."""
+class InteractiveStructure(PrivateStructure):
+    """Interactive structure."""
 
     __slots__ = ()
 
@@ -488,18 +507,18 @@ class InteractiveClassStructure(PrivateClassStructure):
         return self._update(*args, **kwargs)
 
 
-ICS = TypeVar("ICS", bound=InteractiveClassStructure)
+ICS = TypeVar("ICS", bound=InteractiveStructure)
 
 
-class MutableClassStructureMeta(ClassStructureMeta):
-    """Metaclass for :class:`MutableClassStructure`."""
+class MutableStructureMeta(StructureMeta):
+    """Metaclass for :class:`MutableStructure`."""
 
     __attribute_type__ = MutableAttribute  # type: Type[Attribute]
 
 
 # noinspection PyAbstractClass
-class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, PrivateClassStructure)):
-    """Mutable class structure."""
+class MutableStructure(six.with_metaclass(MutableStructureMeta, PrivateStructure)):
+    """Mutable structure."""
 
     __slots__ = ()
 
@@ -567,7 +586,7 @@ class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, Privat
 
 
 def _make_init(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {"DEFAULT": DEFAULT}  # type: dict[str, Any]
     args = []
     arg_names = []
@@ -601,7 +620,7 @@ def _make_init(cls):
 
 
 def _make_hash(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {}  # type: dict[str, Any]
     args = []
     for name, attribute in six.iteritems(cls.__attributes__):
@@ -629,7 +648,7 @@ def _make_hash(cls):
 
 
 def _make_eq(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {}  # type: dict[str, Any]
     args = []
     for name, attribute in six.iteritems(cls.__attributes__):
@@ -662,7 +681,7 @@ def _make_eq(cls):
 
 
 def _make_order(cls, method):
-    # type: (Type[ClassStructure], Literal["lt", "le", "gt", "ge"]) -> Callable
+    # type: (Type[Structure], Literal["lt", "le", "gt", "ge"]) -> Callable
     globs = {"MISSING": MISSING}  # type: dict[str, Any]
     args = []
     for name, attribute in six.iteritems(cls.__attributes__):
@@ -704,7 +723,7 @@ def _make_order(cls, method):
 
 
 def _make_repr(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {"six": six, "recursive_repr": recursive_repr, "safe_repr": safe_repr}  # type: dict[str, Any]
     args = []
     kwargs = []
@@ -750,7 +769,7 @@ def _make_repr(cls):
 
 
 def _make_frozen_setattr(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {"cls": cls}  # type: dict[str, Any]
     script = "\n".join(
         (
@@ -771,7 +790,7 @@ def _make_frozen_setattr(cls):
 
 
 def _make_frozen_delattr(cls):
-    # type: (Type[ClassStructure]) -> Callable
+    # type: (Type[Structure]) -> Callable
     globs = {"cls": cls}  # type: dict[str, Any]
     script = "\n".join(
         (

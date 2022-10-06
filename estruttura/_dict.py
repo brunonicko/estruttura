@@ -17,8 +17,7 @@ from tippo import (
     overload,
 )
 
-from ._constants import DELETED, MISSING
-from ._structures import (
+from ._bases import (
     InteractiveProxyUniformStructure,
     InteractiveUniformStructure,
     MutableProxyUniformStructure,
@@ -28,6 +27,7 @@ from ._structures import (
     ProxyUniformStructure,
     UniformStructure,
 )
+from ._constants import DELETED, MISSING
 
 KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type

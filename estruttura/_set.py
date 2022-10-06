@@ -4,7 +4,7 @@ import slotted
 from basicco import runtime_final
 from tippo import AbstractSet, Iterable, TypeVar, cast
 
-from ._structures import (
+from ._bases import (
     InteractiveProxyUniformStructure,
     InteractiveUniformStructure,
     MutableProxyUniformStructure,

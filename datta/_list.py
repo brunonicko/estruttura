@@ -5,9 +5,9 @@ from basicco import recursive_repr, custom_repr, safe_repr
 from tippo import Any, TypeVar, Iterable, Iterator, overload
 from pyrsistent.typing import PVector
 
-from estruttura import ListStructure, PrivateListStructure, InteractiveListStructure, relationship
+from estruttura import ListStructure, PrivateListStructure, InteractiveListStructure, get_relationship
 
-from ._data import UniformData, PrivateUniformData, InteractiveUniformData
+from ._bases import UniformData, PrivateUniformData, InteractiveUniformData
 
 
 T = TypeVar("T")  # value type
@@ -31,7 +31,7 @@ class ProtectedDataList(UniformData[PVector[T], T], ListStructure[T]):
     def __init__(self, initial=()):
         # type: (Iterable[T]) -> None
 
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             initial = tuple(rel.process(v) for v in initial)
 
@@ -165,7 +165,7 @@ class PrivateDataList(ProtectedDataList[T], PrivateUniformData[PVector[T], T], P
 
         index = self.resolve_index(index, clamp=True)
 
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             values = tuple(rel.process(v) for v in values)
 
@@ -241,7 +241,7 @@ class PrivateDataList(ProtectedDataList[T], PrivateUniformData[PVector[T], T], P
             stop = self.resolve_index(item) + 1
             values = (value,)
 
-        rel = relationship(self)
+        rel = get_relationship(self)
         if rel is not None:
             values = tuple(rel.process(v) for v in values)
 

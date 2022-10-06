@@ -4,9 +4,9 @@ from basicco import recursive_repr, custom_repr, safe_repr
 from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, SupportsKeysAndGetItem, overload
 from pyrsistent.typing import PMap
 
-from estruttura import DELETED, DictStructure, PrivateDictStructure, InteractiveDictStructure, relationship
+from estruttura import DELETED, DictStructure, PrivateDictStructure, InteractiveDictStructure, get_relationship
 
-from ._data import UniformData, PrivateUniformData, InteractiveUniformData
+from ._bases import UniformData, PrivateUniformData, InteractiveUniformData
 
 
 KT = TypeVar("KT")  # key type
@@ -45,7 +45,7 @@ class ProtectedDataDict(UniformData[PMap[KT, VT], KT], DictStructure[KT, VT]):
 
     def __init__(self, *args, **kwargs):
         initial = dict(*args, **kwargs)
-        rel = relationship(self)
+        rel = get_relationship(self)
         for key, value in six.iteritems(initial):
             if value is DELETED:
                 error = "{!r}; DELETED is not a valid initial value".format(key)
@@ -191,7 +191,7 @@ class PrivateDataDict(ProtectedDataDict[KT, VT], PrivateUniformData[PMap[KT, VT]
 
         updates = dict(*args, **kwargs)
         deletes = set()
-        rel = relationship(self)
+        rel = get_relationship(self)
         for key, value in six.iteritems(updates):
             if value is DELETED:
                 deletes.add(key)

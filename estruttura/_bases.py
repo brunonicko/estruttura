@@ -19,11 +19,11 @@ T = TypeVar("T")  # value type
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
-class StructureMeta(BaseMeta, slotted.SlottedABCGenericMeta):
-    """Metaclass for :class:`Structure`."""
+class BaseStructureMeta(BaseMeta, slotted.SlottedABCGenericMeta):
+    """Metaclass for :class:`BaseStructure`."""
 
 
-class Structure(six.with_metaclass(StructureMeta, Base)):
+class BaseStructure(six.with_metaclass(BaseStructureMeta, Base)):
     """Non-hashable by default."""
 
     __slots__ = ()
@@ -33,14 +33,11 @@ class Structure(six.with_metaclass(StructureMeta, Base)):
         raise TypeError(error)
 
 
-S = TypeVar("S", bound=Structure)
+# Set as non-hashable by default.
+type.__setattr__(BaseStructure, "__hash__", None)
 
 
-# Set as non-hashable.
-type.__setattr__(Structure, "__hash__", None)
-
-
-class HashableStructure(Structure, slotted.SlottedHashable):
+class HashableStructure(BaseStructure, slotted.SlottedHashable):
     """Forces implementation of `__hash__` method."""
 
     __slots__ = ()
@@ -51,7 +48,7 @@ class HashableStructure(Structure, slotted.SlottedHashable):
         raise NotImplementedError()
 
 
-class SizedStructure(Structure, slotted.SlottedSized):
+class SizedStructure(BaseStructure, slotted.SlottedSized):
     """Forces implementation of `__len__` method."""
 
     __slots__ = ()
@@ -63,7 +60,7 @@ class SizedStructure(Structure, slotted.SlottedSized):
         raise NotImplementedError()
 
 
-class IterableStructure(Structure, slotted.SlottedIterable[T_co]):
+class IterableStructure(BaseStructure, slotted.SlottedIterable[T_co]):
     """Forces implementation of `__iter__` method."""
 
     __slots__ = ()
@@ -74,7 +71,7 @@ class IterableStructure(Structure, slotted.SlottedIterable[T_co]):
         raise NotImplementedError()
 
 
-class ContainerStructure(Structure, slotted.SlottedContainer[T_co]):
+class ContainerStructure(BaseStructure, slotted.SlottedContainer[T_co]):
     """Forces implementation of `__contains__` method."""
 
     __slots__ = ()
@@ -85,7 +82,7 @@ class ContainerStructure(Structure, slotted.SlottedContainer[T_co]):
         raise NotImplementedError()
 
 
-class CollectionStructureMeta(StructureMeta):
+class CollectionStructureMeta(BaseStructureMeta):
     """Metaclass for :class:`CollectionStructure`."""
 
 

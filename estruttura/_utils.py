@@ -1,4 +1,4 @@
-from tippo import Any, Type
+from tippo import Any, Callable, Type, TypeVar, cast
 
 from ._bases import UniformStructure, UniformStructureMeta
 from ._relationship import Relationship
@@ -6,35 +6,77 @@ from ._attribute import Attribute, AttributeMap
 from ._structure import Structure, StructureMeta
 
 
-def get_relationship(structure):
+T = TypeVar("T")
+
+
+def get_relationship(uniform_structure):
     # type: (Type[UniformStructure] | UniformStructure) -> Relationship | None
-    return structure.__relationship__
+    return uniform_structure.__relationship__
 
 
-def get_relationship_type(structure):
+def get_relationship_type(uniform_structure):
     # type: (Type[UniformStructure] | UniformStructure) -> Type[Relationship]
-    if not isinstance(structure, UniformStructureMeta):
-        structure = type(structure)
-    return structure.__relationship_type__
+    if not isinstance(uniform_structure, UniformStructureMeta):
+        uniform_structure = cast(Type[UniformStructure], type(uniform_structure))
+    return uniform_structure.__relationship_type__
 
 
-def get_attributes(cls):
+def get_attributes(structure):
     # type: (Type[Structure] | Structure) -> AttributeMap
-    if not isinstance(cls, StructureMeta):
-        cls = type(cls)
-    return cls.__attributes__
+    if not isinstance(structure, StructureMeta):
+        structure = cast(Type[Structure], type(structure))
+    return structure.__attributes__
 
 
-def get_attribute_type(cls):
+def get_attribute_type(structure):
     # type: (Type[Structure] | Structure) -> Type[Attribute]
-    if not isinstance(cls, StructureMeta):
-        cls = type(cls)
-    return cls.__attribute_type__
+    if not isinstance(structure, StructureMeta):
+        structure = cast(Type[Structure], type(structure))
+    return structure.__attribute_type__
 
 
-def to_items(obj):
+def to_items(structure):
     # type: (Structure) -> list[tuple[str, Any]]
-    return [(n, obj[n]) for n in obj if hasattr(obj, n)]
+    return [(n, structure[n]) for n in structure if hasattr(structure, n)]
+
+
+def getter(attribute, dependencies):
+    # type: (T, tuple) -> Callable[[Callable[[Any], T]], None]
+
+    def decorator(func):
+        # type: (Callable[[Any], T]) -> None
+        if func.__name__ != "_":
+            error = "delegate function {!r} needs to be named '_'".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute, attribute).getter(*dependencies)(func)
+
+    return decorator
+
+
+def setter(attribute):
+    # type: (Any) -> Callable[[Callable[[Any, Any], None]], None]
+
+    def decorator(func):
+        # type: (Callable[[Any, Any], None]) -> None
+        if func.__name__ != "_":
+            error = "delegate function {!r} needs to be named '_'".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute, attribute).setter(func)
+
+    return decorator
+
+
+def deleter(attribute):
+    # type: (Any) -> Callable[[Callable[[Any], None]], None]
+
+    def decorator(func):
+        # type: (Callable[[Any], None]) -> None
+        if func.__name__ != "_":
+            error = "delegate function {!r} needs to be named '_'".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute, attribute).deleter(func)
+
+    return decorator
 
 
 def resolve_index(length, index, clamp=False):

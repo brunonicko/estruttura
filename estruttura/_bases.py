@@ -86,16 +86,14 @@ class CollectionStructureMeta(BaseStructureMeta):
     """Metaclass for :class:`CollectionStructure`."""
 
 
-SlottedCollection = slotted.SlottedCollection  # trick static type checking.
-if SlottedCollection is None:
-    globals()["SlottedCollection"] = object
-assert SlottedCollection is not None
-
-
 # noinspection PyAbstractClass
 class CollectionStructure(
     six.with_metaclass(
-        CollectionStructureMeta, SizedStructure, IterableStructure[T_co], ContainerStructure[T_co], SlottedCollection
+        CollectionStructureMeta,
+        SizedStructure,
+        IterableStructure[T_co],
+        ContainerStructure[T_co],
+        slotted.SlottedCollection[T_co],
     )
 ):
     """Collection structure."""

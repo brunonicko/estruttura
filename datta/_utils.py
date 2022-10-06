@@ -12,12 +12,13 @@ T_co = TypeVar("T_co", covariant=True)
 def attribute(
     default=MISSING,  # type: Any
     factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
-    required=True,  # type: bool
+    required=None,  # type: bool | None
     init=None,  # type: bool | None
     updatable=None,  # type: bool | None
     deletable=None,  # type: bool | None
-    repr=True,  # type: bool
-    eq=True,  # type: bool
+    constant=False,  # type: bool
+    repr=None,  # type: bool | None
+    eq=None,  # type: bool | None
     order=None,  # type: bool | None
     hash=None,  # type: bool | None
     metadata=None,  # type: Any
@@ -53,6 +54,7 @@ def attribute(
         init=init,
         updatable=updatable,
         deletable=deletable,
+        constant=constant,
         repr=repr,
         eq=eq,
         order=order,

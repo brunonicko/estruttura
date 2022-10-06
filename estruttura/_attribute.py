@@ -23,7 +23,8 @@ from tippo import (
     Iterator,
     Literal,
     Mapping,
-    Protocol,
+    SupportsGetItem,
+    SupportsGetSetDeleteItem,
     SupportsKeysAndGetItem,
     Tuple,
     Type,
@@ -57,6 +58,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_init",
         "_updatable",
         "_deletable",
+        "_constant",
         "_repr",
         "_eq",
         "_order",
@@ -72,7 +74,6 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_metadata",
         "_extra_paths",
         "_builtin_paths",
-        "_constant",
         "_count",
     )
 
@@ -80,12 +81,13 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self,
         default=MISSING,  # type: Any
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
-        required=True,  # type: bool
+        required=None,  # type: bool | None
         init=None,  # type: bool | None
         updatable=None,  # type: bool | None
         deletable=None,  # type: bool | None
-        repr=True,  # type: bool
-        eq=True,  # type: bool
+        constant=False,  # type: bool
+        repr=None,  # type: bool | None
+        eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
         relationship=None,  # type: Relationship | None
@@ -95,6 +97,74 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     ):
         # type: (...) -> None
         global _attribute_count
+
+        # Resolve parameters based on whether attribute is constant.
+        if constant:
+            if default is MISSING:
+                error = "constant attribute needs a default value"
+                raise ValueError(error)
+
+            if factory is not MISSING:
+                error = "constant attribute can't have a default factory"
+                raise ValueError(error)
+
+            if required is None:
+                required = False
+            elif required:
+                error = "constant attribute can't be required"
+                raise ValueError(error)
+
+            if init is None:
+                init = False
+            elif init:
+                error = "constant attribute can't be in init"
+                raise ValueError(error)
+
+            if updatable is None:
+                updatable = False
+            elif updatable:
+                error = "constant attribute can't be updatable"
+                raise ValueError(error)
+
+            if deletable is None:
+                deletable = False
+            elif deletable:
+                error = "constant attribute can't be deletable"
+                raise ValueError(error)
+
+            if repr is None:
+                repr = False
+            elif repr:
+                error = "constant attribute can't be in repr"
+                raise ValueError(error)
+
+            if eq is None:
+                eq = False
+            elif eq:
+                error = "constant attribute can't be in eq"
+                raise ValueError(error)
+
+            if order is None:
+                order = False
+            elif order:
+                error = "constant attribute can't be ordered"
+                raise ValueError(error)
+
+            if hash is None:
+                hash = False
+            elif hash:
+                error = "constant attribute can't be in hash"
+                raise ValueError(error)
+
+        else:
+            if required is None:
+                required = True
+
+            if repr is None:
+                repr = True
+
+            if eq is None:
+                eq = True
 
         # Ensure single default source.
         if default is not MISSING and factory is not MISSING:
@@ -119,7 +189,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             raise ValueError(error)
 
         # Set attributes.
-        self._owner = None  # type: Type[_Subscriptable] | None
+        self._owner = None  # type: Type[SupportsGetItem] | None
         self._name = None  # type: str | None
         self._default = default
         self._factory = factory
@@ -136,13 +206,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
         self._dependents = ()  # type: tuple[Attribute, ...]
         self._recursive_dependents = None  # type: tuple[Attribute, ...] | None
-        self._fget = None  # type: Callable[[_Subscriptable], T_co] | None
-        self._fset = None  # type: Callable[[_Subscriptable, T_co], None] | None
-        self._fdel = None  # type: Callable[[_Subscriptable], None] | None
+        self._fget = None  # type: Callable[[SupportsGetItem], T_co] | None
+        self._fset = None  # type: Callable[[SupportsGetItem, T_co], None] | None
+        self._fdel = None  # type: Callable[[SupportsGetItem], None] | None
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
-        self._constant = False
+        self._constant = bool(constant)
+
+        # Process constant default value.
+        if constant:
+            self._default = self.get_default_value()
 
         # Increment count.
         _attribute_count += 1
@@ -163,12 +237,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def __get__(self, instance, owner):
-        # type: (A, None, Type[_Subscriptable]) -> A | T_co
+        # type: (A, None, Type[SupportsGetItem]) -> A | T_co
         pass
 
     @overload
     def __get__(self, instance, owner):
-        # type: (_Subscriptable, Type[_Subscriptable]) -> T_co
+        # type: (SupportsGetItem, Type[SupportsGetItem]) -> T_co
         pass
 
     def __get__(self, instance, owner):
@@ -183,7 +257,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self
 
     def __set_name__(self, owner, name):
-        # type: (Type[_Subscriptable], str) -> None
+        # type: (Type[SupportsGetItem], str) -> None
 
         # Checks.
         if self._name is not None and self._name != name:
@@ -232,22 +306,6 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._owner = owner
         self._name = name
 
-        # If attribute is a constant, set flag and process value.
-        if all(
-            (
-                self.default is not MISSING,
-                not self.init,
-                not self.repr,
-                not self.eq,
-                not self.hash,
-                not self.updatable,
-                not self.deletable,
-                not self.delegated,
-            )
-        ):
-            self.process(self.default)
-            self._constant = True
-
     def to_items(self, usecase=None):
         # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
         items = [
@@ -257,6 +315,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("init", self.init),
             ("updatable", self.updatable),
             ("deletable", self.deletable),
+            ("constant", self.constant),
             ("repr", self.repr),
             ("eq", self.eq),
             ("order", self.order),
@@ -272,8 +331,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
                     ("name", self.name),
                     ("owner", self.owner),
                     ("delegated", self.delegated),
-                    ("constant", self.constant),
-                    ("countcount", self.count),
+                    ("count", self.count),
                 ]
             )
             if usecase is not basic_data.ItemUsecase.REPR:
@@ -349,12 +407,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def getter(self, maybe_func):
-        # type: (A, Callable[[_Subscriptable], T_co]) -> A
+        # type: (A, Callable[[SupportsGetItem], T_co]) -> A
         pass
 
     @overload
     def getter(self, *dependencies):
-        # type: (A, *Attribute) -> Callable[[Callable[[_Subscriptable], T_co]], A]
+        # type: (A, *Attribute) -> Callable[[Callable[[SupportsGetItem], T_co]], A]
         pass
 
     def getter(self, *dependencies):
@@ -368,6 +426,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :raises ValueError: Getter delegate already defined.
         :raises TypeError: Invalid delegate type.
         """
+        if self.constant:
+            error_ = "can't delegate a constant attribute"
+            raise RuntimeError(error_)
 
         def getter_decorator(func):
             if self.owned:
@@ -396,12 +457,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def setter(self, maybe_func=None):
-        # type: (A, None) -> Callable[[Callable[[_Subscriptable, T_co], None]], A]
+        # type: (A, None) -> Callable[[Callable[[SupportsGetItem, T_co], None]], A]
         pass
 
     @overload
     def setter(self, maybe_func):
-        # type: (A, Callable[[_Subscriptable, T_co], None]) -> A
+        # type: (A, Callable[[SupportsGetItem, T_co], None]) -> A
         pass
 
     def setter(self, maybe_func=None):
@@ -416,6 +477,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :raises ValueError: Setter delegate already defined.
         :raises TypeError: Invalid delegate type.
         """
+        if self.constant:
+            error_ = "can't delegate a constant attribute"
+            raise RuntimeError(error_)
 
         def setter_decorator(func):
             if self.owned:
@@ -440,12 +504,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @overload
     def deleter(self, maybe_func=None):
-        # type: (A, None) -> Callable[[Callable[[_Subscriptable], None]], A]
+        # type: (A, None) -> Callable[[Callable[[SupportsGetItem], None]], A]
         pass
 
     @overload
     def deleter(self, maybe_func):
-        # type: (A, Callable[[_Subscriptable], None]) -> A
+        # type: (A, Callable[[SupportsGetItem], None]) -> A
         pass
 
     def deleter(self, maybe_func=None):
@@ -460,6 +524,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :raises ValueError: Deleter delegate already defined.
         :raises TypeError: Invalid delegate type.
         """
+        if self.constant:
+            error_ = "can't delegate a constant attribute"
+            raise RuntimeError(error_)
 
         def deleter_decorator(func):
             if self.owned:
@@ -489,7 +556,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def owner(self):
-        # type: () -> Type[_Subscriptable] | None
+        # type: () -> Type[SupportsGetItem] | None
         return self._owner
 
     @property
@@ -602,17 +669,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def fget(self):
-        # type: () -> Callable[[_Subscriptable], T_co] | None
+        # type: () -> Callable[[SupportsGetItem], T_co] | None
         return self._fget
 
     @property
     def fset(self):
-        # type: () -> Callable[[_Subscriptable, T_co], None] | None
+        # type: () -> Callable[[SupportsGetItem, T_co], None] | None
         return self._fset
 
     @property
     def fdel(self):
-        # type: () -> Callable[[_Subscriptable], None] | None
+        # type: () -> Callable[[SupportsGetItem], None] | None
         return self._fdel
 
     @property
@@ -660,7 +727,7 @@ class MutableAttribute(Attribute[T]):
     __slots__ = ()
 
     def __set__(self, instance, value):
-        # type: (_MutableSubscriptable, T) -> None
+        # type: (SupportsGetSetDeleteItem, T) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
@@ -671,7 +738,7 @@ class MutableAttribute(Attribute[T]):
         instance[self.name] = value
 
     def __delete__(self, instance):
-        # type: (_MutableSubscriptable) -> None
+        # type: (SupportsGetSetDeleteItem) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
@@ -746,6 +813,7 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
         i = 0
         reached_kwargs = False
         required_names = set()
+        constant_names = set()
         initial_values = {}  # type: dict[str, Any]
         for name, attribute in six.iteritems(self):
 
@@ -763,9 +831,12 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
 
                 if attribute.has_default:
 
-                    # Has a default value.
-                    value = attribute.get_default_value(process=False)
-                    initial_values[name] = value
+                    # Default value.
+                    if attribute.constant:
+                        constant_names.add(name)
+                        initial_values[name] = attribute.default
+                    else:
+                        initial_values[name] = attribute.get_default_value(process=False)
 
                 continue
 
@@ -822,6 +893,10 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
         # Compile updates.
         initial_values, _ = self.get_update_values(initial_values)
 
+        # Remove constant values.
+        for constant_name in constant_names:
+            del initial_values[constant_name]
+
         # Check for required attributes.
         missing = required_names.difference(initial_values)
         if missing:
@@ -854,7 +929,7 @@ class StateReader(Base):
     __slots__ = ("__instance",)
 
     def __init__(self, instance=None):
-        # type: (_Subscriptable | None) -> None
+        # type: (SupportsGetItem | None) -> None
         self.__instance = instance
 
     def __getitem__(self, name):
@@ -872,7 +947,7 @@ class StateReader(Base):
 
     @property
     def instance(self):
-        # type: () -> _Subscriptable | None
+        # type: () -> SupportsGetItem | None
         return self.__instance
 
 
@@ -1225,24 +1300,6 @@ class _DelegateSelfInternals(Base):
         # type: () -> Attribute | None
         """Whether running in an attribute's getter delegate."""
         return self.__in_getter
-
-
-# noinspection PyAbstractClass
-class _Subscriptable(Protocol):
-    def __getitem__(self, name):
-        # type: (str) -> Any
-        raise NotImplementedError()
-
-
-# noinspection PyAbstractClass
-class _MutableSubscriptable(_Subscriptable):
-    def __setitem__(self, name, value):
-        # type: (str, Any) -> None
-        raise NotImplementedError()
-
-    def __delitem__(self, name):
-        # type: (str) -> None
-        raise NotImplementedError()
 
 
 def _traverse(attribute, direction):

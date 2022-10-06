@@ -4,17 +4,18 @@ import six
 
 from basicco import mangling, runtime_final
 from estruttura import DELETED, AttributeMap, StructureMeta, Structure, PrivateStructure, InteractiveStructure
-from tippo import Any, TypeVar, Type
+from tippo import Any, TypeVar, Type, dataclass_transform
 
 from ._bases import BaseDataMeta, BaseData
 from ._relationship import DataRelationship
 from ._attribute import DataAttribute
+from ._utils import attribute as attribute_
 
 
 T_co = TypeVar("T_co", covariant=True)  # covariant value type
 
 
-# @dataclass_transform(field_descriptors=(DataAttribute, attribute_))
+@dataclass_transform(field_descriptors=(DataAttribute, attribute_))
 class DataMeta(BaseDataMeta, StructureMeta):
     __attribute_type__ = DataAttribute  # type: Type[DataAttribute]
     __relationship_type__ = DataRelationship  # type: Type[DataRelationship]
@@ -28,9 +29,12 @@ class DataMeta(BaseDataMeta, StructureMeta):
         slots = list(dct.get("__slots__", ()))
         dct_copy = dict(dct)
         for attribute_name, attribute in six.iteritems(this_attribute_map):
-            del dct_copy[attribute_name]
-            slot_name = mangling.unmangle(attribute_name, name)
-            slots.append(slot_name)
+            if attribute.constant:
+                dct_copy[attribute_name] = attribute.default
+            else:
+                del dct_copy[attribute_name]
+                slot_name = mangling.unmangle(attribute_name, name)
+                slots.append(slot_name)
         dct_copy["__slots__"] = tuple(slots)
 
         return dct_copy
@@ -40,13 +44,24 @@ class ProtectedData(six.with_metaclass(DataMeta, Structure, BaseData)):
     """Protected data."""
 
     __slots__ = ()
-    __kwargs__ = {
-        "frozen": True,
-        "gen_init": True,
-        "gen_hash": True,
-        "gen_eq": True,
-        "gen_repr": True,
-    }
+
+    def __init_subclass__(
+        cls,
+        kw_only=None,  # type: bool | None
+        gen_order=None,  # type: bool | None
+        **kwargs
+    ):
+        # type: (...) -> None
+        super(ProtectedData, cls).__init_subclass__(
+            kw_only=kw_only,
+            frozen=True,
+            gen_init=True,
+            gen_hash=True,
+            gen_eq=True,
+            gen_order=gen_order,
+            gen_repr=True,
+            **kwargs
+        )
 
     @runtime_final.final
     def __getitem__(self, name):

@@ -28,7 +28,7 @@ T_co = TypeVar("T_co", covariant=True)  # covariant value type
 Item = Tuple[str, Any]  # type: TypeAlias
 
 
-# @dataclass_transform(field_descriptors=(Attribute,))
+@dataclass_transform(field_descriptors=(Attribute,))
 class StructureMeta(CollectionStructureMeta):
     """Metaclass for :class:`Structure`."""
 
@@ -111,8 +111,11 @@ class StructureMeta(CollectionStructureMeta):
         this_attribute_items = [(n, a) for n, a in attribute_items if n in this_attributes]
         this_attribute_map = AttributeMap(this_attribute_items)
 
-        # Hook to edit dct.
+        # Remove disposable variable "_".
         dct_copy = dict(dct)
+        dct_copy.pop("_", None)
+
+        # Hook to edit dct.
         edited_dct = mcs.__edit_dct__(this_attribute_map, attribute_map, name, bases, dct_copy, **kwargs)
         if edited_dct is not dct_copy:
             dct_copy = edited_dct

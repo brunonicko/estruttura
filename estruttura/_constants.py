@@ -2,10 +2,11 @@
 
 from enum import Enum
 
+import six
 from tippo import TypeVar, final
 
-KT = TypeVar("KT")  # key type
-VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
+KT = TypeVar("KT")
+VT_co = TypeVar("VT_co", covariant=True)
 
 
 @final
@@ -30,3 +31,6 @@ class DefaultType(Enum):
 
 
 DEFAULT = DefaultType.DEFAULT
+
+
+BASIC_TYPES = (bool, float, type(None)) + six.integer_types + six.string_types

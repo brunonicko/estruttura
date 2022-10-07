@@ -17,8 +17,8 @@ from ._bases import (
     UniformStructure,
 )
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
 class SetStructure(UniformStructure[T_co], slotted.SlottedSet[T_co]):

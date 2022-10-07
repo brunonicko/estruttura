@@ -18,8 +18,8 @@ from ._bases import (
 )
 from ._utils import pre_move, resolve_continuous_slice, resolve_index
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
 class ListStructure(UniformStructure[T_co], slotted.SlottedSequence[T_co]):

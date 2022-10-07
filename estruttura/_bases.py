@@ -17,8 +17,8 @@ from tippo import Any, Iterator, Type, TypeVar, cast
 
 from ._relationship import Relationship
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
 class BaseStructureMeta(BaseMeta, slotted.SlottedABCGenericMeta):

@@ -39,8 +39,8 @@ from tippo import (
 from ._constants import DEFAULT, DELETED, MISSING, MissingType
 from ._relationship import Relationship
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 Item = Tuple[str, Any]  # type: TypeAlias
 
@@ -727,8 +727,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._constant
 
 
-A = TypeVar("A", bound=Attribute)  # attribute type
-AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)  # covariant attribute type
+A = TypeVar("A", bound=Attribute)
+AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)
 
 
 class MutableAttribute(Attribute[T]):

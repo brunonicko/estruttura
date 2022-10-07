@@ -13,7 +13,8 @@ from tippo import (
     overload,
 )
 
-T = TypeVar("T")  # value type
+
+T = TypeVar("T")
 
 
 class Relationship(basic_data.ImmutableBasicData, Generic[T]):
@@ -34,7 +35,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         self,
         converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
         validator=None,  # type: Callable[[Any], None] | str | None
-        types=(),  # type: Iterable[Type[T] | Type | str | None] | Type[T] | Type | str | None
+        types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
         subtypes=False,  # type: bool
         serializer=None,  # type: Callable[[T], Any] | str | None
         deserializer=None,  # type: Callable[[Any], T] | str | None
@@ -172,7 +173,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     @property
     def types(self):
-        # type: () -> tuple[Type[T] | Type | str | None, ...]
+        # type: () -> tuple[Type[T] | str | None, ...]
         """Types for runtime checking."""
         return self._types
 

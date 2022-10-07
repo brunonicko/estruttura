@@ -24,8 +24,8 @@ from ._bases import CollectionStructure, CollectionStructureMeta
 from ._constants import DEFAULT, DELETED, MISSING
 from ._relationship import Relationship
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
+T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 Item = Tuple[str, Any]  # type: TypeAlias
 

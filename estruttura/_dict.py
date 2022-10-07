@@ -31,9 +31,9 @@ from ._bases import (
 )
 from ._constants import DELETED, MISSING
 
-KT = TypeVar("KT")  # key type
-VT = TypeVar("VT")  # value type
-VT_co = TypeVar("VT_co", covariant=True)  # covariant value type
+KT = TypeVar("KT")
+VT = TypeVar("VT")
+VT_co = TypeVar("VT_co", covariant=True)
 
 
 class DictStructure(UniformStructure[KT], slotted.SlottedMapping[KT, VT_co]):
@@ -523,7 +523,7 @@ class PrivateProxyDict(ProxyDict[KT, VT], PrivateDictStructure[KT, VT], PrivateP
         return self._transform_wrapped(self._wrapped._update(*args, **kwargs))  # noqa
 
 
-PPD = TypeVar("PPD", bound=PrivateProxyDict)  # private proxy dictionary type
+PPD = TypeVar("PPD", bound=PrivateProxyDict)
 
 
 class InteractiveProxyDict(

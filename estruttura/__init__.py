@@ -1,7 +1,8 @@
+from basicco.type_checking import TypeCheckError
+
 from ._attribute import (
     Attribute,
     AttributeMap,
-    DelegateSelf,
     MutableAttribute,
     StateReader,
 )
@@ -79,6 +80,7 @@ from ._utils import (
 )
 
 __all__ = [
+    "TypeCheckError",
     "BaseStructureMeta",
     "BaseStructure",
     "HashableStructure",
@@ -100,7 +102,6 @@ __all__ = [
     "MutableAttribute",
     "AttributeMap",
     "StateReader",
-    "DelegateSelf",
     "StructureMeta",
     "Structure",
     "PrivateStructure",

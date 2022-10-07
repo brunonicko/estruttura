@@ -1,3 +1,5 @@
+"""Attribute descriptor with support for delegates and dependencies."""
+
 import collections
 import contextlib
 import weakref
@@ -98,8 +100,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         # type: (...) -> None
         global _attribute_count
 
-        # Resolve parameters based on whether attribute is constant.
         if constant:
+
+            # Resolve/check parameters based on whether attribute is a constant.
             if default is MISSING:
                 error = "constant attribute needs a default value"
                 raise ValueError(error)
@@ -157,6 +160,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
                 raise ValueError(error)
 
         else:
+
+            # Not a constant, set default parameter values.
             if required is None:
                 required = True
 
@@ -246,14 +251,19 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         pass
 
     def __get__(self, instance, owner):
-        if self.constant:
+
+        # Constant value.
+        if owner is not None and self.constant:
             return self.default
+
+        # Instance value.
         if instance is not None:
             if self.name is None:
                 assert self.owner is None
                 error = "attribute not named/owned"
                 raise RuntimeError(error)
             return instance[self.name]
+
         return self
 
     def __set_name__(self, owner, name):
@@ -909,7 +919,7 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
         # type: (Mapping[str, Any], SupportsKeysAndGetItem | None) -> tuple[dict[str, Any], dict[str, Any]]
 
         # Compile update values.
-        delegate_self = DelegateSelf(self, state_reader)
+        delegate_self = _DelegateSelf(self, state_reader)
         sorting_key = lambda i: len(self[i[0]].recursive_dependencies)
         for name, value in sorted(six.iteritems(updates), key=sorting_key, reverse=True):
             setattr(delegate_self, name, value)
@@ -952,7 +962,7 @@ class StateReader(Base):
 
 
 @runtime_final.final
-class DelegateSelf(Base):
+class _DelegateSelf(Base):
     """Intermediary self object provided to delegates."""
 
     __slots__ = ("__",)
@@ -1002,7 +1012,7 @@ class DelegateSelf(Base):
         if name in self.__.attribute_map:
             self[name] = value
         else:
-            super(DelegateSelf, self).__setattr__(name, value)
+            super(_DelegateSelf, self).__setattr__(name, value)
 
     def __delattr__(self, name):
         # type: (str) -> None
@@ -1013,7 +1023,7 @@ class DelegateSelf(Base):
         if name in self.__.attribute_map:
             del self[name]
         else:
-            super(DelegateSelf, self).__delattr__(name)
+            super(_DelegateSelf, self).__delattr__(name)
 
     def __getitem__(self, name):
         # type: (str) -> Any
@@ -1058,7 +1068,7 @@ class _DelegateSelfInternals(Base):
     )
 
     def __init__(self, iobj, attribute_map, state):
-        # type: (DelegateSelf, AttributeMap, SupportsKeysAndGetItem) -> None
+        # type: (_DelegateSelf, AttributeMap, SupportsKeysAndGetItem) -> None
         """
         :param iobj: Internal object.
         :param attribute_map: Attribute map.
@@ -1279,7 +1289,7 @@ class _DelegateSelfInternals(Base):
 
     @property
     def iobj(self):
-        # type: () -> DelegateSelf | None
+        # type: () -> _DelegateSelf | None
         """Intermediary object."""
         return self.__iobj_ref()
 

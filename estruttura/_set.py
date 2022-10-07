@@ -1,3 +1,5 @@
+"""Set structures."""
+
 import abc
 
 import slotted

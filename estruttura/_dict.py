@@ -1,3 +1,5 @@
+"""Dictionary structures."""
+
 import abc
 
 import six

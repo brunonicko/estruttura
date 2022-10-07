@@ -1,3 +1,5 @@
+"""Class structure with support for attribute descriptors."""
+
 import abc
 
 import six

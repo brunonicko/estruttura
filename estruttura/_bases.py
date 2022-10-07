@@ -1,3 +1,5 @@
+"""Base structure classes."""
+
 import abc
 import weakref
 

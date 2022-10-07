@@ -36,13 +36,8 @@
 
 Overview
 --------
-Abstract data structure classes.
+`estruttura` is a Python package that provides standardized abstract data structure classes and utilities.
 
-
-Example
--------
-
-.. code:: python
-
-    >>> import estruttura
-    >>> pass
+Motivation
+----------
+`estruttura` was born out of needing a common data classes interface for building the `datta` and `objetto` packages.

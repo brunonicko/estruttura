@@ -1,3 +1,5 @@
+"""Utility functions."""
+
 from tippo import Any, Callable, Type, TypeVar, cast
 
 from ._bases import UniformStructure, UniformStructureMeta

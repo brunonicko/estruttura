@@ -1,3 +1,5 @@
+"""Relationships between structures and values."""
+
 from basicco import basic_data, fabricate_value, type_checking
 from tippo import (
     Any,

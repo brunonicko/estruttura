@@ -1,3 +1,5 @@
+"""List structures."""
+
 import abc
 
 import slotted

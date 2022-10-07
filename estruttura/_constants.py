@@ -1,3 +1,5 @@
+"""Constants and sentinel values."""
+
 from enum import Enum
 
 from tippo import TypeVar, final

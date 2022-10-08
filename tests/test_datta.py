@@ -1,5 +1,6 @@
 import pytest
 
+from datta import Data, attribute
 from datta.examples.json_data import JSONDict
 
 
@@ -29,6 +30,25 @@ def test_json():
     }
     js = JSONDict(data)
     assert js == JSONDict.deserialize(js.serialize())
+
+
+def test_circle():
+    class Circle(Data):
+        PI = attribute(3.14, constant=True)
+        radius = attribute()
+
+    assert not Circle.__attributes__["PI"].serialized
+
+    circle = Circle(3)
+    assert circle.radius == 3
+
+    assert Circle.deserialize({"radius": 3}) == circle
+
+    with pytest.raises(TypeError):
+        Circle(3, PI=300)
+
+    with pytest.raises(TypeError):
+        Circle.deserialize({"radius": 3, "PI": 300})
 
 
 if __name__ == "__main__":

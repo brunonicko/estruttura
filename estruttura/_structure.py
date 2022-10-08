@@ -378,11 +378,7 @@ class Structure(six.with_metaclass(StructureMeta, CollectionStructure[str])):
         attributes = cls.__attributes__
         deserialized_values = attributes.get_initial_values(
             args=(),
-            kwargs=dict(
-                (n, attributes[n].relationship.deserialize_value(v))
-                for n, v in six.iteritems(serialized)
-                if attributes[n].serialized
-            ),
+            kwargs=dict((n, attributes[n].relationship.deserialize_value(v)) for n, v in six.iteritems(serialized)),
             deserializing=True,
         )
         return cls.__construct__(deserialized_values)
@@ -655,7 +651,7 @@ def _make_init(cls):
     ).format(
         args=(", " + ", ".join(args)) if args else "",
         kwargs=(", " + ", ".join(kwargs)) if kwargs else "",
-        arg_names=", ".join(arg_names),
+        arg_names=", ".join(arg_names) + ("," if arg_names else ""),
         kwarg_names=", ".join(kwarg_names),
     )
 

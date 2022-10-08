@@ -3,6 +3,7 @@ from basicco.type_checking import TypeCheckError
 from ._attribute import (
     Attribute,
     AttributeMap,
+    AttributeMeta,
     MutableAttribute,
     StateReader,
 )
@@ -47,6 +48,7 @@ from ._list import (
     ProxyList,
 )
 from ._relationship import Relationship
+from ._serialization import BaseSerializer, Deserializer, Serializer
 from ._set import (
     InteractiveProxySet,
     InteractiveSetStructure,
@@ -66,17 +68,17 @@ from ._structure import (
     StructureMeta,
 )
 from ._utils import (
+    deleter,
+    get_attribute_type,
+    get_attributes,
     get_relationship,
     get_relationship_type,
-    get_attributes,
-    get_attribute_type,
-    to_items,
     getter,
-    setter,
-    deleter,
-    resolve_index,
-    resolve_continuous_slice,
     pre_move,
+    resolve_continuous_slice,
+    resolve_index,
+    setter,
+    to_items,
 )
 
 __all__ = [
@@ -98,6 +100,7 @@ __all__ = [
     "PrivateProxyUniformStructure",
     "InteractiveProxyUniformStructure",
     "MutableProxyUniformStructure",
+    "AttributeMeta",
     "Attribute",
     "MutableAttribute",
     "AttributeMap",
@@ -139,6 +142,9 @@ __all__ = [
     "InteractiveProxySet",
     "MutableProxySet",
     "Relationship",
+    "BaseSerializer",
+    "Serializer",
+    "Deserializer",
     "get_relationship",
     "get_relationship_type",
     "get_attributes",

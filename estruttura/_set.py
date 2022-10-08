@@ -4,7 +4,7 @@ import abc
 
 import slotted
 from basicco import runtime_final
-from tippo import AbstractSet, Iterable, TypeVar, cast
+from tippo import AbstractSet, Iterable, Type, TypeVar, cast
 
 from ._bases import (
     InteractiveProxyUniformStructure,
@@ -184,6 +184,29 @@ class SetStructure(UniformStructure[T_co], slotted.SlottedSet[T_co]):
         """
         return self.__xor__(other)
 
+    @classmethod
+    @abc.abstractmethod
+    def __construct__(cls, values):
+        # type: (Type[SS], list[T_co]) -> SS
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> list
+        relationship = type(self).__relationship__
+        return [relationship.serialize_value(v) for v in self]
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[SS], list) -> SS
+        relationship = cls.__relationship__
+        return cls.__construct__([relationship.deserialize_value(v) for v in serialized])
+
     @abc.abstractmethod
     def isdisjoint(self, iterable):
         # type: (Iterable) -> bool
@@ -271,6 +294,9 @@ class SetStructure(UniformStructure[T_co], slotted.SlottedSet[T_co]):
         :return: Inverse Difference.
         """
         raise NotImplementedError()
+
+
+SS = TypeVar("SS", bound=SetStructure)
 
 
 class PrivateSetStructure(SetStructure[T], PrivateUniformStructure[T]):
@@ -574,6 +600,7 @@ class MutableSetStructure(PrivateSetStructure[T], MutableUniformStructure[T], sl
         self._update(iterable)
 
 
+# noinspection PyAbstractClass
 class ProxySet(SetStructure[T_co], ProxyUniformStructure[T_co]):
     """Proxy set."""
 
@@ -701,6 +728,7 @@ class ProxySet(SetStructure[T_co], ProxyUniformStructure[T_co]):
         return cast(PrivateSetStructure[T_co], super(ProxySet, self)._wrapped)
 
 
+# noinspection PyAbstractClass
 class PrivateProxySet(ProxySet[T], PrivateSetStructure[T], PrivateProxyUniformStructure[T]):
     """Private proxy set."""
 
@@ -746,12 +774,14 @@ class PrivateProxySet(ProxySet[T], PrivateSetStructure[T], PrivateProxyUniformSt
 PPS = TypeVar("PPS", bound=PrivateProxySet)
 
 
+# noinspection PyAbstractClass
 class InteractiveProxySet(PrivateProxySet[T], InteractiveSetStructure[T], InteractiveProxyUniformStructure[T]):
     """Interactive proxy set."""
 
     __slots__ = ()
 
 
+# noinspection PyAbstractClass
 class MutableProxySet(PrivateProxySet[T], MutableSetStructure[T], MutableProxyUniformStructure[T]):
     """Mutable proxy set."""
 

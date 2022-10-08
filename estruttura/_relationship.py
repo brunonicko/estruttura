@@ -1,6 +1,7 @@
 """Relationships between structures and values."""
 
-from basicco import basic_data, fabricate_value, type_checking
+import six
+from basicco import BaseMeta, basic_data, fabricate_value, type_checking
 from tippo import (
     Any,
     Callable,
@@ -13,11 +14,20 @@ from tippo import (
     overload,
 )
 
+from ._constants import MISSING, MissingType
+from ._serialization import Deserializer, Serializer
 
 T = TypeVar("T")
 
 
-class Relationship(basic_data.ImmutableBasicData, Generic[T]):
+class RelationshipMeta(BaseMeta):
+    """Metaclass for :class:`Relationship`."""
+
+    __default_serializer_type__ = Serializer  # type: Type[Serializer]
+    __default_deserializer_type__ = Deserializer  # type: Type[Deserializer]
+
+
+class Relationship(six.with_metaclass(RelationshipMeta, basic_data.ImmutableBasicData, Generic[T])):
     """Describes a relationship between a structure and its values."""
 
     __slots__ = (
@@ -37,8 +47,8 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         validator=None,  # type: Callable[[Any], None] | str | None
         types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
         subtypes=False,  # type: bool
-        serializer=None,  # type: Callable[[T], Any] | str | None
-        deserializer=None,  # type: Callable[[Any], T] | str | None
+        serializer=MISSING,  # type: Callable[[T], Any] | str | None | MissingType
+        deserializer=MISSING,  # type: Callable[[Any], T] | str | None | MissingType
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -57,10 +67,27 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         self._validator = fabricate_value.format_factory(validator)
         self._types = type_checking.format_types(types)
         self._subtypes = bool(subtypes)
-        self._serializer = fabricate_value.format_factory(serializer)
-        self._deserializer = fabricate_value.format_factory(deserializer)
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
+
+        if serializer is MISSING:
+            serializer = type(self).__default_serializer_type__(
+                types=self.types,
+                subtypes=self.subtypes,
+                extra_paths=self.extra_paths,
+                builtin_paths=self.builtin_paths,
+            )
+
+        if deserializer is MISSING:
+            deserializer = type(self).__default_deserializer_type__(
+                types=self.types,
+                subtypes=self.subtypes,
+                extra_paths=self.extra_paths,
+                builtin_paths=self.builtin_paths,
+            )
+
+        self._serializer = fabricate_value.format_factory(serializer)
+        self._deserializer = fabricate_value.format_factory(deserializer)
 
     def convert(self, value):
         # type: (Any) -> T
@@ -108,7 +135,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         # type: (Any) -> T
         return self.validate(self.check_type(self.convert(value)))
 
-    def serialize(self, value):
+    def serialize_value(self, value):
         # type: (T) -> Any
         return fabricate_value.fabricate_value(
             self.serializer,
@@ -117,7 +144,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
             builtin_paths=self.builtin_paths,
         )
 
-    def deserialize(self, serialized):
+    def deserialize_value(self, serialized):
         # type: (Any) -> T
         return fabricate_value.fabricate_value(
             self.deserializer,

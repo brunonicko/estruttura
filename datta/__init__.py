@@ -59,6 +59,7 @@ from ._relationship import (
 )
 from ._utils import (
     attribute,
+    relationship,
 )
 
 __all__ = [
@@ -108,6 +109,3 @@ __all__ = [
     "relationship",
     "attribute",
 ]
-
-
-relationship = DataRelationship

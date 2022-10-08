@@ -1,12 +1,12 @@
 from basicco import type_checking
 from tippo import Any, Mapping
 
-from datta import DataList, DataDict, DataRelationship
+from datta import DataList, DataDict, relationship
 
 __all__ = ["JSONList", "JSONDict"]
 
 
-JSONTypes = ("datta.examples.JSONList", "datta.examples.JSONDict", str, int, float, bool, None)
+JSONTypes = ("JSONList", "JSONDict", str, int, float, bool, None)
 
 
 def json_converter(value):
@@ -18,7 +18,7 @@ def json_converter(value):
         return value
 
 
-json_relationship = DataRelationship(types=JSONTypes, converter=json_converter)
+json_relationship = relationship(types=JSONTypes, converter=json_converter)
 
 
 class JSONList(DataList):

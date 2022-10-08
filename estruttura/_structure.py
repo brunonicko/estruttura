@@ -15,8 +15,8 @@ from tippo import (
     Type,
     TypeAlias,
     TypeVar,
-    overload,
     dataclass_transform,
+    overload,
 )
 
 from ._attribute import Attribute, AttributeMap, MutableAttribute, StateReader
@@ -351,10 +351,49 @@ class Structure(six.with_metaclass(StructureMeta, CollectionStructure[str])):
         """
         raise NotImplementedError()
 
+    @classmethod
+    @abc.abstractmethod
+    def __construct__(cls, values):
+        # type: (Type[S], dict[str, Any]) -> S
+        """
+        Construct an instance with deserialized attribute values.
+
+        :param values: Deserialized attribute values.
+        :return: Instance.
+        """
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> dict[str, Any]
+        attributes = type(self).__attributes__
+        return dict(
+            (n, attributes[n].relationship.serialize_value(v))
+            for n, v in six.iteritems(dict(self))
+            if attributes[n].serialized
+        )
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[S], dict[str, Any]) -> S
+        attributes = cls.__attributes__
+        deserialized_values = attributes.get_initial_values(
+            args=(),
+            kwargs=dict(
+                (n, attributes[n].relationship.deserialize_value(v))
+                for n, v in six.iteritems(serialized)
+                if attributes[n].serialized
+            ),
+            deserializing=True,
+        )
+        return cls.__construct__(deserialized_values)
+
     @runtime_final.final
     def keys(self):
         # type: () -> tuple[str, ...]
         return tuple(self.__iter__())
+
+
+S = TypeVar("S", bound=Structure)
 
 
 class PrivateStructure(Structure):
@@ -594,25 +633,30 @@ def _make_init(cls):
     # type: (Type[Structure]) -> Callable
     globs = {"DEFAULT": DEFAULT}  # type: dict[str, Any]
     args = []
+    kwargs = []
     arg_names = []
+    kwarg_names = []
     for name, attribute in six.iteritems(cls.__attributes__):
         if not attribute.init:
             continue
         if attribute.has_default or cls.__kw_only__:
-            args.append("{}=DEFAULT".format(name))
-            arg_names.append("{name}={name}".format(name=name))
+            kwargs.append("{}=DEFAULT".format(name))
+            kwarg_names.append("{name!r}:{name}".format(name=name))
         else:
             args.append(name)
             arg_names.append(name)
 
     script = "\n".join(
         (
-            "def __init__(self{args}):",
-            "    self.__init_state__(type(self).__attributes__.get_initial_values({arg_names}))",
+            "def __init__(self{args}{kwargs}):",
+            "    self.__init_state__(type(self).__attributes__.get_initial_values(args=({arg_names}), "
+            "kwargs={{{kwarg_names}}}))",
         )
     ).format(
         args=(", " + ", ".join(args)) if args else "",
+        kwargs=(", " + ", ".join(kwargs)) if kwargs else "",
         arg_names=", ".join(arg_names),
+        kwarg_names=", ".join(kwarg_names),
     )
 
     return dynamic_code.make_function(

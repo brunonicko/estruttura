@@ -1,7 +1,7 @@
 import six
 import pyrsistent
 from basicco import recursive_repr, custom_repr, safe_repr
-from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, SupportsKeysAndGetItem, overload
+from tippo import Any, TypeVar, Iterable, Mapping, Iterator, Union, Type, SupportsKeysAndGetItem, overload
 from pyrsistent.typing import PMap
 
 from estruttura import DELETED, DictStructure, PrivateDictStructure, InteractiveDictStructure, get_relationship
@@ -13,6 +13,7 @@ KT = TypeVar("KT")  # key type
 VT = TypeVar("VT")  # value type
 
 
+# noinspection PyAbstractClass
 class ProtectedDataDict(UniformData[PMap[KT, VT], KT], DictStructure[KT, VT]):
     """Protected data dictionary."""
 
@@ -59,6 +60,17 @@ class ProtectedDataDict(UniformData[PMap[KT, VT], KT], DictStructure[KT, VT]):
                     raise exc
             initial[key] = value
         super(ProtectedDataDict, self).__init__(initial)
+
+    @classmethod
+    def __construct__(cls, values):
+        # type: (Type[PRDD], dict[KT, VT]) -> PRDD
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        return cls(values)
 
     def __contains__(self, key):
         # type: (Any) -> bool
@@ -157,6 +169,9 @@ class ProtectedDataDict(UniformData[PMap[KT, VT], KT], DictStructure[KT, VT]):
         """
         for value in six.itervalues(self._internal):
             yield value
+
+
+PRDD = TypeVar("PRDD", bound=ProtectedDataDict)
 
 
 class PrivateDataDict(ProtectedDataDict[KT, VT], PrivateUniformData[PMap[KT, VT], KT], PrivateDictStructure[KT, VT]):

@@ -63,6 +63,20 @@ class ProtectedData(six.with_metaclass(DataMeta, Structure, BaseData)):
             **kwargs
         )
 
+    @classmethod
+    def __construct__(cls, values):
+        # type: (Type[PRD], dict[str, Any]) -> PRD
+        """
+        Construct an instance with deserialized attribute values.
+
+        :param values: Deserialized attribute values.
+        :return: Instance.
+        """
+        self = cls.__new__(cls)
+        for name, value in six.iteritems(values):
+            object.__setattr__(self, name, value)
+        return self
+
     @runtime_final.final
     def __getitem__(self, name):
         # type: (str) -> Any
@@ -83,6 +97,9 @@ class ProtectedData(six.with_metaclass(DataMeta, Structure, BaseData)):
             object.__setattr__(self, name, value)
 
 
+PRD = TypeVar("PRD", bound=ProtectedData)
+
+
 class PrivateData(ProtectedData, PrivateStructure):
     """Private data."""
 
@@ -90,7 +107,7 @@ class PrivateData(ProtectedData, PrivateStructure):
 
     @runtime_final.final
     def __update_state__(self, new_values, old_values):
-        # type: (PDC, dict[str, Any], dict[str, Any]) -> PDC
+        # type: (PD, dict[str, Any], dict[str, Any]) -> PD
         """
         Update attribute values.
 
@@ -109,7 +126,7 @@ class PrivateData(ProtectedData, PrivateStructure):
         return self_copy
 
 
-PDC = TypeVar("PDC", bound=PrivateData)
+PD = TypeVar("PD", bound=PrivateData)
 
 
 class Data(PrivateData, InteractiveStructure):

@@ -15,6 +15,7 @@ from basicco import (
     recursive_repr,
     runtime_final,
     safe_repr,
+    type_checking,
     unique_iterator,
 )
 from tippo import (
@@ -48,7 +49,13 @@ Item = Tuple[str, Any]  # type: TypeAlias
 _attribute_count = 0
 
 
-class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
+class AttributeMeta(BaseMeta):
+    """Metaclass for :class:`Attribute`."""
+
+    __relationship_type__ = Relationship  # type: Type[Relationship]
+
+
+class Attribute(six.with_metaclass(AttributeMeta, basic_data.ImmutableBasicData, Generic[T_co])):
     """Attribute descriptor."""
 
     __slots__ = (
@@ -65,6 +72,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_eq",
         "_order",
         "_hash",
+        "_serialized",
         "_relationship",
         "_dependencies",
         "_recursive_dependencies",
@@ -92,7 +100,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
-        relationship=None,  # type: Relationship | None
+        serialized=None,  # type: bool | None
+        relationship=None,  # type: Relationship[T_co] | None
         metadata=None,  # type: Any
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
@@ -159,6 +168,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
                 error = "constant attribute can't be in hash"
                 raise ValueError(error)
 
+            if serialized is None:
+                serialized = False
+            elif serialized:
+                error = "constant attribute can't be serialized"
+                raise ValueError(error)
+
         else:
 
             # Not a constant, set default parameter values.
@@ -170,6 +185,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
             if eq is None:
                 eq = True
+
+            if serialized is None:
+                serialized = True
 
         # Ensure single default source.
         if default is not MISSING and factory is not MISSING:
@@ -193,6 +211,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             error = "can't contribute to order if it's not required"
             raise ValueError(error)
 
+        # Default relationship.
+        if relationship is None:
+            relationship = type(self).__relationship_type__()
+        else:
+            type_checking.assert_is_instance(relationship, type(self).__relationship_type__)
+
         # Set attributes.
         self._owner = None  # type: Type[SupportsGetItem] | None
         self._name = None  # type: str | None
@@ -206,7 +230,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
-        self._relationship = relationship
+        self._serialized = bool(serialized)
+        self._relationship = relationship  # type: Relationship[T_co]
         self._dependencies = ()  # type: tuple[Attribute, ...]
         self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
         self._dependents = ()  # type: tuple[Attribute, ...]
@@ -281,19 +306,19 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
         # Resolve automatic parameters.
         if self.delegated:
-            if self.init is None:
-                self._init = False
             if self.updatable is None:
                 self._updatable = self.fset is not None
             if self.deletable is None:
                 self._deletable = self.fdel is not None
-        else:
             if self.init is None:
-                self._init = True
+                self._init = self.updatable and all((d.has_default or d.delegated) for d in self.recursive_dependencies)
+        else:
             if self.updatable is None:
                 self._updatable = True
             if self.deletable is None:
                 self._deletable = False
+            if self.init is None:
+                self._init = True
         assert not any(p is None for p in (self._init, self._updatable, self._deletable))
 
         # More checks.
@@ -330,6 +355,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("eq", self.eq),
             ("order", self.order),
             ("hash", self.hash),
+            ("serialized", self.serialized),
             ("relationship", self.relationship),
             ("metadata", self.metadata),
             ("extra_paths", self.extra_paths),
@@ -406,14 +432,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     def process(self, value):
         # type: (Any) -> T_co
-        if self.relationship is not None:
-            try:
-                return self.relationship.process(value)
-            except Exception as e:
-                exc = type(e)("{!r} attribute; {}".format(self.name, e))
-                six.raise_from(exc, None)
-                raise exc
-        return value
+        try:
+            return self.relationship.process(value)
+        except Exception as e:
+            exc = type(e)("{!r} attribute; {}".format(self.name, e))
+            six.raise_from(exc, None)
+            raise exc
 
     @overload
     def getter(self, maybe_func):
@@ -637,8 +661,14 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._hash
 
     @property
+    def serialized(self):
+        # type: () -> bool
+        """Whether to serialize/deserialize attribute value."""
+        return self._serialized
+
+    @property
     def relationship(self):
-        # type: () -> Relationship | None
+        # type: () -> Relationship[T_co]
         return self._relationship
 
     @property
@@ -809,13 +839,14 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
         for name in self.__attribute_dict:
             yield name
 
-    def get_initial_values(self, *args, **kwargs):
-        # type: (*Any, **Any) -> dict[str, Any]
+    def get_initial_values(self, args, kwargs, deserializing=False):
+        # type: (tuple, dict[str, Any], bool) -> dict[str, Any]
         """
-        Get initial attribute values.
+        Get initial/deserialized attribute values.
 
         :param args: Positional arguments.
         :param kwargs: Keyword arguments.
+        :param deserializing: Whether is deserializing instead of initializing.
         :return: Initial attribute values.
         """
 
@@ -831,12 +862,14 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
             if attribute.required:
                 required_names.add(name)
 
-            # Skip non-init attributes.
-            if not attribute.init:
+            # Skip non-init (or non serialized) attributes.
+            if (not attribute.init) if not deserializing else (not attribute.serialized):
 
-                # Can't get its value from the init.
+                # Can't get its value from the init/construct method.
                 if name in kwargs:
-                    error = "attribute {!r} can't be set externally".format(name)
+                    error = "attribute {!r} is not part of __{}__".format(
+                        name, "__init__" if not deserializing else "__construct__"
+                    )
                     raise TypeError(error)
 
                 if attribute.has_default:
@@ -875,11 +908,6 @@ class AttributeMap(six.with_metaclass(AttributeMapMeta, Base, slotted.SlottedMap
             except KeyError:
                 if attribute.has_default:
                     value = attribute.get_default_value(process=False)
-                elif attribute.required:
-                    error = "missing value for required attribute {!r}".format(name)
-                    exc = TypeError(error)
-                    six.raise_from(exc, None)
-                    raise exc
                 else:
                     continue
 

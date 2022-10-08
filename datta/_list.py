@@ -2,7 +2,7 @@ import itertools
 
 import pyrsistent
 from basicco import recursive_repr, custom_repr, safe_repr
-from tippo import Any, TypeVar, Iterable, Iterator, overload
+from tippo import Any, TypeVar, Iterable, Iterator, Type, overload
 from pyrsistent.typing import PVector
 
 from estruttura import ListStructure, PrivateListStructure, InteractiveListStructure, get_relationship
@@ -13,6 +13,7 @@ from ._bases import UniformData, PrivateUniformData, InteractiveUniformData
 T = TypeVar("T")  # value type
 
 
+# noinspection PyAbstractClass
 class ProtectedDataList(UniformData[PVector[T], T], ListStructure[T]):
     """Protected data list."""
 
@@ -36,6 +37,17 @@ class ProtectedDataList(UniformData[PVector[T], T], ListStructure[T]):
             initial = tuple(rel.process(v) for v in initial)
 
         super(ProtectedDataList, self).__init__(initial)
+
+    @classmethod
+    def __construct__(cls, values):
+        # type: (Type[PRDL], list[T]) -> PRDL
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        return cls(values)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -142,6 +154,9 @@ class ProtectedDataList(UniformData[PVector[T], T], ListStructure[T]):
             error = "provided 'stop' argument but did not provide 'start'"
             raise ValueError(error)
         return self._internal.index(*args)
+
+
+PRDL = TypeVar("PRDL", bound=ProtectedDataList)
 
 
 class PrivateDataList(ProtectedDataList[T], PrivateUniformData[PVector[T], T], PrivateListStructure[T]):

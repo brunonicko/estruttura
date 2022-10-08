@@ -1,6 +1,6 @@
 import pyrsistent
 from basicco import recursive_repr, custom_repr, safe_repr
-from tippo import Any, TypeVar, Iterable, Iterator
+from tippo import Any, TypeVar, Iterable, Type, Iterator
 from pyrsistent.typing import PSet
 
 from estruttura import SetStructure, PrivateSetStructure, InteractiveSetStructure, get_relationship
@@ -11,6 +11,7 @@ from ._bases import UniformData, PrivateUniformData, InteractiveUniformData
 T = TypeVar("T")  # value type
 
 
+# noinspection PyAbstractClass
 class ProtectedDataSet(UniformData[PSet[T], T], SetStructure[T]):
     """Protected data set."""
 
@@ -34,6 +35,17 @@ class ProtectedDataSet(UniformData[PSet[T], T], SetStructure[T]):
             initial = tuple(rel.process(v) for v in initial)
 
         super(ProtectedDataSet, self).__init__(initial)
+
+    @classmethod
+    def __construct__(cls, values):
+        # type: (Type[PRDS], list[T]) -> PRDS
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        return cls(values)
 
     def __contains__(self, value):
         # type: (Any) -> bool
@@ -160,6 +172,9 @@ class ProtectedDataSet(UniformData[PSet[T], T], SetStructure[T]):
         :return: Union.
         """
         return DataSet(self._internal.union(iterable))
+
+
+PRDS = TypeVar("PRDS", bound=ProtectedDataSet)
 
 
 class PrivateDataSet(ProtectedDataSet[T], PrivateUniformData[PSet[T], T], PrivateSetStructure[T]):

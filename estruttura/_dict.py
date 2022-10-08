@@ -13,6 +13,7 @@ from tippo import (
     KeysView,
     MutableMapping,
     SupportsKeysAndGetItem,
+    Type,
     TypeVar,
     ValuesView,
     cast,
@@ -52,6 +53,29 @@ class DictStructure(UniformStructure[KT], slotted.SlottedMapping[KT, VT_co]):
         :raises KeyError: Key is not present.
         """
         raise NotImplementedError()
+
+    @classmethod
+    @abc.abstractmethod
+    def __construct__(cls, values):
+        # type: (Type[DS], dict[KT, VT_co]) -> DS
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> dict
+        relationship = type(self).__relationship__
+        return dict((k, relationship.serialize_value(v)) for k, v in six.iteritems(self))
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[DS], dict) -> DS
+        relationship = cls.__relationship__
+        return cls.__construct__(dict((k, relationship.deserialize_value(v)) for k, v in six.iteritems(serialized)))
 
     @abc.abstractmethod
     def get(self, key, fallback=None):
@@ -124,6 +148,9 @@ class DictStructure(UniformStructure[KT], slotted.SlottedMapping[KT, VT_co]):
         :return: Values.
         """
         return ValuesView(self)
+
+
+DS = TypeVar("DS", bound=DictStructure)
 
 
 class PrivateDictStructure(DictStructure[KT, VT], PrivateUniformStructure[KT]):
@@ -416,6 +443,7 @@ class MutableDictStructure(
         self._update(*args, **kwargs)
 
 
+# noinspection PyAbstractClass
 class ProxyDict(DictStructure[KT, VT_co], ProxyUniformStructure[KT]):
     """Proxy dictionary."""
 
@@ -492,6 +520,7 @@ class ProxyDict(DictStructure[KT, VT_co], ProxyUniformStructure[KT]):
         return cast(PrivateDictStructure[KT, VT_co], super(ProxyDict, self)._wrapped)
 
 
+# noinspection PyAbstractClass
 class PrivateProxyDict(ProxyDict[KT, VT], PrivateDictStructure[KT, VT], PrivateProxyUniformStructure[KT]):
     """Private proxy dictionary."""
 
@@ -526,6 +555,7 @@ class PrivateProxyDict(ProxyDict[KT, VT], PrivateDictStructure[KT, VT], PrivateP
 PPD = TypeVar("PPD", bound=PrivateProxyDict)
 
 
+# noinspection PyAbstractClass
 class InteractiveProxyDict(
     PrivateProxyDict[KT, VT], InteractiveDictStructure[KT, VT], InteractiveProxyUniformStructure[KT]
 ):
@@ -534,6 +564,7 @@ class InteractiveProxyDict(
     __slots__ = ()
 
 
+# noinspection PyAbstractClass
 class MutableProxyDict(PrivateProxyDict[KT, VT], MutableDictStructure[KT, VT], MutableProxyUniformStructure[KT]):
     """Mutable proxy dictionary."""
 

@@ -2,17 +2,16 @@
 
 from tippo import Any, Callable, Type, TypeVar, cast
 
+from ._attribute import Attribute, AttributeMap
 from ._bases import UniformStructure, UniformStructureMeta
 from ._relationship import Relationship
-from ._attribute import Attribute, AttributeMap
 from ._structure import Structure, StructureMeta
-
 
 T = TypeVar("T")
 
 
 def get_relationship(uniform_structure):
-    # type: (Type[UniformStructure] | UniformStructure) -> Relationship | None
+    # type: (Type[UniformStructure] | UniformStructure) -> Relationship
     return uniform_structure.__relationship__
 
 

@@ -1,6 +1,6 @@
 import pytest
 
-from datta.examples import JSONDict
+from datta.examples.json_data import JSONDict
 
 
 def test_json():
@@ -28,7 +28,7 @@ def test_json():
         ],
     }
     js = JSONDict(data)
-    print(js)
+    assert js == JSONDict.deserialize(js.serialize())
 
 
 if __name__ == "__main__":

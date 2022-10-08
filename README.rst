@@ -41,3 +41,11 @@ Overview
 Motivation
 ----------
 `estruttura` was born out of needing a common data classes interface for building the `datta` and `objetto` packages.
+
+
+Example
+-------
+
+.. code:: python
+
+    >>> import estruttura

@@ -34,9 +34,22 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, Base)):
         error = "{!r} object is not hashable".format(type(self).__qualname__)
         raise TypeError(error)
 
+    @abc.abstractmethod
+    def serialize(self):
+        # type: () -> Any
+        raise NotImplementedError()
+
+    @classmethod
+    @abc.abstractmethod
+    def deserialize(cls, serialized):
+        # type: (Type[BS], Any) -> BS
+        raise NotImplementedError()
+
 
 # Set as non-hashable by default.
 type.__setattr__(BaseStructure, "__hash__", None)
+
+BS = TypeVar("BS", bound=BaseStructure)
 
 
 class HashableStructure(BaseStructure, slotted.SlottedHashable):
@@ -114,7 +127,7 @@ class UniformStructure(six.with_metaclass(UniformStructureMeta, CollectionStruct
     """Container structure with a single relationship."""
 
     __slots__ = ("__proxy_refs",)
-    __relationship__ = Relationship()  # type: Relationship | None
+    __relationship__ = Relationship()  # type: Relationship
 
     def __init_subclass__(cls, relationship=None, **kwargs):
         # type: (Relationship | None, **Any) -> None
@@ -124,6 +137,8 @@ class UniformStructure(six.with_metaclass(UniformStructureMeta, CollectionStruct
         if relationship is not None:
             type_checking.assert_is_instance(relationship, cls.__relationship_type__)
             cls.__relationship__ = relationship
+        elif not isinstance(cls.__relationship__, cls.__relationship_type__):
+            cls.__relationship__ = cls.__relationship_type__()
         super(UniformStructure, cls).__init_subclass__(**kwargs)  # noqa
 
     def __register_proxy__(self, proxy):

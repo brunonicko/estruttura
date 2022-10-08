@@ -56,7 +56,7 @@ class UniformData(six.with_metaclass(UniformDataMeta, BaseData, UniformStructure
     """Uniform data."""
 
     __slots__ = ("__hash", "__internal")
-    __relationship__ = None  # type: DataRelationship | None
+    __relationship__ = DataRelationship()  # type: DataRelationship
 
     @staticmethod
     @runtime_final.final

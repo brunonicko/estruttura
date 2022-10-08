@@ -4,7 +4,16 @@ import abc
 
 import slotted
 from basicco import runtime_final
-from tippo import Any, Iterable, Iterator, MutableSequence, TypeVar, cast, overload
+from tippo import (
+    Any,
+    Iterable,
+    Iterator,
+    MutableSequence,
+    Type,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from ._bases import (
     InteractiveProxyUniformStructure,
@@ -56,6 +65,29 @@ class ListStructure(UniformStructure[T_co], slotted.SlottedSequence[T_co]):
         :return: Value/values.
         """
         raise NotImplementedError()
+
+    @classmethod
+    @abc.abstractmethod
+    def __construct__(cls, values):
+        # type: (Type[LS], list[T_co]) -> LS
+        """
+        Construct an instance with deserialized values.
+
+        :param values: Deserialized values.
+        :return: Instance.
+        """
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> list
+        relationship = type(self).__relationship__
+        return [relationship.serialize_value(v) for v in self]
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[LS], list) -> LS
+        relationship = cls.__relationship__
+        return cls.__construct__([relationship.deserialize_value(v) for v in serialized])
 
     @abc.abstractmethod
     def count(self, value):
@@ -118,6 +150,9 @@ class ListStructure(UniformStructure[T_co], slotted.SlottedSequence[T_co]):
         :return: None or (index, stop, target index, post index).
         """
         return pre_move(len(self), item, target_index)
+
+
+LS = TypeVar("LS", bound=ListStructure)
 
 
 class PrivateListStructure(ListStructure[T], PrivateUniformStructure[T]):
@@ -506,6 +541,7 @@ class MutableListStructure(PrivateListStructure[T], MutableUniformStructure[T], 
         self._update(item, value)
 
 
+# noinspection PyAbstractClass
 class ProxyList(ListStructure[T_co], ProxyUniformStructure[T_co]):
     """Proxy list."""
 
@@ -580,6 +616,7 @@ class ProxyList(ListStructure[T_co], ProxyUniformStructure[T_co]):
         return cast(PrivateListStructure[T_co], super(ProxyList, self)._wrapped)
 
 
+# noinspection PyAbstractClass
 class PrivateProxyList(ProxyList[T], PrivateListStructure[T], PrivateProxyUniformStructure[T]):
     """Private proxy list."""
 
@@ -646,12 +683,14 @@ class PrivateProxyList(ProxyList[T], PrivateListStructure[T], PrivateProxyUnifor
 PPL = TypeVar("PPL", bound=PrivateProxyList)
 
 
+# noinspection PyAbstractClass
 class InteractiveProxyList(PrivateProxyList[T], InteractiveListStructure[T], InteractiveProxyUniformStructure[T]):
     """Interactive proxy list."""
 
     __slots__ = ()
 
 
+# noinspection PyAbstractClass
 class MutableProxyList(PrivateProxyList[T], MutableListStructure[T], MutableProxyUniformStructure[T]):
     """Proxy mutable list."""
 

@@ -37,7 +37,7 @@ from tippo import (
     overload,
 )
 
-from ._constants import DEFAULT, DELETED, MISSING, MissingType
+from ..constants import DEFAULT, DELETED, MISSING, MissingType
 from ._relationship import Relationship
 
 T = TypeVar("T")

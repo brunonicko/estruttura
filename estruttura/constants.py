@@ -3,10 +3,17 @@
 from enum import Enum
 
 import six
-from tippo import TypeVar, final
+from tippo import final
 
-KT = TypeVar("KT")
-VT_co = TypeVar("VT_co", covariant=True)
+__all__ = [
+    "MissingType",
+    "MISSING",
+    "DeletedType",
+    "DELETED",
+    "DefaultType",
+    "DEFAULT",
+    "BASIC_TYPES",
+]
 
 
 @final

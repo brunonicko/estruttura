@@ -14,7 +14,7 @@ from tippo import (
     overload,
 )
 
-from ._constants import MISSING, MissingType
+from ..constants import MISSING, MissingType
 from ._serialization import Deserializer, Serializer
 
 T = TypeVar("T")
@@ -233,6 +233,12 @@ class Relationship(six.with_metaclass(RelationshipMeta, basic_data.ImmutableBasi
         # type: () -> tuple[str, ...] | None
         """Builtin module paths in fallback order."""
         return self._builtin_paths
+
+    @property
+    def will_process(self):
+        # type: () -> bool
+        """Whether value will be processed or not."""
+        return any((self.converter is not None, self.types, self.validator is not None))
 
 
 R = TypeVar("R", bound=Relationship)

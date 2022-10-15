@@ -14,7 +14,6 @@ from ..base import BaseList, BaseImmutableList, BaseMutableList
 
 
 T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
 
 
 _PVECTOR_TYPE = type(pyrsistent.pvector())  # type: Type[PVector]

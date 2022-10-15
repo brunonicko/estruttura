@@ -1,5 +1,3 @@
-import contextlib
-
 from tippo import Any, TypeVar, Iterator, MutableSequence, Iterable, Union, overload
 
 from ..base import BaseList, BaseImmutableList, BaseMutableList
@@ -56,11 +54,6 @@ class ListStructure(CollectionStructure[LST, T], BaseList[T]):
         # type: () -> int
         return len(self._state)
 
-    @contextlib.contextmanager
-    def _insert_context(self, index, values):
-        # type: (int, tuple[T, ...]) -> Iterator
-        yield
-
     def _insert(self, index, *values):
         # type: (LS, int, T) -> LS
         """
@@ -71,18 +64,10 @@ class ListStructure(CollectionStructure[LST, T], BaseList[T]):
         :return: Transformed.
         :raises ValueError: No values provided.
         """
-        index = self.resolve_index(index, clamp=True)
         relationship = type(self).relationship
         if relationship is not None and relationship.will_process:
             values = tuple(relationship.process(v) for v in values)
-
-        with self._insert_context(index, values):
-            return self._transform(self._state.insert(index, *values))
-
-    @contextlib.contextmanager
-    def _move_context(self, index, stop, target_index, post_index, values):
-        # type: (int, int, int, int, tuple[T, ...]) -> Iterator
-        yield
+        return self._transform(self._state.insert(index, *values))
 
     def _move(self, item, target_index):
         # type: (LS, slice | int, int) -> LS
@@ -93,20 +78,7 @@ class ListStructure(CollectionStructure[LST, T], BaseList[T]):
         :param target_index: Target index.
         :return: Transformed.
         """
-        result = self.pre_move(item, target_index)
-        if result is None:
-            return self
-
-        index, stop, target_index, post_index = result
-        values = tuple(self[index:stop])
-
-        with self._move_context(index, stop, target_index, post_index, values):
-            return self._transform(self._state.move(item, target_index))
-
-    @contextlib.contextmanager
-    def _delete_context(self, index, stop, values):
-        # type: (int, int, tuple[T, ...]) -> Iterator
-        yield
+        return self._transform(self._state.move(item, target_index))
 
     def _delete(self, item):
         # type: (LS, slice | int) -> LS
@@ -116,21 +88,7 @@ class ListStructure(CollectionStructure[LST, T], BaseList[T]):
         :param item: Index/slice.
         :return: Transformed.
         """
-        if isinstance(item, slice):
-            index, stop = self.resolve_continuous_slice(item)
-            values = tuple(self[index:stop])
-        else:
-            index = self.resolve_index(item)
-            stop = index + 1
-            values = (self[index],)
-
-        with self._delete_context(index, stop, values):
-            return self._transform(self._state.delete(item))
-
-    @contextlib.contextmanager
-    def _update_context(self, index, stop, old_values, new_values):
-        # type: (int, int, tuple[T, ...], tuple[T, ...]) -> Iterator
-        yield
+        return self._transform(self._state.delete(item))
 
     @overload
     def _update(self, item, value):
@@ -150,30 +108,13 @@ class ListStructure(CollectionStructure[LST, T], BaseList[T]):
         :param value: Value(s).
         :return: Transformed.
         """
-        if isinstance(item, slice):
-            index, stop = self.resolve_continuous_slice(item)
-            old_values = tuple(self[index:stop])
-        else:
-            index = self.resolve_index(item)
-            stop = index + 1
-            old_values = (self[index],)
-
         relationship = type(self).relationship
         if relationship is not None and relationship.will_process:
             if isinstance(item, slice):
                 value = tuple(relationship.process(v) for v in value)
-                new_values = value
             else:
                 value = relationship.process(value)
-                new_values = (value,)
-        else:
-            if isinstance(item, slice):
-                new_values = tuple(value)
-            else:
-                new_values = (value,)
-
-        with self._update_context(index, stop, old_values, new_values):
-            return self._transform(self._state.update(item, value))
+        return self._transform(self._state.update(item, value))
 
     def count(self, value):
         # type: (object) -> int

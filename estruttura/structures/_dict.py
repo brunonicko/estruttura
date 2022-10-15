@@ -1,5 +1,3 @@
-import contextlib
-
 import six
 from tippo import Any, TypeVar, Iterator, SupportsKeysAndGetItem, Iterable, Union, overload
 
@@ -29,10 +27,6 @@ class DictStructure(CollectionStructure[DST, KT], BaseDict[KT, VT]):
         """
         return self._state[key]
 
-    @contextlib.contextmanager
-    def _update_context(self, updates):
-        yield
-
     @overload
     def _update(self, __m, **kwargs):
         # type: (DS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> DS
@@ -59,9 +53,7 @@ class DictStructure(CollectionStructure[DST, KT], BaseDict[KT, VT]):
         relationship = type(self).relationship
         if relationship is not None and relationship.will_process:
             updates = dict((k, relationship.process(v) if v is not DELETED else v) for k, v in six.iteritems(updates))
-
-        with self._update_context(updates):
-            return self._transform(self._state.update(*args, **kwargs))
+        return self._transform(self._state.update(updates))
 
     def get(self, key, fallback=None):
         # type: (KT, Any) -> Any

@@ -1,7 +1,5 @@
-import contextlib
 import weakref
 
-import six
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, Generic, TypeVar, Type, Iterator, Union, cast
@@ -26,7 +24,7 @@ class Structure(Base, Generic[BST]):
             _ = self.__proxy_refs  # type: ignore
         except AttributeError:
             proxies = weakref.WeakValueDictionary()  # type: weakref.WeakValueDictionary[int, Structure[S]]
-            self.__proxy_refs = proxies  # type: ignore
+            self.__proxy_refs = proxies
         else:
             proxies = self.__proxy_refs
         proxies[id(proxy)] = proxy
@@ -37,7 +35,7 @@ class Structure(Base, Generic[BST]):
             _ = self.__proxy_refs  # type: ignore
         except AttributeError:
             proxies = weakref.WeakValueDictionary()  # type: weakref.WeakValueDictionary[int, Structure[S]]
-            self.__proxy_refs = proxies  # type: ignore
+            self.__proxy_refs = proxies
         else:
             proxies = self.__proxy_refs
         del proxies[id(proxy)]
@@ -62,19 +60,11 @@ class Structure(Base, Generic[BST]):
     @final
     def __proxies__(self):
         # type: (S) -> tuple[Structure[S], ...]
-
-        # Get proxies from weak value dictionary.
         try:
             proxy_refs = self.__proxy_refs  # type: ignore
         except AttributeError:
-            proxy_refs = weakref.WeakValueDictionary()  # type: ignore
-
-        # Remove invalid proxies.
-        self.__proxy_refs = weakref.WeakValueDictionary(
-            dict((i, p) for i, p in six.iteritems(proxy_refs) if p._state is self)
-        )  # type: ignore
-
-        return tuple(self.__proxy_refs.values())
+            proxy_refs = self.__proxy_refs = weakref.WeakValueDictionary()  # type: ignore
+        return tuple(proxy_refs.values())
 
     @property
     @abstract
@@ -136,10 +126,6 @@ class CollectionStructure(Structure[CST], BaseCollection[T_co]):
         # type: (object) -> bool
         return item in self._state
 
-    @contextlib.contextmanager
-    def _clear_context(self):
-        yield
-
     def _clear(self):
         # type: (CS) -> CS
         """
@@ -147,8 +133,7 @@ class CollectionStructure(Structure[CST], BaseCollection[T_co]):
 
         :return: Transformed (immutable) or self (mutable).
         """
-        with self._clear_context():
-            return self._transform(self._state.clear())
+        return self._transform(self._state.clear())
 
 
 CS = TypeVar("CS", bound=CollectionStructure)  # collection structure self type

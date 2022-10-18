@@ -1,9 +1,14 @@
 import six
 import collections
+import operator
 
-from tippo import Any, Type, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, overload
+from tippo import Any, Type, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Callable, overload
+from basicco.explicit_hash import set_to_none
+from basicco.safe_repr import safe_repr
+from basicco.recursive_repr import recursive_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
+from basicco.obj_state import get_state, update_state
 from basicco.get_mro import preview_mro
 
 from ..constants import DELETED
@@ -97,7 +102,7 @@ class BaseClassMeta(BaseMeta):
         cls.__attributes = attribute_map
 
         # Check for non-default attributes declared after default ones.
-        if False and not cls.__kw_only__:  # FIXME
+        if cls.__kw_only__:
             seen_default = None
             for attribute_name, attribute in six.iteritems(attribute_map):
                 if not attribute.init:
@@ -133,6 +138,28 @@ MAT_co = TypeVar("MAT_co", bound=BaseMutableAttribute, covariant=True)  # mutabl
 class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
     __slots__ = ()
     __attributes__ = AttributeMap()  # type: AttributeMap[BaseAttribute]
+    __kw_only__ = False  # type: bool
+
+    def __init_subclass__(cls, kw_only=None, **kwargs):
+
+        # Keyword arguments only.
+        if kw_only is not None:
+            if not kw_only and cls.__kw_only__:
+                error = "class {!r} already set to use keyword arguments only, can't set it to False".format(
+                    cls.__qualname__
+                )
+                raise TypeError(error)
+            cls.__kw_only__ = bool(kw_only)
+
+        super(BaseClass, cls).__init_subclass__(**kwargs)  # noqa
+
+    def __init__(self, *args, **kwargs):
+        cls = type(self)
+        if cls.__kw_only__ and args:
+            error = "{}.__init__ accepts keyword arguments only".format(cls.__qualname__)
+            raise TypeError(error)
+        values = cls.__attributes__.get_initial_values(args, kwargs, init_property="init", init_method="__init__")
+        self.__init_state__(values)
 
     @abstract
     def __getitem__(self, name):
@@ -172,6 +199,97 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
         return self.__getattribute__(name)
 
     @abstract
+    def __hash__(self):
+        # type: () -> int
+        raise NotImplementedError()
+
+    def __order__(self, other, func):
+        # type: (object, Callable[[Any, Any], bool]) -> bool
+
+        # Require the exact same type for comparison.
+        cls = type(self)
+        if cls is not type(other):
+            return NotImplemented
+        assert isinstance(other, type(self))
+
+        # Get attributes to compare.
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.order]
+        if not attributes:
+            return NotImplemented
+
+        # Compare values.
+        order_values = tuple(self[n] for n in attributes if n in self)
+        other_order_values = tuple(other[n] for n in attributes if n in other)
+        return func(order_values, other_order_values)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+
+        # Same object
+        if self is object:
+            return True
+
+        # Require the exact same type for comparison.
+        cls = type(self)
+        if cls is not type(other):
+            return NotImplemented
+        assert isinstance(other, type(self))
+
+        # Get attributes to compare.
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
+
+        # Compare values.
+        order_values = dict((n, self[n]) for n in attributes if n in self)
+        other_order_values = dict((n, other[n]) for n in attributes if n in other)
+        return order_values == other_order_values
+
+    def __lt__(self, other):
+        # type: (object) -> bool
+        return self.__order__(other, operator.lt)
+
+    def __le__(self, other):
+        # type: (object) -> bool
+        return self.__order__(other, operator.le)
+
+    def __gt__(self, other):
+        # type: (object) -> bool
+        return self.__order__(other, operator.gt)
+
+    def __ge__(self, other):
+        # type: (object) -> bool
+        return self.__order__(other, operator.ge)
+
+    @safe_repr
+    @recursive_repr
+    def __repr__(self):
+        cls = type(self)
+
+        args = []
+        kwargs = []
+        delegated = []
+        for name, attribute in six.iteritems(cls.__attributes__):
+            if not attribute.repr:
+                continue
+            if attribute.has_default:
+                kwargs.append(name)
+            elif attribute.delegated:
+                delegated.append(name)
+            elif cls.__kw_only__:
+                kwargs.append(name)
+            else:
+                args.append(name)
+
+        parts = []
+        for name, value in six.iteritems(dict((n, self[n]) for n in args if n in self)):
+            parts.append(repr(value))
+        for name, value in six.iteritems(dict((n, self[n]) for n in kwargs if n in self)):
+            parts.append("{}={!r}".format(name, value))
+        for name, value in six.iteritems(dict((n, self[n]) for n in delegated if n in self)):
+            parts.append("<{}={!r}>".format(name, value))
+
+        return "{}({})".format(cls.__qualname__, ", ".join(parts))
+
+    @abstract
     def __init_state__(self, new_values):
         # type: (dict[str, Any]) -> None
         """
@@ -203,7 +321,7 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
         :return: Transformed.
         """
         if name in self:
-            return self._remove(name)
+            return self._delete(name)
         if name not in type(self).__attributes__:
             error = "{!r} object has no attribute named {!r}".format(type(self).__qualname__, name)
             raise AttributeError(error)
@@ -213,7 +331,7 @@ class BaseClass(six.with_metaclass(BaseClassMeta, Base)):
         return self
 
     @final
-    def _remove(self, name):
+    def _delete(self, name):
         # type: (BC, str) -> BC
         """
         Delete existing attribute value.
@@ -278,6 +396,32 @@ class BaseImmutableClassMeta(BaseClassMeta, BaseImmutableMeta):
 class BaseImmutableClass(six.with_metaclass(BaseImmutableClassMeta, BaseClass, BaseImmutable)):
     __slots__ = ()
 
+    def __copy__(self):
+        cls = type(self)
+        self_copy = cls.__new__(cls)
+        update_state(self_copy, get_state(self))
+        return self_copy
+
+    def __hash__(self):
+        cls = type(self)
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.hash]
+        hash_values = (cls,) + tuple((n, self[n]) for n in attributes if n in self)
+        return hash(hash_values)
+
+    def __setattr__(self, name, value):
+        cls = type(self)
+        if name in cls.__attributes__:
+            error = "{!r} attributes are read-only".format(cls.__qualname__)
+            raise AttributeError(error)
+        super(BaseImmutableClass, self).__setattr__(name, value)
+
+    def __delattr__(self, name):
+        cls = type(self)
+        if name in cls.__attributes__:
+            error = "{!r} attributes are read-only".format(cls.__qualname__)
+            raise AttributeError(error)
+        super(BaseImmutableClass, self).__delattr__(name)
+
     @final
     def discard(self, name):
         # type: (BIC, str) -> BIC
@@ -290,7 +434,7 @@ class BaseImmutableClass(six.with_metaclass(BaseImmutableClassMeta, BaseClass, B
         return self._discard(name)
 
     @final
-    def remove(self, name):
+    def delete(self, name):
         # type: (BIC, str) -> BIC
         """
         Delete existing attribute value.
@@ -299,7 +443,7 @@ class BaseImmutableClass(six.with_metaclass(BaseImmutableClassMeta, BaseClass, B
         :return: Transformed.
         :raises AttributeError: Invalid attribute or no value set.
         """
-        return self._remove(name)
+        return self._delete(name)
 
     @final
     def set(self, name, value):
@@ -350,6 +494,11 @@ class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BaseClass, BaseM
     __slots__ = ()
     __attributes__ = AttributeMap()  # type: AttributeMap[BaseMutableAttribute]
 
+    @set_to_none
+    def __hash__(self):
+        error = "{!r} object is not hashable".format(type(self).__name__)
+        raise TypeError(error)
+
     @final
     def __setitem__(self, name, value):
         # type: (str, Any) -> None
@@ -371,7 +520,7 @@ class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BaseClass, BaseM
         self._discard(name)
 
     @final
-    def remove(self, name):
+    def delete(self, name):
         # type: (str) -> None
         """
         Delete existing attribute value.
@@ -379,7 +528,7 @@ class BaseMutableClass(six.with_metaclass(BaseMutableClassMeta, BaseClass, BaseM
         :param name: Attribute name.
         :raises AttributeError: Invalid attribute or no value set.
         """
-        self._remove(name)
+        self._delete(name)
 
     @final
     def set(self, name, value):

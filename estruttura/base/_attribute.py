@@ -175,7 +175,7 @@ class BaseAttribute(six.with_metaclass(BaseAttributeMeta, BaseImmutable, Immutab
 
         # Ensure safe order.
         if order is None:
-            order = eq and required
+            order = False
         if order and not eq:
             error = "can't contribute to order if it's not contributing to the eq"
             raise ValueError(error)
@@ -879,7 +879,8 @@ class AttributeMap(Base, SlottedHashable, SlottedMapping[str, AT_co]):
         # Check for required attributes.
         missing = required_names.difference(initial_values)
         if missing:
-            error = "missing values for required attributes {!r}".format(", ".join(repr(k) for k in missing))
+            sorted_missing = [n for n in self if n in missing]
+            error = "missing values for required attributes {}".format(", ".join(repr(k) for k in sorted_missing))
             raise RuntimeError(error)
 
         return initial_values

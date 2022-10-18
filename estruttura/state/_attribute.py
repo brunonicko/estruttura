@@ -2,8 +2,8 @@ from ..base import BaseAttribute, BaseMutableAttribute
 
 
 class StateAttribute(BaseAttribute):
-    pass
+    __slots__ = ()
 
 
 class MutableStateAttribute(StateAttribute, BaseMutableAttribute):
-    pass
+    __slots__ = ()

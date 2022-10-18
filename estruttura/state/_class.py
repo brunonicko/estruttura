@@ -1,9 +1,7 @@
-import copy
-
 import six
-from basicco.explicit_hash import set_to_none
 from basicco.mangling import unmangle
 from basicco.runtime_final import final
+from basicco.obj_state import get_state, update_state
 from tippo import Any, Type, TypeVar
 
 from ..base import (
@@ -22,6 +20,14 @@ from ._attribute import StateAttribute, MutableStateAttribute
 class ClassStateMeta(BaseClassMeta):
     __attribute_type__ = StateAttribute
 
+
+# noinspection PyAbstractClass
+class ClassState(six.with_metaclass(ClassStateMeta, BaseClass)):
+    __slots__ = ()
+
+
+class ImmutableClassStateMeta(ClassStateMeta, BaseImmutableClassMeta):
+
     # noinspection PyUnusedLocal
     @staticmethod
     def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
@@ -38,8 +44,7 @@ class ClassStateMeta(BaseClassMeta):
         return dct
 
 
-# noinspection PyAbstractClass
-class ClassState(six.with_metaclass(ClassStateMeta, BaseClass)):
+class ImmutableClassState(six.with_metaclass(ImmutableClassStateMeta, ClassState, BaseImmutableClass)):
     __slots__ = ()
 
     @final
@@ -61,34 +66,16 @@ class ClassState(six.with_metaclass(ClassStateMeta, BaseClass)):
         for name, value in six.iteritems(new_values):
             object.__setattr__(self, name, value)
 
-
-class ImmutableClassStateMeta(ClassStateMeta, BaseImmutableClassMeta):
-    pass
-
-
-class ImmutableClassState(six.with_metaclass(ImmutableClassStateMeta, ClassState, BaseImmutableClass)):
-    __slots__ = ()
-
-    def __hash__(self):
-        # type: () -> int
-        return object.__hash__(self)  # TODO: based on attributes
-
-    def __eq__(self, other):
-        # type: (object) -> bool
-        return self is other  # TODO: based on attributes
-
     @final
     def __update_state__(self, new_values, old_values):
         # type: (ICS, dict[str, Any], dict[str, Any]) -> ICS
-        """
-        Update attribute values.
-
-        :return: Transformed.
-        """
         if not new_values:
             return self
 
-        self_copy = copy.copy(self)
+        cls = type(self)
+        self_copy = cls.__new__(cls)
+        state = dict((n, v) for n, v in six.iteritems(get_state(self)) if n not in new_values)
+        update_state(self_copy, state)
         for name, value in six.iteritems(new_values):
             if value is DELETED:
                 object.__delattr__(self_copy, name)
@@ -106,33 +93,29 @@ class MutableClassStateMeta(ClassStateMeta, BaseMutableClassMeta):
 
 
 class MutableClassState(six.with_metaclass(MutableClassStateMeta, ClassState, BaseMutableClass)):
-    __slots__ = ()
+    __slots__ = ("__internal",)
 
-    @set_to_none
-    def __hash__(self):
-        error = "{!r} object is not hashable".format(type(self).__name__)
-        raise TypeError(error)
+    @final
+    def __getitem__(self, name):
+        # type: (str) -> Any
+        return self.__internal[name]
 
-    def __eq__(self, other):
-        # type: (object) -> bool
-        return self is other  # TODO: based on attributes
+    @final
+    def __init_state__(self, new_values):
+        # type: (dict[str, Any]) -> None
+        self.__internal = new_values
 
     @final
     def __update_state__(self, new_values, old_values):
         # type: (MCS, dict[str, Any], dict[str, Any]) -> MCS
-        """
-        Update attribute values.
-
-        :return: Transformed.
-        """
         if not new_values:
             return self
 
         for name, value in six.iteritems(new_values):
             if value is DELETED:
-                object.__delattr__(self, name)
+                del self.__internal[name]
             else:
-                object.__setattr__(self, name, value)
+                self.__internal[name] = value
 
         return self
 

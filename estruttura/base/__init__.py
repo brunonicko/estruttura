@@ -9,6 +9,21 @@ from ._base import (
     BaseImmutableCollection,
     BaseMutableCollection,
 )
+from ._attribute import (
+    BaseAttributeMeta,
+    BaseAttribute,
+    BaseMutableAttribute,
+    AttributeMap,
+    StateReader,
+)
+from ._class import (
+    BaseClassMeta,
+    BaseClass,
+    BaseImmutableClassMeta,
+    BaseImmutableClass,
+    BaseMutableClassMeta,
+    BaseMutableClass,
+)
 from ._dict import (
     BaseDict,
     BaseImmutableDict,
@@ -33,6 +48,17 @@ __all__ = [
     "BaseCollection",
     "BaseImmutableCollection",
     "BaseMutableCollection",
+    "BaseAttributeMeta",
+    "BaseAttribute",
+    "BaseMutableAttribute",
+    "AttributeMap",
+    "StateReader",
+    "BaseClassMeta",
+    "BaseClass",
+    "BaseImmutableClassMeta",
+    "BaseImmutableClass",
+    "BaseMutableClassMeta",
+    "BaseMutableClass",
     "BaseDict",
     "BaseImmutableDict",
     "BaseMutableDict",

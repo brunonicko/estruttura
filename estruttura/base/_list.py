@@ -3,14 +3,14 @@ from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, overload, MutableSequence, Iterable, TypeVar
 
-from ._base import BaseCollection, BaseImmutableCollection, BaseMutableCollection
+from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
 from ..utils import resolve_index, resolve_continuous_slice, pre_move
 
 
 T = TypeVar("T")
 
 
-class BaseList(BaseCollection[T], slotted.SlottedSequence[T]):
+class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
     __slots__ = ()
 
     @overload
@@ -215,7 +215,7 @@ BL = TypeVar("BL", bound=BaseList)
 
 
 # noinspection PyAbstractClass
-class BaseImmutableList(BaseList[T], BaseImmutableCollection[T]):
+class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
     __slots__ = ()
 
     @final
@@ -337,7 +337,7 @@ BIL = TypeVar("BIL", bound=BaseImmutableList)
 
 
 # noinspection PyAbstractClass
-class BaseMutableList(BaseList[T], BaseMutableCollection[T], slotted.SlottedMutableSequence[T]):
+class BaseMutableList(BaseList[T], BaseMutableUniformCollection[T], slotted.SlottedMutableSequence[T]):
     __slots__ = ()
 
     @final

@@ -15,7 +15,7 @@ from tippo import (
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
-from ._base import BaseCollection, BaseImmutableCollection, BaseMutableCollection
+from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
 from ..constants import DeletedType, DELETED, MISSING
 
 
@@ -23,7 +23,7 @@ KT = TypeVar("KT")
 VT = TypeVar("VT")
 
 
-class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT]):
+class BaseDict(BaseUniformCollection[KT], slotted.SlottedMapping[KT, VT]):
     __slots__ = ()
 
     @abstract
@@ -48,12 +48,12 @@ class BaseDict(BaseCollection[KT], slotted.SlottedMapping[KT, VT]):
         :return: Transformed.
         """
         try:
-            return self._remove(key)
+            return self._delete(key)
         except KeyError:
             return self
 
     @final
-    def _remove(self, key):
+    def _delete(self, key):
         # type: (BD, KT) -> BD
         """
         Delete existing key.
@@ -178,7 +178,7 @@ BD = TypeVar("BD", bound=BaseDict)
 
 
 # noinspection PyAbstractClass
-class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableCollection[KT]):
+class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
     __slots__ = ()
 
     @final
@@ -193,7 +193,7 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableCollection[KT]):
         return self._discard(key)
 
     @final
-    def remove(self, key):
+    def delete(self, key):
         # type: (BID, KT) -> BID
         """
         Delete existing key.
@@ -202,7 +202,7 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableCollection[KT]):
         :return: Transformed.
         :raises KeyError: Key is not present.
         """
-        return self._remove(key)
+        return self._delete(key)
 
     @final
     def set(self, key, value):
@@ -246,7 +246,7 @@ BID = TypeVar("BID", bound=BaseImmutableDict)
 
 
 # noinspection PyAbstractClass
-class BaseMutableDict(BaseDict[KT, VT], BaseMutableCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
+class BaseMutableDict(BaseDict[KT, VT], BaseMutableUniformCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
     __slots__ = ()
 
     @final
@@ -269,13 +269,13 @@ class BaseMutableDict(BaseDict[KT, VT], BaseMutableCollection[KT], slotted.Slott
         :param key: Key.
         :raises KeyError: Key is not preset.
         """
-        self._remove(key)
+        self._delete(key)
 
     @final
     def pop(self, key, fallback=MISSING):
         # type: (KT, Any) -> Any
         """
-        Get value for key and remove it, return fallback value if key is not present.
+        Get value for key and delete it, return fallback value if key is not present.
 
         :param key: Key.
         :param fallback: Fallback value.
@@ -344,7 +344,7 @@ class BaseMutableDict(BaseDict[KT, VT], BaseMutableCollection[KT], slotted.Slott
         self._discard(key)
 
     @final
-    def remove(self, key):
+    def delete(self, key):
         # type: (KT) -> None
         """
         Delete existing key.
@@ -352,7 +352,7 @@ class BaseMutableDict(BaseDict[KT, VT], BaseMutableCollection[KT], slotted.Slott
         :param key: Key.
         :raises KeyError: Key is not present.
         """
-        self._remove(key)
+        self._delete(key)
 
     @final
     def set(self, key, value):

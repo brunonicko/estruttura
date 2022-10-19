@@ -24,21 +24,6 @@ class SetStructure(CollectionStructure[SST, T], BaseSet[T]):
         """
         return self._transform(self._state.discard(*values))
 
-    def _replace(self, old_value, new_value):
-        # type: (SS, T, T) -> SS
-        """
-        Replace existing value with a new one.
-
-        :param old_value: Existing value.
-        :param new_value: New value.
-        :return: Transformed.
-        :raises KeyError: Value is not present.
-        """
-        relationship = type(self).relationship
-        if relationship is not None and relationship.will_process:
-            new_value = relationship.process(new_value)
-        return self._transform(self._state.replace(old_value, new_value))
-
     def _update(self, iterable):
         # type: (SS, Iterable[T]) -> SS
         """

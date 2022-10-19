@@ -64,7 +64,7 @@ class BaseMutableMeta(BaseMeta):
             dct["__hash__"] = None
         cls = super(BaseMutableMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
         if cls.__hash__ is not None and not is_abstract(cls.__hash__):
-            error = "{!r} in {!r} needs to be None".format(cls.__hash__, name)
+            error = "'__hash__' in {!r} needs to be None".format(name)
             raise TypeError(error)
         return cls
 
@@ -81,14 +81,39 @@ class BaseMutable(six.with_metaclass(BaseMutableMeta, Base)):
         raise TypeError(error)
 
 
+# noinspection PyAbstractClass
 class BaseCollection(Base, slotted.SlottedCollection[T_co]):
-    """Has protected transformation methods."""
+    """Base collection."""
+
+    __slots__ = ()
+
+
+# noinspection PyAbstractClass
+class BaseImmutableCollection(BaseCollection[T_co], BaseImmutable):
+    """Base immutable collection."""
+
+    __slots__ = ()
+
+
+# noinspection PyAbstractClass
+class BaseMutableCollection(BaseCollection[T_co], BaseMutable):
+    """Base mutable collection."""
+
+    __slots__ = ()
+
+    @set_to_none
+    def __hash__(self):
+        error = "{!r} object is not hashable".format(type(self).__name__)
+        raise TypeError(error)
+
+
+class BaseUniformCollection(BaseCollection[T_co]):
 
     __slots__ = ()
 
     @abstract
     def _clear(self):
-        # type: (BC) -> BC
+        # type: (BUC) -> BUC
         """
         Clear.
 
@@ -97,18 +122,18 @@ class BaseCollection(Base, slotted.SlottedCollection[T_co]):
         raise NotImplementedError()
 
 
-BC = TypeVar("BC", bound=BaseCollection)
+BUC = TypeVar("BUC", bound=BaseUniformCollection)
 
 
 # noinspection PyAbstractClass
-class BaseImmutableCollection(BaseCollection[T_co], BaseImmutable):
+class BaseImmutableUniformCollection(BaseUniformCollection[T_co], BaseImmutableCollection[T_co], BaseImmutable):
     """Has public immutable transformation methods that return a new version."""
 
     __slots__ = ()
 
     @final
     def clear(self):
-        # type: (BIC) -> BIC
+        # type: (BIUC) -> BIUC
         """
         Clear.
 
@@ -117,11 +142,11 @@ class BaseImmutableCollection(BaseCollection[T_co], BaseImmutable):
         return self._clear()
 
 
-BIC = TypeVar("BIC", bound=BaseImmutableCollection)
+BIUC = TypeVar("BIUC", bound=BaseImmutableUniformCollection)
 
 
 # noinspection PyAbstractClass
-class BaseMutableCollection(BaseCollection[T_co], BaseMutable):
+class BaseMutableUniformCollection(BaseUniformCollection[T_co], BaseMutableCollection[T_co], BaseMutable):
     """Has public mutable transformation methods."""
 
     __slots__ = ()

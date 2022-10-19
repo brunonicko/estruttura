@@ -1,10 +1,13 @@
 import weakref
 
+import six
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, Generic, TypeVar, Type, Iterator, Union, cast
 
-from ..base import Base, BaseCollection, BaseImmutable, BaseMutable, BaseImmutableCollection, BaseMutableCollection
+from ..base import (
+    BaseMeta, Base, BaseCollection, BaseImmutable, BaseMutable, BaseImmutableCollection, BaseMutableCollection
+)
 from ._relationship import Relationship
 
 
@@ -15,7 +18,11 @@ BST = TypeVar("BST", bound=Base)  # base state type
 ST = TypeVar("ST", bound=Union[BaseImmutable, BaseMutable])  # state type
 
 
-class Structure(Base, Generic[BST]):
+class StructureMeta(BaseMeta):
+    pass
+
+
+class Structure(six.with_metaclass(StructureMeta, Base, Generic[BST])):
     __slots__ = ("__proxy_refs",)
 
     def __register_proxy__(self, proxy):

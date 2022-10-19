@@ -3,13 +3,13 @@ from tippo import AbstractSet, Iterable, TypeVar
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
-from ._base import BaseCollection, BaseImmutableCollection, BaseMutableCollection
+from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
 
 
 T = TypeVar("T")
 
 
-class BaseSet(BaseCollection[T], slotted.SlottedSet[T]):
+class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
     __slots__ = ()
 
     @final
@@ -219,19 +219,6 @@ class BaseSet(BaseCollection[T], slotted.SlottedSet[T]):
         raise NotImplementedError()
 
     @abstract
-    def _replace(self, old_value, new_value):
-        # type: (BS, T, T) -> BS
-        """
-        Replace existing value with a new one.
-
-        :param old_value: Existing value.
-        :param new_value: New value.
-        :return: Transformed.
-        :raises KeyError: Value is not present.
-        """
-        raise NotImplementedError()
-
-    @abstract
     def _update(self, iterable):
         # type: (BS, Iterable[T]) -> BS
         """
@@ -335,7 +322,7 @@ BS = TypeVar("BS", bound=BaseSet)
 
 
 # noinspection PyAbstractClass
-class BaseImmutableSet(BaseSet[T], BaseImmutableCollection[T]):
+class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
     __slots__ = ()
 
     @final
@@ -375,19 +362,6 @@ class BaseImmutableSet(BaseSet[T], BaseImmutableCollection[T]):
         return self._remove(*values)
 
     @final
-    def replace(self, old_value, new_value):
-        # type: (BIS, T, T) -> BIS
-        """
-        Replace existing value with a new one.
-
-        :param old_value: Existing value.
-        :param new_value: New value.
-        :return: Transformed.
-        :raises KeyError: Old value is not present.
-        """
-        return self._replace(old_value, new_value)
-
-    @final
     def update(self, iterable):
         # type: (BIS, Iterable[T]) -> BIS
         """
@@ -403,7 +377,7 @@ BIS = TypeVar("BIS", bound=BaseImmutableSet)
 
 
 # noinspection PyAbstractClass
-class BaseMutableSet(BaseSet[T], BaseMutableCollection[T], slotted.SlottedMutableSet[T]):
+class BaseMutableSet(BaseSet[T], BaseMutableUniformCollection[T], slotted.SlottedMutableSet[T]):
     __slots__ = ()
 
     @final
@@ -537,17 +511,6 @@ class BaseMutableSet(BaseSet[T], BaseMutableCollection[T], slotted.SlottedMutabl
         :raises KeyError: Value is not present.
         """
         self.remove(*values)
-
-    @final
-    def replace(self, old_value, new_value):
-        # type: (T, T) -> None
-        """
-        Replace existing value with a new one.
-
-        :param old_value: Existing value.
-        :param new_value: New value.
-        """
-        self.replace(old_value, new_value)
 
     @final
     def update(self, iterable):

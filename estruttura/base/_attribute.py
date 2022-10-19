@@ -705,7 +705,11 @@ BA = TypeVar("BA", bound=BaseAttribute)  # base attribute self type
 AT_co = TypeVar("AT_co", bound=BaseAttribute, covariant=True)  # attribute type
 
 
-class BaseMutableAttribute(BaseAttribute[T]):
+class BaseMutableAttributeMeta(BaseAttributeMeta):
+    pass
+
+
+class BaseMutableAttribute(six.with_metaclass(BaseMutableAttributeMeta, BaseAttribute[T])):
     __slots__ = ()
 
     def __set__(self, instance, value):

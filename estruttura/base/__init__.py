@@ -12,6 +12,7 @@ from ._base import (
 from ._attribute import (
     BaseAttributeMeta,
     BaseAttribute,
+    BaseMutableAttributeMeta,
     BaseMutableAttribute,
     AttributeMap,
     StateReader,
@@ -50,6 +51,7 @@ __all__ = [
     "BaseMutableCollection",
     "BaseAttributeMeta",
     "BaseAttribute",
+    "BaseMutableAttributeMeta",
     "BaseMutableAttribute",
     "AttributeMap",
     "StateReader",

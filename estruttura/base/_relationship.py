@@ -1,7 +1,6 @@
-"""Relationships between structures and values."""
+"""Relationship between structures and values."""
 
-import six
-from basicco import BaseMeta, basic_data, fabricate_value, type_checking
+from basicco import basic_data, fabricate_value, type_checking
 from tippo import (
     Any,
     Callable,
@@ -14,20 +13,12 @@ from tippo import (
     overload,
 )
 
-from ..constants import MISSING, MissingType
-from ._serialization import Deserializer, Serializer
+from .constants import MISSING, MissingType
 
 T = TypeVar("T")
 
 
-class RelationshipMeta(BaseMeta):
-    """Metaclass for :class:`Relationship`."""
-
-    __default_serializer_type__ = Serializer  # type: Type[Serializer]
-    __default_deserializer_type__ = Deserializer  # type: Type[Deserializer]
-
-
-class Relationship(six.with_metaclass(RelationshipMeta, basic_data.ImmutableBasicData, Generic[T])):
+class Relationship(basic_data.ImmutableBasicData, Generic[T]):
     """Describes a relationship between a structure and its values."""
 
     __slots__ = (
@@ -69,23 +60,6 @@ class Relationship(six.with_metaclass(RelationshipMeta, basic_data.ImmutableBasi
         self._subtypes = bool(subtypes)
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
-
-        if serializer is MISSING:
-            serializer = type(self).__default_serializer_type__(
-                types=self.types,
-                subtypes=self.subtypes,
-                extra_paths=self.extra_paths,
-                builtin_paths=self.builtin_paths,
-            )
-
-        if deserializer is MISSING:
-            deserializer = type(self).__default_deserializer_type__(
-                types=self.types,
-                subtypes=self.subtypes,
-                extra_paths=self.extra_paths,
-                builtin_paths=self.builtin_paths,
-            )
-
         self._serializer = fabricate_value.format_factory(serializer)
         self._deserializer = fabricate_value.format_factory(deserializer)
 
@@ -131,7 +105,7 @@ class Relationship(six.with_metaclass(RelationshipMeta, basic_data.ImmutableBasi
         else:
             return value
 
-    def process(self, value):
+    def process_value(self, value):
         # type: (Any) -> T
         return self.validate(self.check_type(self.convert(value)))
 

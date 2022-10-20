@@ -15,15 +15,15 @@ from tippo import (
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
-from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
-from ..constants import DeletedType, DELETED, MISSING
+from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from .constants import DeletedType, DELETED, MISSING
 
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
 
 
-class BaseDict(BaseUniformCollection[KT], slotted.SlottedMapping[KT, VT]):
+class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
     __slots__ = ()
 
     @abstract
@@ -174,16 +174,16 @@ class BaseDict(BaseUniformCollection[KT], slotted.SlottedMapping[KT, VT]):
         return ValuesView(self)
 
 
-BD = TypeVar("BD", bound=BaseDict)
+BD = TypeVar("BD", bound=DictStructure)
 
 
 # noinspection PyAbstractClass
-class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
+class ImmutableDictStructure(DictStructure[KT, VT], ImmutableCollectionStructure[KT]):
     __slots__ = ()
 
     @final
     def discard(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDS, KT) -> IDS
         """
         Discard key if it exists.
 
@@ -194,7 +194,7 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
 
     @final
     def delete(self, key):
-        # type: (BID, KT) -> BID
+        # type: (IDS, KT) -> IDS
         """
         Delete existing key.
 
@@ -206,7 +206,7 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
 
     @final
     def set(self, key, value):
-        # type: (BID, KT, VT) -> BID
+        # type: (IDS, KT, VT) -> IDS
         """
         Set value for key.
 
@@ -218,17 +218,17 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, SupportsKeysAndGetItem[KT, VT], **VT) -> BID
+        # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (BID, Iterable[tuple[KT, VT]], **VT) -> BID
+        # type: (IDS, Iterable[tuple[KT, VT]], **VT) -> IDS
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (BID, **VT) -> BID
+        # type: (IDS, **VT) -> IDS
         pass
 
     @final
@@ -242,11 +242,15 @@ class BaseImmutableDict(BaseDict[KT, VT], BaseImmutableUniformCollection[KT]):
         return self._update(*args, **kwargs)
 
 
-BID = TypeVar("BID", bound=BaseImmutableDict)
+IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dict structure self type
 
 
 # noinspection PyAbstractClass
-class BaseMutableDict(BaseDict[KT, VT], BaseMutableUniformCollection[KT], slotted.SlottedMutableMapping[KT, VT]):
+class MutableDictStructure(
+    DictStructure[KT, VT],
+    MutableCollectionStructure[KT],
+    slotted.SlottedMutableMapping[KT, VT],
+):
     __slots__ = ()
 
     @final

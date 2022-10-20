@@ -5,7 +5,7 @@ import six
 from basicco import Base, import_path, type_checking
 from tippo import Any, Generic, Iterable, Type, TypeVar, cast
 
-from ..constants import BASIC_TYPES
+from .constants import BASIC_TYPES
 
 T = TypeVar("T")
 

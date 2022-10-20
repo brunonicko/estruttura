@@ -1,16 +1,18 @@
 import slotted
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, overload, MutableSequence, Iterable, TypeVar
+from tippo import Any, Callable, overload, MutableSequence, Iterable, TypeVar
 
-from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
-from ..utils import resolve_index, resolve_continuous_slice, pre_move
+from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._relationship import Relationship
+from .utils import resolve_index, resolve_continuous_slice, pre_move
 
 
 T = TypeVar("T")
+RT = TypeVar("RT", bound=Relationship)
 
 
-class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
+class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
     __slots__ = ()
 
     @overload
@@ -26,7 +28,7 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
     @abstract
     def __getitem__(self, index):
         """
-        Get value/values at index/from slice.
+        Get value/values at index/slice.
 
         :param index: Index/slice.
         :return: Value/values.
@@ -35,7 +37,7 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
 
     @final
     def _append(self, value):
-        # type: (BL, T) -> BL
+        # type: (LS, T) -> LS
         """
         Append value at the end.
 
@@ -46,7 +48,7 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
 
     @final
     def _extend(self, iterable):
-        # type: (BL, Iterable[T]) -> BL
+        # type: (LS, Iterable[T]) -> LS
         """
         Extend at the end with iterable.
 
@@ -57,7 +59,7 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
 
     @final
     def _remove(self, value):
-        # type: (BL, T) -> BL
+        # type: (LS, T) -> LS
         """
         Remove first occurrence of value.
 
@@ -69,7 +71,7 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
 
     @final
     def _reverse(self):
-        # type: (BL) -> BL
+        # type: (LS) -> LS
         """
         Reverse values.
 
@@ -77,22 +79,65 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
         """
         return self._update(slice(0, len(self)), reversed(self))
 
+    @final
+    def _sort(self, key=None):
+        # type: (LS, Callable[[T], Any] | None) -> LS
+        """
+        Sort values.
+
+        :param key: Sorting key function.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update(slice(0, len(self)), sorted(self, key=key))
+
     @abstract
-    def _insert(self, index, *values):
-        # type: (BL, int, T) -> BL
+    def _do_insert(self, index, values):
+        # type: (LS, int, tuple[T, ...]) -> LS
         """
         Insert value(s) at index.
 
         :param index: Index.
         :param values: Value(s).
         :return: Transformed (immutable) or self (mutable).
-        :raises ValueError: No values provided.
         """
         raise NotImplementedError()
 
+    @final
+    def _insert(self, index, *values):
+        # type: (LS, int, T) -> LS
+        """
+        Insert value(s) at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if not values:
+            return self
+        index = self.resolve_index(index, clamp=True)
+        if self.relationship is not None and self.relationship.will_process:
+            values = tuple(self.relationship.process_value(v) for v in values)
+        return self._do_insert(index, values)
+
     @abstract
+    def _do_move(self, target_index, index, stop, post_index, post_stop, values):
+        # type: (LS, int, int, int, int, int, tuple[T, ...]) -> LS
+        """
+        Move values internally.
+
+        :param target_index: Target index.
+        :param index: Index (pre-move).
+        :param index: Stop (pre-move).
+        :param post_index: Post index (post-move).
+        :param post_index: Post stop (post-move).
+        :param values: Values being moved.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
     def _move(self, item, target_index):
-        # type: (BL, slice | int, int) -> BL
+        # type: (LS, slice | int, int) -> LS
         """
         Move values internally.
 
@@ -100,22 +145,52 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
         :param target_index: Target index.
         :return: Transformed (immutable) or self (mutable).
         """
+        result = self.pre_move(item, target_index)
+        if result is None:
+            return self
+        target_index, index, stop, post_index, post_stop = result
+        values = tuple(self[index:stop])
+        return self._do_move(target_index, index, stop, post_index, post_stop, values)
+
+    @abstract
+    def _do_delete(self, index, stop, values):
+        # type: (LS, int, int, tuple[T, ...]) -> LS
+        """
+        Delete values at index/slice.
+
+        :param index: Index.
+        :param index: Stop.
+        :param values: Values being deleted.
+        :return: Transformed (immutable) or self (mutable).
+        """
         raise NotImplementedError()
 
     @abstract
     def _delete(self, item):
-        # type: (BL, slice | int) -> BL
+        # type: (LS, slice | int) -> LS
         """
         Delete values at index/slice.
 
         :param item: Index/slice.
         :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            if index == stop:
+                return self
+        else:
+            index = self.resolve_index(item)
+            stop = index + 1
+
+        values = tuple(self[index:stop])
+        if not values:
+            return self
+
+        return self._do_delete(index, stop, values)
 
     @final
     def _set(self, index, value):
-        # type: (BL, int, T) -> BL
+        # type: (LS, int, T) -> LS
         """
         Set value at index.
 
@@ -127,17 +202,31 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
         index = self.resolve_index(index)
         return self._update(index, value)
 
-    @overload
-    def _update(self, item, value):
-        # type: (BL, int, T) -> BL
-        pass
-
-    @overload
-    def _update(self, item, value):
-        # type: (BL, slice, Iterable[T]) -> BL
-        pass
-
     @abstract
+    def _do_update(self, index, stop, old_values, new_values):
+        # type: (LS, int, int, tuple[T, ...], tuple[T, ...]) -> LS
+        """
+        Update value(s).
+
+        :param index: Index.
+        :param stop: Stop.
+        :param old_values: Old values.
+        :param new_values: New values.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @overload
+    def _update(self, item, value):
+        # type: (LS, int, T) -> LS
+        pass
+
+    @overload
+    def _update(self, item, value):
+        # type: (LS, slice, Iterable[T]) -> LS
+        pass
+
+    @final
     def _update(self, item, value):
         """
         Update value(s).
@@ -146,7 +235,24 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
         :param value: Value(s).
         :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            if index == stop:
+                return self._insert(index, *value)
+            new_values = tuple(value)
+        else:
+            index = self.resolve_index(item)
+            stop = index + 1
+            new_values = (value,)
+
+        if not new_values:
+            return self
+        old_values = tuple(self[index:stop])
+
+        if self.relationship is not None and self.relationship.will_process:
+            new_values = tuple(self.relationship.process_value(v) for v in new_values)
+
+        return self._do_update(index, stop, old_values, new_values)
 
     @abstract
     def count(self, value):
@@ -200,27 +306,27 @@ class BaseList(BaseUniformCollection[T], slotted.SlottedSequence[T]):
 
     @final
     def pre_move(self, item, target_index):
-        # type: (slice | int, int) -> tuple[int, int, int, int] | None
+        # type: (slice | int, int) -> tuple[int, int, int, int, int] | None
         """
         Perform checks before moving values internally.
 
         :param item: Index/slice.
         :param target_index: Target index.
-        :return: None or (index, stop, target index, post index).
+        :return: None or (target index, index, stop, post index, post_stop).
         """
         return pre_move(len(self), item, target_index)
 
 
-BL = TypeVar("BL", bound=BaseList)
+LS = TypeVar("LS", bound=ListStructure)  # list structure self type
 
 
 # noinspection PyAbstractClass
-class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
+class ImmutableListStructure(ListStructure[RT, T], ImmutableCollectionStructure[RT, T]):
     __slots__ = ()
 
     @final
     def append(self, value):
-        # type: (BIL, T) -> BIL
+        # type: (ILS, T) -> ILS
         """
         Append value at the end.
 
@@ -231,7 +337,7 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @final
     def extend(self, iterable):
-        # type: (BIL, Iterable[T]) -> BIL
+        # type: (ILS, Iterable[T]) -> ILS
         """
         Extend at the end with iterable.
 
@@ -242,7 +348,7 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @final
     def remove(self, value):
-        # type: (BIL, T) -> BIL
+        # type: (ILS, T) -> ILS
         """
         Remove first occurrence of value.
 
@@ -254,7 +360,7 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @final
     def reverse(self):
-        # type: (BIL) -> BIL
+        # type: (ILS) -> ILS
         """
         Reverse values.
 
@@ -263,21 +369,31 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
         return self._reverse()
 
     @final
+    def sort(self, key=None):
+        # type: (LS, Callable[[T], Any] | None) -> LS
+        """
+        Sort values.
+
+        :param key: Sorting key function.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._sort(key=key)  # noqa
+
+    @final
     def insert(self, index, *values):
-        # type: (BIL, int, T) -> BIL
+        # type: (ILS, int, T) -> ILS
         """
         Insert value(s) at index.
 
         :param index: Index.
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
         """
         return self._insert(index, *values)
 
     @final
     def move(self, item, target_index):
-        # type: (BIL, slice | int, int) -> BIL
+        # type: (ILS, slice | int, int) -> ILS
         """
         Move values internally.
 
@@ -289,7 +405,7 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @final
     def delete(self, item):
-        # type: (BIL, slice | int) -> BIL
+        # type: (ILS, slice | int) -> ILS
         """
         Delete values at index/slice.
 
@@ -300,7 +416,7 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @final
     def set(self, index, value):
-        # type: (BIL, int, T) -> BIL
+        # type: (ILS, int, T) -> ILS
         """
         Set value at index.
 
@@ -313,12 +429,12 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
 
     @overload
     def update(self, item, value):
-        # type: (BIL, int, T) -> BIL
+        # type: (ILS, int, T) -> ILS
         pass
 
     @overload
     def update(self, item, value):
-        # type: (BIL, slice, Iterable[T]) -> BIL
+        # type: (ILS, slice, Iterable[T]) -> ILS
         pass
 
     @final
@@ -333,11 +449,11 @@ class BaseImmutableList(BaseList[T], BaseImmutableUniformCollection[T]):
         return self._update(item, value)
 
 
-BIL = TypeVar("BIL", bound=BaseImmutableList)
+ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure self type
 
 
 # noinspection PyAbstractClass
-class BaseMutableList(BaseList[T], BaseMutableUniformCollection[T], slotted.SlottedMutableSequence[T]):
+class MutableListStructure(ListStructure[RT, T], MutableCollectionStructure[RT, T], slotted.SlottedMutableSequence[T]):
     __slots__ = ()
 
     @final
@@ -415,7 +531,6 @@ class BaseMutableList(BaseList[T], BaseMutableUniformCollection[T], slotted.Slot
 
         :param index: Index.
         :param values: Value(s).
-        :raises ValueError: No values provided.
         """
         self._insert(index, *values)
 
@@ -455,6 +570,16 @@ class BaseMutableList(BaseList[T], BaseMutableUniformCollection[T], slotted.Slot
         # type: () -> None
         """Reverse values."""
         self._reverse()
+
+    @final
+    def sort(self, key=None):
+        # type: (LS, Callable[[T], Any] | None) -> None
+        """
+        Sort values.
+
+        :param key: Sorting key function.
+        """
+        self._sort(key=key)
 
     @final
     def move(self, item, target_index):

@@ -3,13 +3,13 @@ from tippo import AbstractSet, Iterable, TypeVar
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
-from ._base import BaseUniformCollection, BaseImmutableUniformCollection, BaseMutableUniformCollection
+from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 
 
 T = TypeVar("T")
 
 
-class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
+class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
     __slots__ = ()
 
     @final
@@ -172,7 +172,7 @@ class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
 
     @final
     def _add(self, value):
-        # type: (BS, T) -> BS
+        # type: (SS, T) -> SS
         """
         Add value.
 
@@ -183,7 +183,7 @@ class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
 
     @final
     def _remove(self, *values):
-        # type: (BS, T) -> BS
+        # type: (SS, T) -> SS
         """
         Remove existing value(s).
 
@@ -208,7 +208,7 @@ class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
 
     @abstract
     def _discard(self, *values):
-        # type: (BS, T) -> BS
+        # type: (SS, T) -> SS
         """
         Discard value(s).
 
@@ -220,7 +220,7 @@ class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
 
     @abstract
     def _update(self, iterable):
-        # type: (BS, Iterable[T]) -> BS
+        # type: (SS, Iterable[T]) -> SS
         """
         Update with iterable.
 
@@ -318,16 +318,16 @@ class BaseSet(BaseUniformCollection[T], slotted.SlottedSet[T]):
         raise NotImplementedError()
 
 
-BS = TypeVar("BS", bound=BaseSet)
+SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
-class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
+class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
     __slots__ = ()
 
     @final
     def add(self, value):
-        # type: (BIS, T) -> BIS
+        # type: (ISS, T) -> ISS
         """
         Add value.
 
@@ -338,7 +338,7 @@ class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
 
     @final
     def discard(self, *values):
-        # type: (BIS, T) -> BIS
+        # type: (ISS, T) -> ISS
         """
         Discard value(s).
 
@@ -350,7 +350,7 @@ class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
 
     @final
     def remove(self, *values):
-        # type: (BIS, T) -> BIS
+        # type: (ISS, T) -> ISS
         """
         Remove existing value(s).
 
@@ -363,7 +363,7 @@ class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
 
     @final
     def update(self, iterable):
-        # type: (BIS, Iterable[T]) -> BIS
+        # type: (ISS, Iterable[T]) -> ISS
         """
         Update with iterable.
 
@@ -373,11 +373,11 @@ class BaseImmutableSet(BaseSet[T], BaseImmutableUniformCollection[T]):
         return self._update(iterable)
 
 
-BIS = TypeVar("BIS", bound=BaseImmutableSet)
+ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
 
 
 # noinspection PyAbstractClass
-class BaseMutableSet(BaseSet[T], BaseMutableUniformCollection[T], slotted.SlottedMutableSet[T]):
+class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
     __slots__ = ()
 
     @final

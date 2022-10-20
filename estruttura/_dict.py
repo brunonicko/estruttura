@@ -10,21 +10,50 @@ from tippo import (
     SupportsKeysAndGetItem,
     Iterable,
     MutableMapping,
+    Generic,
     overload,
 )
+from basicco.mapping_proxy import MappingProxyType
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
+from basicco.custom_repr import mapping_repr
+from basicco.safe_repr import safe_repr
+from basicco.recursive_repr import recursive_repr
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._relationship import Relationship
 from .constants import DeletedType, DELETED, MISSING
 
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
+RT = TypeVar("RT", bound=Relationship)
 
 
-class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
+class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT], Generic[RT, KT, VT]):
     __slots__ = ()
+
+    @overload
+    def __init__(self, __m, **kwargs):
+        # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> None
+        pass
+
+    @overload
+    def __init__(self, __m, **kwargs):
+        # type: (Iterable[tuple[KT, VT]], **VT) -> None
+        pass
+
+    @overload
+    def __init__(self, **kwargs):
+        # type: (**VT) -> None
+        pass
+
+    @final
+    def __init__(self, *args, **kwargs):
+        initial_values = dict(*args, **kwargs)
+        if self.relationship is not None and self.relationship.will_process:
+            initial_values = dict((k, self.relationship.process_value(v)) for k, v in six.iteritems(initial_values))
+        self._do_init(MappingProxyType(initial_values))
 
     @abstract
     def __getitem__(self, key):
@@ -38,68 +67,143 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
         """
         raise NotImplementedError()
 
+    @safe_repr
+    @recursive_repr
+    def __repr__(self):
+        # type: () -> str
+        """
+        Get representation.
+        :return: Representation.
+        """
+        return mapping_repr(
+            self,
+            prefix="{}({{".format(type(self).__qualname__),
+            suffix="})",
+        )
+
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (MappingProxyType[KT, VT]) -> None
+        """
+        Initialize keys and values.
+
+        :param initial_values: New keys and values.
+        """
+        raise NotImplementedError()
+
     @final
     def _discard(self, key):
-        # type: (BD, KT) -> BD
+        # type: (DS, KT) -> DS
         """
         Discard key if it exists.
 
         :param key: Key.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         """
-        try:
-            return self._delete(key)
-        except KeyError:
+        if key in self:
+            return self._update({key: DELETED})
+        else:
             return self
 
     @final
     def _delete(self, key):
-        # type: (BD, KT) -> BD
+        # type: (DS, KT) -> DS
         """
         Delete existing key.
 
         :param key: Key.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         :raises KeyError: Key is not present.
         """
         return self._update({key: DELETED})
 
     @final
     def _set(self, key, value):
-        # type: (BD, KT, VT) -> BD
+        # type: (DS, KT, VT) -> DS
         """
         Set value for key.
 
         :param key: Key.
         :param value: Value.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         """
         return self._update({key: value})
 
+    @abstract
+    def _do_update(
+        self,  # type: DS
+        inserts,  # type: MappingProxyType[KT, VT]
+        deletes,  # type: MappingProxyType[KT, VT]
+        updates_old,  # type: MappingProxyType[KT, VT]
+        updates_new,  # type: MappingProxyType[KT, VT]
+        updates_and_inserts,  # type: MappingProxyType[KT, VT]
+    ):
+        # type: (...) -> DS
+        """
+        Update keys and values.
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BD, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> BD
+        # type: (DS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> DS
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (BD, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> BD
+        # type: (DS, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> DS
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (BD, **VT | DeletedType) -> BD
+        # type: (DS, **VT | DeletedType) -> DS
         pass
 
-    @abstract
+    @final
     def _update(self, *args, **kwargs):
         """
         Update keys and values.
 
         Same parameters as :meth:`dict.update`.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        changes = dict(*args, **kwargs)
+        inserts = {}
+        deletes = {}
+        updates_old = {}
+        updates_new = {}
+        updates_combined = {}
+        for key, value in six.iteritems(changes):
+            if value is DELETED:
+                if key not in self:
+                    raise KeyError(key)
+                deletes[key] = self[key]
+                continue
+
+            if self.relationship is not None and self.relationship.will_process:
+                value = self.relationship.process_value(value)
+
+            updates_combined[key] = value
+            if key in self:
+                updates_old[key] = self[key]
+                updates_new[key] = value
+            else:
+                inserts[key] = value
+
+        return self._do_update(
+            MappingProxyType(inserts),
+            MappingProxyType(deletes),
+            MappingProxyType(updates_old),
+            MappingProxyType(updates_new),
+            MappingProxyType(updates_combined),
+        )
 
     @abstract
     def get(self, key, fallback=None):
@@ -113,7 +217,7 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
         """
         raise NotImplementedError()
 
-    @abstract
+    @final
     def iteritems(self):
         # type: () -> Iterator[tuple[KT, VT]]
         """
@@ -121,9 +225,10 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
 
         :return: Items iterator.
         """
-        raise NotImplementedError()
+        for key in self:
+            yield key, self[key]
 
-    @abstract
+    @final
     def iterkeys(self):
         # type: () -> Iterator[KT]
         """
@@ -131,9 +236,10 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
 
         :return: Keys iterator.
         """
-        raise NotImplementedError()
+        for key in self:
+            yield key
 
-    @abstract
+    @final
     def itervalues(self):
         # type: () -> Iterator[VT]
         """
@@ -141,7 +247,8 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
 
         :return: Values iterator.
         """
-        raise NotImplementedError()
+        for key in self:
+            yield self[key]
 
     @final
     def items(self):
@@ -174,11 +281,11 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
         return ValuesView(self)
 
 
-BD = TypeVar("BD", bound=DictStructure)
+DS = TypeVar("DS", bound=DictStructure)
 
 
 # noinspection PyAbstractClass
-class ImmutableDictStructure(DictStructure[KT, VT], ImmutableCollectionStructure[KT]):
+class ImmutableDictStructure(DictStructure[RT, KT, VT], ImmutableCollectionStructure[RT, KT]):
     __slots__ = ()
 
     @final
@@ -247,8 +354,8 @@ IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dict structure s
 
 # noinspection PyAbstractClass
 class MutableDictStructure(
-    DictStructure[KT, VT],
-    MutableCollectionStructure[KT],
+    DictStructure[RT, KT, VT],
+    MutableCollectionStructure[RT, KT],
     slotted.SlottedMutableMapping[KT, VT],
 ):
     __slots__ = ()

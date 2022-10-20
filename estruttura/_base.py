@@ -109,7 +109,7 @@ class CollectionStructure(Structure[RT], slotted.SlottedCollection[T_co], Generi
 
         :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        return self._do_clear()
 
 
 BC = TypeVar("BC", bound=CollectionStructure)

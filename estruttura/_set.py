@@ -4,13 +4,23 @@ from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._relationship import Relationship
 
 
 T = TypeVar("T")
+RT = TypeVar("RT", bound=Relationship)
 
 
-class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
+class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
     __slots__ = ()
+
+    @final
+    def __init__(self, initial=()):  # noqa
+        # type: (Iterable[T]) -> None
+        initial_values = frozenset(initial)
+        if self.relationship is not None and self.relationship.will_process:
+            initial_values = frozenset(self.relationship.process_value(v) for v in initial_values)
+        self._do_init(initial_values)
 
     @final
     def __le__(self, other):
@@ -170,6 +180,16 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
         """
         return self.__xor__(other)
 
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (frozenset[T]) -> None
+        """
+        Initialize values.
+
+        :param initial_values: New values.
+        """
+        raise NotImplementedError()
+
     @final
     def _add(self, value):
         # type: (SS, T) -> SS
@@ -181,6 +201,17 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
         """
         return self._update((value,))
 
+    @abstract
+    def _do_remove(self, old_values):
+        # type: (SS, frozenset[T]) -> SS
+        """
+        Remove values.
+
+        :param old_values: Old values.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
     @final
     def _remove(self, *values):
         # type: (SS, T) -> SS
@@ -189,24 +220,21 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
 
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
         :raises KeyError: Value is not present.
         """
-        if not values:
-            error = "no values provided"
-            raise ValueError(error)
+        old_values = frozenset(values)
+        if not old_values:
+            return self
 
-        missing = set(values).difference(self.intersection(values))
+        missing = old_values.difference(old_values.intersection(self))
         if len(missing) == 1:
-            error = "value {!r} is not in the set".format(next(iter(missing)))
-            raise KeyError(error)
+            raise KeyError(next(iter(missing)))
         elif missing:
-            error = "values {} are not in the set".format(", ".join(repr(v) for v in missing))
-            raise KeyError(error)
+            raise KeyError(tuple(missing))
 
-        return self._discard(*values)
+        return self._do_remove(old_values)
 
-    @abstract
+    @final
     def _discard(self, *values):
         # type: (SS, T) -> SS
         """
@@ -214,11 +242,28 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
 
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
+        """
+        if not values:
+            return self
+
+        old_values = frozenset(values).intersection(self)
+        if not old_values:
+            return self
+
+        return self._do_remove(old_values)
+
+    @abstract
+    def _do_update(self, new_values):
+        # type: (SS, frozenset[T]) -> SS
+        """
+        Add values.
+
+        :param new_values: New values.
+        :return: Transformed.
         """
         raise NotImplementedError()
 
-    @abstract
+    @final
     def _update(self, iterable):
         # type: (SS, Iterable[T]) -> SS
         """
@@ -227,7 +272,16 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
         :param iterable: Iterable.
         :return: Transformed.
         """
-        raise NotImplementedError()
+        if self.relationship is not None and self.relationship.will_process:
+            new_values = frozenset(self.relationship.process_value(v) for v in iterable)
+        else:
+            new_values = frozenset(iterable)
+
+        new_values = frozenset(self.difference(new_values))
+        if not new_values:
+            return self
+
+        return self._do_update(new_values)
 
     @abstract
     def isdisjoint(self, iterable):
@@ -322,7 +376,7 @@ SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
+class ImmutableSetStructure(SetStructure[RT, T], ImmutableCollectionStructure[RT, T]):
     __slots__ = ()
 
     @final
@@ -344,7 +398,6 @@ class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
 
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
         """
         return self._discard(*values)
 
@@ -356,7 +409,6 @@ class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
 
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
         :raises KeyError: Value is not present.
         """
         return self._remove(*values)
@@ -377,7 +429,7 @@ ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure sel
 
 
 # noinspection PyAbstractClass
-class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+class MutableSetStructure(SetStructure[RT, T], MutableCollectionStructure[RT, T], slotted.SlottedMutableSet[T]):
     __slots__ = ()
 
     @final
@@ -496,7 +548,6 @@ class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotte
         Discard value(s).
 
         :param values: Value(s).
-        :raises ValueError: No values provided.
         """
         self.discard(*values)
 
@@ -507,7 +558,6 @@ class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotte
         Remove existing value(s).
 
         :param values: Value(s).
-        :raises ValueError: No values provided.
         :raises KeyError: Value is not present.
         """
         self.remove(*values)

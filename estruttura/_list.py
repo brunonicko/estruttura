@@ -1,7 +1,7 @@
 import slotted
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Callable, overload, MutableSequence, Iterable, TypeVar
+from tippo import Any, Callable, overload, MutableSequence, Iterable, Generic, TypeVar
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
@@ -14,6 +14,15 @@ RT = TypeVar("RT", bound=Relationship)
 
 class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
     __slots__ = ()
+
+    @final
+    def __init__(self, initial=()):  # noqa
+        # type: (Iterable[T]) -> None
+        if self.relationship is not None and self.relationship.will_process:
+            initial_values = tuple(self.relationship.process_value(v) for v in initial)
+        else:
+            initial_values = tuple(initial)
+        self._do_init(initial_values)
 
     @overload
     def __getitem__(self, index):
@@ -32,6 +41,16 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
 
         :param index: Index/slice.
         :return: Value/values.
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (tuple[T, ...]) -> None
+        """
+        Initialize values.
+
+        :param initial_values: New values.
         """
         raise NotImplementedError()
 
@@ -91,13 +110,13 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
         return self._update(slice(0, len(self)), sorted(self, key=key))
 
     @abstract
-    def _do_insert(self, index, values):
+    def _do_insert(self, index, new_values):
         # type: (LS, int, tuple[T, ...]) -> LS
         """
         Insert value(s) at index.
 
         :param index: Index.
-        :param values: Value(s).
+        :param new_values: New values.
         :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
@@ -153,14 +172,14 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
         return self._do_move(target_index, index, stop, post_index, post_stop, values)
 
     @abstract
-    def _do_delete(self, index, stop, values):
+    def _do_delete(self, index, stop, old_values):
         # type: (LS, int, int, tuple[T, ...]) -> LS
         """
         Delete values at index/slice.
 
         :param index: Index.
         :param index: Stop.
-        :param values: Values being deleted.
+        :param old_values: Values being deleted.
         :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()

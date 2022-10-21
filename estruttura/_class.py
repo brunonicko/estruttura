@@ -384,16 +384,6 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
             six.raise_from(exc, None)
             raise exc
 
-    @abstract
-    def _do_init(self, initial_values):
-        # type: (MappingProxyType[str, Any]) -> None
-        """
-        Initialize attribute values.
-
-        :param initial_values: Initial values.
-        """
-        raise NotImplementedError()
-
     def __order__(self, other, func):
         # type: (object, Callable[[Any, Any], bool]) -> bool
 
@@ -519,6 +509,16 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
             parts.append("<{}={!r}>".format(name, value))
 
         return "{}({})".format(cls.__qualname__, ", ".join(parts))
+
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (MappingProxyType[str, Any]) -> None
+        """
+        Initialize attribute values.
+
+        :param initial_values: Initial values.
+        """
+        raise NotImplementedError()
 
     @final
     def _discard(self, name):

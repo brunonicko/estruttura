@@ -31,15 +31,15 @@ class DataClassMeta(ImmutableClassStructureMeta):
 class DataClass(six.with_metaclass(DataClassMeta, ImmutableClassStructure)):
     __slots__ = ()
 
-    def _do_init(self, initial_values):
-        for name, value in six.iteritems(initial_values):
-            object.__setattr__(self, name, value)
-
     def __getitem__(self, name):
         return getattr(self, name)
 
     def __contains__(self, name):
         return hasattr(self, name)
+
+    def _do_init(self, initial_values):
+        for name, value in six.iteritems(initial_values):
+            object.__setattr__(self, name, value)
 
     def _do_update(
         self,

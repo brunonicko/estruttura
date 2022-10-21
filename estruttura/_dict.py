@@ -94,7 +94,7 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
         """
         Initialize keys and values.
 
-        :param initial_values: New keys and values.
+        :param initial_values: Initial values.
         """
         raise NotImplementedError()
 
@@ -186,7 +186,7 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
         deletes = {}
         updates_old = {}
         updates_new = {}
-        updates_combined = {}
+        updates_and_inserts = {}
         for key, value in six.iteritems(changes):
             if value is DELETED:
                 if key not in self:
@@ -202,7 +202,7 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
                     six.raise_from(exc, None)
                     raise exc
 
-            updates_combined[key] = value
+            updates_and_inserts[key] = value
             if key in self:
                 updates_old[key] = self[key]
                 updates_new[key] = value
@@ -214,7 +214,7 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
             MappingProxyType(deletes),
             MappingProxyType(updates_old),
             MappingProxyType(updates_new),
-            MappingProxyType(updates_combined),
+            MappingProxyType(updates_and_inserts),
         )
 
     @abstract

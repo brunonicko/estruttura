@@ -9,6 +9,7 @@ from basicco import SlottedBase
 from basicco.get_mro import preview_mro
 from basicco.safe_repr import safe_repr
 from basicco.recursive_repr import recursive_repr
+from basicco.mapping_proxy import MappingProxyType
 from basicco.custom_repr import iterable_repr
 from basicco.explicit_hash import set_to_none
 from basicco.abstract_class import abstract
@@ -16,6 +17,7 @@ from basicco.runtime_final import final
 from tippo import Any, Callable, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Mapping, Type, Generic, overload
 
 from .constants import DELETED, DEFAULT, MISSING
+from .exceptions import ProcessingError
 from ._attribute import StructureAttribute, MutableStructureAttribute
 from ._relationship import Relationship
 from ._bases import (
@@ -367,10 +369,30 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
     def __init__(self, *args, **kwargs):
         cls = type(self)
         if cls.__kw_only__ and args:
-            error = "{}.__init__ accepts keyword arguments only".format(cls.__qualname__)
+            error = "'{}.__init__' accepts keyword arguments only".format(cls.__qualname__)
             raise TypeError(error)
-        values = cls.__attributes__.get_initial_values(args, kwargs, init_property="init", init_method="__init__")
-        self.__init_state__(values)
+        try:
+            initial_values = cls.__attributes__.get_initial_values(
+                args,
+                kwargs,
+                init_property="init",
+                init_method="__init__",
+            )
+            self._do_init(MappingProxyType(initial_values))
+        except (ProcessingError, TypeError, ValueError) as e:
+            exc = type(e)(e)
+            six.raise_from(exc, None)
+            raise exc
+
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (MappingProxyType[str, Any]) -> None
+        """
+        Initialize attribute values.
+
+        :param initial_values: Initial values.
+        """
+        raise NotImplementedError()
 
     def __order__(self, other, func):
         # type: (object, Callable[[Any, Any], bool]) -> bool
@@ -390,6 +412,11 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
         order_values = tuple(self[n] for n in attributes if n in self)
         other_order_values = tuple(other[n] for n in attributes if n in other)
         return func(order_values, other_order_values)
+
+    @abstract
+    def __hash__(self):
+        # type: () -> int
+        raise NotImplementedError()
 
     def __eq__(self, other):
         # type: (object) -> bool
@@ -451,7 +478,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
         """
         raise NotImplementedError()
 
-    @abstract
+    @final
     def __iter__(self):
         # type: () -> Iterator[tuple[str, Any]]
         """
@@ -459,7 +486,9 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
 
         :return: Attribute item iterator.
         """
-        raise NotImplementedError()
+        for name in type(self).__attributes__:
+            if name in self:
+                yield name, self[name]
 
     @safe_repr
     @recursive_repr
@@ -491,30 +520,33 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
 
         return "{}({})".format(cls.__qualname__, ", ".join(parts))
 
-    @abstract
+    @final
     def _discard(self, name):
         # type: (CS, str) -> CS
         """
         Discard attribute value if it's set.
 
         :param name: Attribute name.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        if name in self:
+            return self._update({name: DELETED})
+        else:
+            return self
 
-    @abstract
+    @final
     def _delete(self, name):
         # type: (CS, str) -> CS
         """
         Delete existing attribute value.
 
         :param name: Attribute name.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         :raises KeyError: Key is not present.
         """
-        raise NotImplementedError()
+        return self._update({name: DELETED})
 
-    @abstract
+    @final
     def _set(self, name, value):
         # type: (CS, str, Any) -> CS
         """
@@ -522,7 +554,29 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
 
         :param name: Attribute name.
         :param value: Value.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update({name: value})
+
+    @abstract
+    def _do_update(
+        self,  # type: CS
+        inserts,  # type: MappingProxyType[str, Any]
+        deletes,  # type: MappingProxyType[str, Any]
+        updates_old,  # type: MappingProxyType[str, Any]
+        updates_new,  # type: MappingProxyType[str, Any]
+        updates_and_inserts,  # type: MappingProxyType[str, Any]
+    ):
+        # type: (...) -> CS
+        """
+        Update attribute values.
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -541,15 +595,45 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
         # type: (CS, **Any) -> CS
         pass
 
-    @abstract
+    @final
     def _update(self, *args, **kwargs):
         """
         Update attribute values.
 
         Same parameters as :meth:`dict.update`.
-        :return: Transformed.
+        :return: Transformed (immutable) or self (mutable).
         """
-        raise NotImplementedError()
+        try:
+            new_values, old_values = type(self).__attributes__.get_update_values(dict(*args, **kwargs), self)
+        except (ProcessingError, TypeError, ValueError) as e:
+            exc = type(e)(e)
+            six.raise_from(exc, None)
+            raise exc
+
+        # Compile inserts, deletes, updates.
+        inserts = {}
+        deletes = {}
+        updates_old = {}
+        updates_new = {}
+        updates_and_inserts = {}
+        for name, value in six.iteritems(new_values):
+            if name in old_values:
+                updates_new[name] = value
+                updates_old[name] = old_values[name]
+            else:
+                inserts[name] = value
+            updates_and_inserts[name] = value
+        for name, value in six.iteritems(old_values):
+            if name not in new_values:
+                deletes[name] = value
+
+        return self._do_update(
+            MappingProxyType(inserts),
+            MappingProxyType(deletes),
+            MappingProxyType(updates_old),
+            MappingProxyType(updates_new),
+            MappingProxyType(updates_and_inserts),
+        )
 
 
 CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
@@ -564,6 +648,22 @@ class ImmutableClassStructure(
     six.with_metaclass(ImmutableClassStructureMeta, ClassStructure[RT, SAT], ImmutableStructure[RT])
 ):
     __slots__ = ()
+
+    def __hash__(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
+        cls = type(self)
+
+        # Get hashable attributes.
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.hash]
+
+        # Hash out a tuple containing the class + names and values.
+        hash_values = (type(self),) + tuple((n, self[n]) for n in attributes if n in self)
+        return hash(hash_values)
 
     @final
     def discard(self, name):
@@ -830,7 +930,7 @@ class _DelegateSelfInternals(SlottedBase):
     __slots__ = (
         "__iobj_ref",
         "__attribute_map",
-        "__cls",
+        "__structure",
         "__dependencies",
         "__in_getter",
         "__new_values",
@@ -897,7 +997,12 @@ class _DelegateSelfInternals(SlottedBase):
             if attribute.delegated:
                 with self.__getter_context(attribute):
                     value = attribute.fget(self.iobj)
-                value = attribute.process_value(value)
+                try:
+                    value = attribute.process_value(value)
+                except (ProcessingError, TypeError, ValueError) as e:
+                    exc = type(e)("{!r} attribute; {}".format(name, e))
+                    six.raise_from(exc, None)
+                    raise exc
                 self.__set_new_value(name, value)
                 return value
             else:
@@ -943,7 +1048,12 @@ class _DelegateSelfInternals(SlottedBase):
                 raise AttributeError(error)
 
         if process:
-            value = attribute.process_value(value)
+            try:
+                value = attribute.process_value(value)
+            except (ProcessingError, TypeError, ValueError) as e:
+                exc = type(e)("{!r} attribute; {}".format(name, e))
+                six.raise_from(exc, None)
+                raise exc
         if attribute.delegated:
             attribute.fset(self.iobj, value)
         else:

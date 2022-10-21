@@ -22,6 +22,7 @@ from basicco.recursive_repr import recursive_repr
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
+from .exceptions import ProcessingError
 from .constants import DeletedType, DELETED, MISSING
 
 
@@ -52,7 +53,14 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
     def __init__(self, *args, **kwargs):
         initial_values = dict(*args, **kwargs)
         if self.relationship is not None and self.relationship.will_process:
-            initial_values = dict((k, self.relationship.process_value(v)) for k, v in six.iteritems(initial_values))
+            try:
+                initial_values = dict(
+                    (k, self.relationship.process_value(v, k)) for k, v in six.iteritems(initial_values)
+                )
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
         self._do_init(MappingProxyType(initial_values))
 
     @abstract
@@ -188,7 +196,12 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
                 continue
 
             if self.relationship is not None and self.relationship.will_process:
-                value = self.relationship.process_value(value)
+                try:
+                    value = self.relationship.process_value(value, key)
+                except ProcessingError as e:
+                    exc = type(e)(e)
+                    six.raise_from(exc, None)
+                    raise exc
 
             updates_combined[key] = value
             if key in self:

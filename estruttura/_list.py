@@ -1,10 +1,12 @@
+import six
 import slotted
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Callable, overload, MutableSequence, Iterable, Generic, TypeVar
+from tippo import Any, Callable, overload, MutableSequence, Iterable, TypeVar
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
+from .exceptions import ProcessingError
 from .utils import resolve_index, resolve_continuous_slice, pre_move
 
 
@@ -19,7 +21,12 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
     def __init__(self, initial=()):  # noqa
         # type: (Iterable[T]) -> None
         if self.relationship is not None and self.relationship.will_process:
-            initial_values = tuple(self.relationship.process_value(v) for v in initial)
+            try:
+                initial_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(initial))
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
         else:
             initial_values = tuple(initial)
         self._do_init(initial_values)
@@ -135,7 +142,12 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
             return self
         index = self.resolve_index(index, clamp=True)
         if self.relationship is not None and self.relationship.will_process:
-            values = tuple(self.relationship.process_value(v) for v in values)
+            try:
+                values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(values))
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
         return self._do_insert(index, values)
 
     @abstract
@@ -269,7 +281,15 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
         old_values = tuple(self[index:stop])
 
         if self.relationship is not None and self.relationship.will_process:
-            new_values = tuple(self.relationship.process_value(v) for v in new_values)
+            try:
+                if isinstance(item, slice):
+                    new_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(new_values))
+                else:
+                    new_values = tuple(self.relationship.process_value(v) for v in new_values)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
 
         return self._do_update(index, stop, old_values, new_values)
 

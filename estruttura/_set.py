@@ -1,3 +1,4 @@
+import six
 import slotted
 from tippo import AbstractSet, Iterable, TypeVar
 from basicco.runtime_final import final
@@ -5,6 +6,7 @@ from basicco.abstract_class import abstract
 
 from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
+from .exceptions import ProcessingError
 
 
 T = TypeVar("T")
@@ -19,7 +21,12 @@ class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
         # type: (Iterable[T]) -> None
         initial_values = frozenset(initial)
         if self.relationship is not None and self.relationship.will_process:
-            initial_values = frozenset(self.relationship.process_value(v) for v in initial_values)
+            try:
+                initial_values = frozenset(self.relationship.process_value(v) for v in initial_values)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
         self._do_init(initial_values)
 
     @final
@@ -273,7 +280,12 @@ class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
         :return: Transformed.
         """
         if self.relationship is not None and self.relationship.will_process:
-            new_values = frozenset(self.relationship.process_value(v) for v in iterable)
+            try:
+                new_values = frozenset(self.relationship.process_value(v) for v in iterable)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
         else:
             new_values = frozenset(iterable)
 

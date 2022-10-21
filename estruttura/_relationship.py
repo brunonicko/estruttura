@@ -1,5 +1,5 @@
 """Relationship between structures and values."""
-
+import six
 from basicco import basic_data, fabricate_value, type_checking
 from tippo import (
     Any,
@@ -13,7 +13,8 @@ from tippo import (
     overload,
 )
 
-from .constants import MISSING, MissingType
+from .constants import MISSING
+from .exceptions import ProcessingError, ConversionError, ValidationError, InvalidTypeError
 
 T = TypeVar("T")
 
@@ -38,8 +39,8 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         validator=None,  # type: Callable[[Any], None] | str | None
         types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
         subtypes=False,  # type: bool
-        serializer=MISSING,  # type: Callable[[T], Any] | str | None | MissingType
-        deserializer=MISSING,  # type: Callable[[Any], T] | str | None | MissingType
+        serializer=None,  # type: Callable[[T], Any] | str | None
+        deserializer=None,  # type: Callable[[Any], T] | str | None
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -63,24 +64,52 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         self._serializer = fabricate_value.format_factory(serializer)
         self._deserializer = fabricate_value.format_factory(deserializer)
 
-    def convert(self, value):
+    def convert_value(self, value):
         # type: (Any) -> T
-        return fabricate_value.fabricate_value(
-            self.converter,
-            value,
-            extra_paths=self._extra_paths,
-            builtin_paths=self._builtin_paths,
-        )
+        if self.converter is not None:
+            try:
+                return fabricate_value.fabricate_value(
+                    self.converter,
+                    value,
+                    extra_paths=self._extra_paths,
+                    builtin_paths=self._builtin_paths,
+                )
+            except (ConversionError, TypeError, ValueError) as e:
+                exc = ConversionError(str(e))
+                six.raise_from(exc, None)
+                raise exc
+        return cast(T, value)
 
-    def validate(self, value):
-        # type: (Any) -> T
-        fabricate_value.fabricate_value(
-            self.validator,
-            value,
-            extra_paths=self._extra_paths,
-            builtin_paths=self._builtin_paths,
-        )
-        return value
+    def validate_value(self, value):
+        # type: (Any) -> None
+        if self.validator is not None:
+            try:
+                fabricate_value.fabricate_value(
+                    self.validator,
+                    value,
+                    extra_paths=self._extra_paths,
+                    builtin_paths=self._builtin_paths,
+                )
+            except ValidationError as e:
+                exc = ValidationError(str(e))
+                six.raise_from(exc, None)
+                raise exc
+
+    def check_value_type(self, value):
+        # type: (Any) -> None
+        if self.types:
+            try:
+                type_checking.assert_is_instance(
+                    value,
+                    self.types,
+                    subtypes=self.subtypes,
+                    extra_paths=self.extra_paths,
+                    builtin_paths=self.builtin_paths,
+                )
+            except type_checking.TypeCheckError as e:
+                exc = InvalidTypeError(str(e))
+                six.raise_from(exc, None)
+                raise exc
 
     def accepts_type(self, value):
         # type: (Any) -> bool
@@ -92,22 +121,21 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
             builtin_paths=self.builtin_paths,
         )
 
-    def check_type(self, value):
-        # type: (Any) -> T
-        if self.types:
-            return type_checking.assert_is_instance(
-                value,
-                self.types,
-                subtypes=self.subtypes,
-                extra_paths=self.extra_paths,
-                builtin_paths=self.builtin_paths,
-            )
-        else:
-            return value
-
-    def process_value(self, value):
-        # type: (Any) -> T
-        return self.validate(self.check_type(self.convert(value)))
+    def process_value(self, value, location=MISSING):
+        # type: (Any, Any) -> T
+        try:
+            converted_value = self.convert_value(value)  # type: T
+            self.check_value_type(converted_value)
+            self.validate_value(converted_value)
+        except ProcessingError as e:
+            if location is not MISSING:
+                error = "{!r}; {}".format(location, e)
+            else:
+                error = str(e)
+            exc = type(e)(error)
+            six.raise_from(exc, None)
+            raise exc
+        return converted_value
 
     def serialize_value(self, value):
         # type: (T) -> Any

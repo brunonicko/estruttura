@@ -89,7 +89,7 @@ class MutableStructure(six.with_metaclass(MutableStructureMeta, Structure[RT])):
 # noinspection PyAbstractClass
 class CollectionStructure(Structure[RT], slotted.SlottedCollection[T_co], Generic[RT, T_co]):
     __slots__ = ()
-    relationship = None  # type: Type[RT] | None
+    relationship = None  # type: RT | None
 
     @abstract
     def _do_clear(self):

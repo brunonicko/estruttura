@@ -332,6 +332,21 @@ class ClassStructureMeta(StructureMeta):
                     )
                     raise TypeError(error)
 
+        # Check for missing attribute dependencies.
+        all_attributes = set(attribute_map.values())
+        for attribute_name, attribute in six.iteritems(attribute_map):
+            missing_dependencies = set(attribute.recursive_dependencies).difference(all_attributes)
+            if missing_dependencies:
+                error = "attribute {!r} depends on {}; not defined in {!r}".format(
+                    attribute_name,
+                    ", ".join(
+                        "'{}.{}'".format(m.owner.__qualname__, m.name)
+                        for m in sorted(missing_dependencies, key=lambda a: a.name)
+                    ),
+                    cls.__qualname__,
+                )
+                raise TypeError(error)
+
         return cls
 
     # noinspection PyUnusedLocal

@@ -20,7 +20,7 @@ from basicco.custom_repr import mapping_repr
 from basicco.safe_repr import safe_repr
 from basicco.recursive_repr import recursive_repr
 
-from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
 from .exceptions import ProcessingError
 from .constants import DeletedType, DELETED, MISSING
@@ -49,7 +49,6 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
         # type: (**VT) -> None
         pass
 
-    @final
     def __init__(self, *args, **kwargs):
         initial_values = dict(*args, **kwargs)
         if self.relationship is not None and self.relationship.will_process:

@@ -4,7 +4,7 @@ from tippo import AbstractSet, Iterable, TypeVar
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
-from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
 from .exceptions import ProcessingError
 
@@ -16,7 +16,6 @@ RT = TypeVar("RT", bound=Relationship)
 class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
     __slots__ = ()
 
-    @final
     def __init__(self, initial=()):  # noqa
         # type: (Iterable[T]) -> None
         initial_values = frozenset(initial)

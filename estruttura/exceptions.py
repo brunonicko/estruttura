@@ -1,3 +1,12 @@
+__all__ = [
+    "EstrutturaException",
+    "ProcessingError",
+    "ConversionError",
+    "ValidationError",
+    "InvalidTypeError",
+]
+
+
 class EstrutturaException(Exception):
     pass
 

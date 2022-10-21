@@ -13,12 +13,12 @@ from basicco.custom_repr import iterable_repr
 from basicco.explicit_hash import set_to_none
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Mapping, Type, Generic, overload
+from tippo import Any, Callable, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Mapping, Type, Generic, overload
 
 from .constants import DELETED, DEFAULT, MISSING
 from ._attribute import StructureAttribute, MutableStructureAttribute
 from ._relationship import Relationship
-from ._base import (
+from ._bases import (
     StructureMeta,
     Structure,
     ImmutableStructureMeta,
@@ -201,7 +201,7 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[str, SAT_co]):
         return initial_values
 
     def get_update_values(self, updates, structure=None):
-        # type: (Mapping[str, Any], StructureClass | None) -> tuple[dict[str, Any], dict[str, Any]]
+        # type: (Mapping[str, Any], ClassStructure | None) -> tuple[dict[str, Any], dict[str, Any]]
         """
         Get values for an update.
 
@@ -226,7 +226,7 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[str, SAT_co]):
         return new_values, old_values
 
 
-class StructureClassMeta(StructureMeta):
+class ClassStructureMeta(StructureMeta):
     __attribute_type__ = StructureAttribute  # type: Type[StructureAttribute]
 
     @staticmethod
@@ -241,7 +241,7 @@ class StructureClassMeta(StructureMeta):
 
             # Prevent overriding attributes with non-attributes.
             for attribute_name in base_attributes:
-                if (isinstance(base, StructureClassMeta) and attribute_name not in base.__attributes__) or (
+                if (isinstance(base, ClassStructureMeta) and attribute_name not in base.__attributes__) or (
                     hasattr(base, attribute_name)
                     and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
                 ):
@@ -254,7 +254,7 @@ class StructureClassMeta(StructureMeta):
                     raise TypeError(error)
 
             # Collect base's attributes.
-            if isinstance(base, StructureClassMeta):
+            if isinstance(base, ClassStructureMeta):
                 for attribute_name, attribute in six.iteritems(base.__attributes__):
 
                     # Attribute type changed and it's not compatible anymore.
@@ -305,7 +305,7 @@ class StructureClassMeta(StructureMeta):
         dct_copy = mcs.__edit_dct__(this_attribute_map, attribute_map, name, bases, dct_copy, **kwargs)
 
         # Build class.
-        cls = super(StructureClassMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
+        cls = super(ClassStructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
 
         # Name and claim attributes.
         for attribute_name, attribute in six.iteritems(this_attributes):
@@ -346,7 +346,7 @@ class StructureClassMeta(StructureMeta):
 
 
 # noinspection PyAbstractClass
-class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Generic[RT, SAT])):
+class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Generic[RT, SAT])):
     __slots__ = ()
     __attributes__ = AttributeMap()  # type: AttributeMap[SAT]
     __kw_only__ = False  # type: bool
@@ -493,7 +493,7 @@ class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Gener
 
     @abstract
     def _discard(self, name):
-        # type: (SC, str) -> SC
+        # type: (CS, str) -> CS
         """
         Discard attribute value if it's set.
 
@@ -504,7 +504,7 @@ class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Gener
 
     @abstract
     def _delete(self, name):
-        # type: (SC, str) -> SC
+        # type: (CS, str) -> CS
         """
         Delete existing attribute value.
 
@@ -516,7 +516,7 @@ class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Gener
 
     @abstract
     def _set(self, name, value):
-        # type: (SC, str, Any) -> SC
+        # type: (CS, str, Any) -> CS
         """
         Set value for attribute.
 
@@ -528,17 +528,17 @@ class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Gener
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (SC, SupportsKeysAndGetItem[str, Any], **Any) -> SC
+        # type: (CS, SupportsKeysAndGetItem[str, Any], **Any) -> CS
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (SC, Iterable[tuple[str, Any]], **Any) -> SC
+        # type: (CS, Iterable[tuple[str, Any]], **Any) -> CS
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (SC, **Any) -> SC
+        # type: (CS, **Any) -> CS
         pass
 
     @abstract
@@ -552,22 +552,22 @@ class StructureClass(six.with_metaclass(StructureClassMeta, Structure[RT], Gener
         raise NotImplementedError()
 
 
-SC = TypeVar("SC", bound=StructureClass)  # structure class self type
+CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
 
 
-class ImmutableStructureClassMeta(StructureClassMeta, ImmutableStructureMeta):
+class ImmutableClassStructureMeta(ClassStructureMeta, ImmutableStructureMeta):
     pass
 
 
 # noinspection PyAbstractClass
-class ImmutableStructureClass(
-    six.with_metaclass(ImmutableStructureClassMeta, StructureClass[RT, SAT], ImmutableStructure[RT])
+class ImmutableClassStructure(
+    six.with_metaclass(ImmutableClassStructureMeta, ClassStructure[RT, SAT], ImmutableStructure[RT])
 ):
     __slots__ = ()
 
     @final
     def discard(self, name):
-        # type: (ISC, str) -> ISC
+        # type: (ICS, str) -> ICS
         """
         Discard attribute value if it's set.
 
@@ -578,7 +578,7 @@ class ImmutableStructureClass(
 
     @final
     def delete(self, name):
-        # type: (ISC, str) -> ISC
+        # type: (ICS, str) -> ICS
         """
         Delete existing attribute value.
 
@@ -590,7 +590,7 @@ class ImmutableStructureClass(
 
     @final
     def set(self, name, value):
-        # type: (ISC, str, Any) -> ISC
+        # type: (ICS, str, Any) -> ICS
         """
         Set value for attribute.
 
@@ -602,17 +602,17 @@ class ImmutableStructureClass(
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (ISC, SupportsKeysAndGetItem[str, Any], **Any) -> ISC
+        # type: (ICS, SupportsKeysAndGetItem[str, Any], **Any) -> ICS
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (ISC, Iterable[tuple[str, Any]], **Any) -> ISC
+        # type: (ICS, Iterable[tuple[str, Any]], **Any) -> ICS
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (ISC, **Any) -> ISC
+        # type: (ICS, **Any) -> ICS
         pass
 
     @final
@@ -626,16 +626,16 @@ class ImmutableStructureClass(
         return self._update(*args, **kwargs)
 
 
-ISC = TypeVar("ISC", bound=ImmutableStructureClass)  # immutable structure class self type
+ICS = TypeVar("ICS", bound=ImmutableClassStructure)  # immutable class structure self type
 
 
-class MutableStructureClassMeta(StructureClassMeta, MutableStructureMeta):
-    pass
+class MutableClassStructureMeta(ClassStructureMeta, MutableStructureMeta):
+    __attribute_type__ = MutableStructureAttribute  # type: Type[MutableStructureAttribute]
 
 
 # noinspection PyAbstractClass
-class MutableStructureClass(
-    six.with_metaclass(MutableStructureClassMeta, StructureClass[RT, MSAT], MutableStructure[RT])
+class MutableClassStructure(
+    six.with_metaclass(MutableClassStructureMeta, ClassStructure[RT, MSAT], MutableStructure[RT])
 ):
     __slots__ = ()
 
@@ -733,7 +733,7 @@ class _DelegateSelf(SlottedBase):
     __slots__ = ("__",)
 
     def __init__(self, attribute_map, structure=None):
-        # type: (AttributeMap, StructureClass | None) -> None
+        # type: (AttributeMap, ClassStructure | None) -> None
         """
         :param attribute_map: Attribute map.
         :param structure: Structure that owns attributes.
@@ -839,7 +839,7 @@ class _DelegateSelfInternals(SlottedBase):
     )
 
     def __init__(self, iobj, attribute_map, structure):
-        # type: (_DelegateSelf, AttributeMap, StructureClass | None) -> None
+        # type: (_DelegateSelf, AttributeMap, ClassStructure | None) -> None
         """
         :param iobj: Internal object.
         :param attribute_map: Attribute map.
@@ -1088,7 +1088,7 @@ class _DelegateSelfInternals(SlottedBase):
 
     @property
     def structure(self):
-        # type: () -> StructureClass | None
+        # type: () -> ClassStructure | None
         """Structure that owns attributes."""
         return self.__structure
 

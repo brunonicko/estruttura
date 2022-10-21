@@ -4,7 +4,7 @@ from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, Callable, overload, MutableSequence, Iterable, TypeVar
 
-from ._base import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
 from ._relationship import Relationship
 from .exceptions import ProcessingError
 from .utils import resolve_index, resolve_continuous_slice, pre_move
@@ -17,7 +17,6 @@ RT = TypeVar("RT", bound=Relationship)
 class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
     __slots__ = ()
 
-    @final
     def __init__(self, initial=()):  # noqa
         # type: (Iterable[T]) -> None
         if self.relationship is not None and self.relationship.will_process:

@@ -1,3 +1,5 @@
+"""Serializers and deserializers."""
+
 import abc
 import enum
 
@@ -6,11 +8,17 @@ from basicco import Base, import_path, type_checking
 from tippo import Any, Generic, Iterable, Type, TypeVar, cast
 
 from .constants import BASIC_TYPES
+from .exceptions import SerializationError
+
+__all__ = ["TypedSerializer", "Serializer", "Deserializer"]
+
 
 T = TypeVar("T")
 
 
-class BaseSerializer(Base, Generic[T]):
+class TypedSerializer(Base, Generic[T]):
+    """Abstract class for typed serializers and deserializers."""
+
     __slots__ = (
         "_types",
         "_subtypes",
@@ -29,6 +37,12 @@ class BaseSerializer(Base, Generic[T]):
         builtin_paths=None,  # type: Iterable[str] | None
     ):
         # type: (...) -> None
+        """
+        :param types: Available types.
+        :param subtypes: Whether to accept subtypes.
+        :param extra_paths: Extra module paths in fallback order.
+        :param builtin_paths: Builtin module paths in fallback order.
+        """
         self._types = type_checking.format_types(types)
         self._subtypes = bool(subtypes)
         self._resolved_types = None  # type: tuple[Type[T], ...] | None
@@ -40,12 +54,18 @@ class BaseSerializer(Base, Generic[T]):
     @abc.abstractmethod
     def __call__(self, value):
         # type: (Any) -> Any
+        """
+        Perform deserialization/serialization.
+
+        :param value: Serialized/value.
+        :return: Value/serialized.
+        """
         raise NotImplementedError()
 
     @property
     def types(self):
         # type: () -> tuple[Type[T] | str | None, ...]
-        """Types."""
+        """Available types."""
         return self._types
 
     @property
@@ -95,104 +115,155 @@ class BaseSerializer(Base, Generic[T]):
         return self._builtin_paths
 
 
-class Serializer(BaseSerializer[T]):
+class Serializer(TypedSerializer[T]):
+    """Typed serializer."""
+
     __slots__ = ()
 
     def __call__(self, value):
         # type: (T) -> Any
+        """
+        Perform serialization.
+
+        :param value: Value.
+        :return: Serialized.
+        """
 
         # Pass through basic types.
         if isinstance(value, BASIC_TYPES):
             return value
 
-        # Get serializer method if any.
-        # TODO: check arg spec for func()
-        serializer = getattr(value, "serialize", None)
+        # Get whether value is a class.
+        is_type = isinstance(value, type)
+        if is_type:
 
-        if callable(serializer):
+            # Serialize class as a path.
+            serialized = import_path.get_path(
+                value, extra_paths=self.extra_paths, builtin_paths=self.builtin_paths
+            )  # type: Any
 
-            # Use serializer method.
-            serialized = serializer()
-
-        elif isinstance(value, enum.Enum):  # TODO: tuple, list, dict, etc
-
-            # Serialize enum value by name.
-            serialized = value.name
+            # Ambiguous types, wrap the path in a dictionary with a '__class__' key.
+            if len(self.complex_types) > 1:
+                serialized = {"__class__": serialized}
+            elif not self.complex_types:
+                error = "can't serialize {!r} without a type definition".format(value)
+                raise SerializationError(error)
 
         else:
-            error = "{!r} does not implement a 'serialize()' method".format(value)
-            raise TypeError(error)
 
-        # Ambiguous types, wrap the serialized value in a dictionary with a path to the class and the state.
-        if self.subtypes or len(self.complex_types) > 1:
-            cls = type(value)
-            serialized = {
-                "__class__": import_path.get_path(cls, extra_paths=self.extra_paths, builtin_paths=self.builtin_paths),
-                "__state__": serialized,
-            }
-            # TODO: support for typing.Type
-        elif not self.complex_types:
-            error = "can't serialize {!r} without a type definition".format(value)
-            raise TypeError(error)
+            # Use serialize method if present.
+            serializer = getattr(value, "serialize", None)
+            if callable(serializer):
+
+                # Use serializer method if applicable.
+                try:
+                    serialized = serializer()
+                except (TypeError, ValueError) as e:
+                    exc = SerializationError("{!r}; {}".format(type(e).__name__, e))
+                    six.raise_from(exc, None)
+                    raise exc
+
+            elif isinstance(value, enum.Enum):
+
+                # Serialize enum value by name.
+                serialized = value.name
+
+            else:
+
+                # Unsupported non-serializable type.
+                error = "{!r} object does not implement a 'serialize()' method".format(type(value).__name__)
+                raise SerializationError(error)
+
+            # Ambiguous types, wrap the serialized value in a dictionary with a path to the class and the state.
+            if self.subtypes or len(self.complex_types) > 1:
+                cls = type(value)
+                cls_path = import_path.get_path(cls, extra_paths=self.extra_paths, builtin_paths=self.builtin_paths)
+                serialized = {
+                    "__class__": cls_path,
+                    "__state__": serialized,
+                }
+            elif not self.complex_types:
+                error = "can't serialize {!r} without a type definition".format(value)
+                raise SerializationError(error)
 
         return serialized
 
 
-class Deserializer(BaseSerializer[T]):
+class Deserializer(TypedSerializer[T]):
+    """Typed deserializer."""
+
     __slots__ = ()
 
-    def __call__(self, value):
+    def __call__(self, serialized):
         # type: (Any) -> T
+        """
+        Perform deserialization.
+
+        :param serialized: Serialized.
+        :return: Value.
+        """
 
         # Pass through basic types.
-        if isinstance(value, BASIC_TYPES):
-            return cast(T, value)
+        if isinstance(serialized, BASIC_TYPES):
+            return cast(T, serialized)
 
+        # Ambiguous types, use serialized class path and state.
         if self.subtypes or len(self.complex_types) > 1:
 
             # Ambiguous types, require the class and the state to be in the serialized dictionary.
-            if isinstance(value, dict) and "__class__" in value:
+            if isinstance(serialized, dict) and "__class__" in serialized:
+
+                # Import class from path.
                 cls = import_path.import_path(
-                    value["__class__"], extra_paths=self.extra_paths, builtin_paths=self.builtin_paths
+                    serialized["__class__"], extra_paths=self.extra_paths, builtin_paths=self.builtin_paths
                 )
-                state = value["__state__"]
+
+                # No state, value is a class.
+                if "__state__" not in serialized:
+                    return cls
+
+                # Get state.
+                state = serialized["__state__"]
+
             else:
-                error = "ambiguous types while deserializing {!r}".format(value)
-                raise TypeError(error)
+                error = "ambiguous types while deserializing {!r}".format(serialized)
+                raise SerializationError(error)
 
         elif not self.complex_types:
 
             # No complex types defined to deserialize.
-            error = "not enough types defined to deserialize {!r}".format(value)
-            raise TypeError(error)
+            error = "not enough types defined to deserialize {!r}".format(serialized)
+            raise SerializationError(error)
 
         else:
             cls = self.complex_types[0]
-            state = value
+            state = serialized
 
         # Get deserializer method if any.
-        # TODO: check arg spec for func(serialized)
-        # TODO: check if it's a classmethod
         deserializer = getattr(cls, "deserialize", None)
-
         if callable(deserializer):
 
             # Use deserializer method.
-            deserialized = deserializer(state)
+            try:
+                value = deserializer(state)
+            except (TypeError, ValueError) as e:
+                exc = SerializationError("{!r}; {}".format(type(e).__name__, e))
+                six.raise_from(exc, None)
+                raise exc
 
-        elif issubclass(cls, enum.Enum):  # TODO: tuple, list, dict, etc
+        elif issubclass(cls, enum.Enum):
 
-            # Deserialize enum value by name.
-            for n, v in six.iteritems(cls.__members__):
-                if n == state:
-                    deserialized = v
+            # Deserialize enum serialized by name.
+            for enum_name, enum_value in six.iteritems(cls.__members__):
+                if enum_name == state:
+                    value = enum_value
                     break
             else:
-                error = "could not find matching {!r} enum value for {!r}".format(cls.__name__, value)
-                raise TypeError(error)
+                error = "could not find matching {!r} enum value for {!r}".format(cls.__name__, serialized)
+                raise SerializationError(error)
 
         else:
-            error = "{!r} does not implement a 'deserialize()' method".format(value)
-            raise TypeError(error)
+            error = "{!r} object does not implement a 'deserialize()' method".format(type(serialized).__name__)
+            raise SerializationError(error)
 
-        return deserialized
+        return value

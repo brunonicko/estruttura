@@ -2,24 +2,27 @@ import six
 import slotted
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Callable, overload, MutableSequence, Iterable, TypeVar
+from tippo import Any, Callable, overload, MutableSequence, Iterable, Type, Sequence, TypeVar
 
 from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
-from ._relationship import Relationship
 from .exceptions import ProcessingError
 from .utils import resolve_index, resolve_continuous_slice, pre_move
 
 
 T = TypeVar("T")
-RT = TypeVar("RT", bound=Relationship)
 
 
-class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
+class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
+    """List structure."""
+
     __slots__ = ()
 
     def __init__(self, initial=()):  # noqa
         # type: (Iterable[T]) -> None
-        if self.relationship is not None and self.relationship.will_process:
+        """
+        :param initial: Initial values.
+        """
+        if self.relationship.will_process:
             try:
                 initial_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(initial))
             except ProcessingError as e:
@@ -140,7 +143,7 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
         if not values:
             return self
         index = self.resolve_index(index, clamp=True)
-        if self.relationship is not None and self.relationship.will_process:
+        if self.relationship.will_process:
             try:
                 values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(values))
             except ProcessingError as e:
@@ -279,7 +282,7 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
             return self
         old_values = tuple(self[index:stop])
 
-        if self.relationship is not None and self.relationship.will_process:
+        if self.relationship.will_process:
             try:
                 if isinstance(item, slice):
                     new_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(new_values))
@@ -291,6 +294,22 @@ class ListStructure(CollectionStructure[RT, T], slotted.SlottedSequence[T]):
                 raise exc
 
         return self._do_update(index, stop, old_values, new_values)
+
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[LS], tuple[T, ...]) -> LS
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> list[Any]
+        return [type(self).relationship.serialize_value(v) for v in self]
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[LS], Sequence[Any]) -> LS
+        values = tuple(cls.relationship.deserialize_value(s) for s in serialized)
+        return cls._do_deserialize(values)
 
     @abstract
     def count(self, value):
@@ -359,7 +378,9 @@ LS = TypeVar("LS", bound=ListStructure)  # list structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableListStructure(ListStructure[RT, T], ImmutableCollectionStructure[RT, T]):
+class ImmutableListStructure(ListStructure[T], ImmutableCollectionStructure[T]):
+    """Immutable list structure."""
+
     __slots__ = ()
 
     @final
@@ -491,7 +512,9 @@ ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure s
 
 
 # noinspection PyAbstractClass
-class MutableListStructure(ListStructure[RT, T], MutableCollectionStructure[RT, T], slotted.SlottedMutableSequence[T]):
+class MutableListStructure(ListStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
+    """Mutable list structure."""
+
     __slots__ = ()
 
     @final

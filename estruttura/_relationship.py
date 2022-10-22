@@ -1,4 +1,5 @@
 """Relationship between structures and values."""
+
 import six
 from basicco import basic_data, fabricate_value, type_checking
 from tippo import (
@@ -15,6 +16,7 @@ from tippo import (
 
 from .constants import MISSING
 from .exceptions import ProcessingError, ConversionError, ValidationError, InvalidTypeError
+from .serialization import TypedSerializer, Serializer, Deserializer
 
 T = TypeVar("T")
 
@@ -39,8 +41,8 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         validator=None,  # type: Callable[[Any], None] | str | None
         types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
         subtypes=False,  # type: bool
-        serializer=None,  # type: Callable[[T], Any] | str | None
-        deserializer=None,  # type: Callable[[Any], T] | str | None
+        serializer=Serializer,  # type: Type[TypedSerializer] | Callable[[T], Any] | str | None
+        deserializer=Deserializer,  # type: Type[TypedSerializer] | Callable[[Any], T] | str | None
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -50,8 +52,8 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         :param validator: Callable value validator.
         :param types: Types for runtime checking.
         :param subtypes: Whether to accept subtypes.
-        :param serializer: Callable value serializer.
-        :param deserializer: Callable value deserializer.
+        :param serializer: Callable value serializer or typed serializer type.
+        :param deserializer: Callable value deserializer or typed deserializer type.
         :param extra_paths: Extra module paths in fallback order.
         :param builtin_paths: Builtin module paths in fallback order.
         """
@@ -61,11 +63,24 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         self._subtypes = bool(subtypes)
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
-        self._serializer = fabricate_value.format_factory(serializer)
-        self._deserializer = fabricate_value.format_factory(deserializer)
+
+        if isinstance(serializer, type) and issubclass(serializer, TypedSerializer):
+            serializer = serializer(self.types, self.subtypes, self.extra_paths, self.builtin_paths)
+        if isinstance(deserializer, type) and issubclass(deserializer, TypedSerializer):
+            deserializer = deserializer(self.types, self.subtypes, self.extra_paths, self.builtin_paths)
+
+        self._serializer = fabricate_value.format_factory(serializer)  # type: Callable[[T], Any] | str | None
+        self._deserializer = fabricate_value.format_factory(deserializer)  # type: Callable[[Any], T] | str | None
 
     def convert_value(self, value):
         # type: (Any) -> T
+        """
+        Convert a value.
+
+        :param value: Value.
+        :return: Converted value.
+        :raises ConversionError: Conversion failed.
+        """
         if self.converter is not None:
             try:
                 return fabricate_value.fabricate_value(
@@ -82,6 +97,12 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     def validate_value(self, value):
         # type: (Any) -> None
+        """
+        Validate a value.
+
+        :param value: Value.
+        :raises ValidationError: Validation failed.
+        """
         if self.validator is not None:
             try:
                 fabricate_value.fabricate_value(
@@ -97,6 +118,12 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     def check_value_type(self, value):
         # type: (Any) -> None
+        """
+        Check value type.
+
+        :param value: Value.
+        :raises InvalidTypeError: Invalid value type.
+        """
         if self.types:
             try:
                 type_checking.assert_is_instance(
@@ -111,18 +138,16 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
                 six.raise_from(exc, None)
                 raise exc
 
-    def accepts_type(self, value):
-        # type: (Any) -> bool
-        return type_checking.is_instance(
-            value,
-            self.types,
-            subtypes=self.subtypes,
-            extra_paths=self.extra_paths,
-            builtin_paths=self.builtin_paths,
-        )
-
     def process_value(self, value, location=MISSING):
         # type: (Any, Any) -> T
+        """
+        Process value (convert, check type, validate).
+
+        :param value: Value.
+        :param location: Optional value location information.
+        :return: Processed value.
+        :raises ProcessingError: Error while processing value.
+        """
         try:
             converted_value = self.convert_value(value)  # type: T
             self.check_value_type(converted_value)
@@ -137,8 +162,30 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
             raise exc
         return converted_value
 
+    def accepts_type(self, value):
+        # type: (Any) -> bool
+        """
+        Get whether the type of a value is accepted or not.
+
+        :param value: Value.
+        :return: True if type is accepted.
+        """
+        return type_checking.is_instance(
+            value,
+            self.types,
+            subtypes=self.subtypes,
+            extra_paths=self.extra_paths,
+            builtin_paths=self.builtin_paths,
+        )
+
     def serialize_value(self, value):
         # type: (T) -> Any
+        """
+        Serialize value.
+
+        :param value: Value.
+        :return: Serialized value.
+        """
         return fabricate_value.fabricate_value(
             self.serializer,
             value,
@@ -148,6 +195,12 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     def deserialize_value(self, serialized):
         # type: (Any) -> T
+        """
+        Deserialize value.
+
+        :param serialized: Serialized value.
+        :return: Value.
+        """
         return fabricate_value.fabricate_value(
             self.deserializer,
             serialized,
@@ -157,6 +210,12 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     def to_items(self, usecase=None):
         # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
+        """
+        Convert to items.
+
+        :param usecase: Usecase.
+        :return: Items.
+        """
         return [
             ("converter", self.converter),
             ("validator", self.validator),
@@ -184,6 +243,12 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         pass
 
     def update(self, *args, **kwargs):
+        """
+        Make a new relationship with updates.
+
+        Same parameters as :meth:`dict.update`.
+        :return: Updated relationship.
+        """
         init_args = self.to_dict(usecase=basic_data.ItemUsecase.INIT)
         init_args.update(*args, **kwargs)
         return cast(R, type(self)(**init_args))

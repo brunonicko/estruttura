@@ -24,13 +24,13 @@ from ._relationship import Relationship
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
-RT = TypeVar("RT", bound=Relationship)
-
 _attribute_count = 0
 
 
 # noinspection PyAbstractClass
-class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
+class StructureAttribute(ImmutableBasicData, Generic[T_co]):
+    """Structure attribute."""
+
     __slots__ = (
         "_owner",
         "_name",
@@ -46,6 +46,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
         "_eq",
         "_order",
         "_hash",
+        "_serialized",
+        "_serialize_to",
+        "_deserialize_from",
         "_metadata",
         "_extra_paths",
         "_builtin_paths",
@@ -63,7 +66,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
         self,
         default=MISSING,  # type: Any
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
-        relationship=None,  # type: RT | None
+        relationship=Relationship(),  # type: Relationship[T_co]
         required=None,  # type: bool | None
         init=None,  # type: bool | None
         updatable=None,  # type: bool | None
@@ -73,6 +76,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
         eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
+        serialized=None,  # type: bool | None  # TODO: deserialized too? "auto" perhaps when it matches the default?
+        serialize_to=None,  # type: str | None
+        deserialize_from=None,  # type: str | None
         metadata=None,  # type: Any
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
@@ -138,6 +144,12 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
                 error = "constant attribute can't be in hash"
                 raise ValueError(error)
 
+            if serialized is None:
+                serialized = False
+            elif serialized:
+                error = "constant attribute can't be serialized"
+                raise ValueError(error)
+
         else:
 
             # Not a constant, set default parameter values.
@@ -189,6 +201,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
+        self._serialized = bool(serialized) if serialized is not None else None
+        self._serialize_to = serialize_to  # TODO: collapse to name? never None?
+        self._deserialize_from = deserialize_from
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
@@ -275,7 +290,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
                 self._deletable = False
             if self.init is None:
                 self._init = True
-        assert not any(p is None for p in (self._init, self._updatable, self._deletable))
+        if self._serialized is None:
+            self._serialized = self._init or self.updatable
+        assert not any(p is None for p in (self._updatable, self._deletable, self._init, self._serialized))
 
         # More checks.
         if self.delegated:
@@ -291,6 +308,13 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
                     raise TypeError(error)
             if self.fdel is None and self.deletable:
                 error = "delegated attribute {!r} is deletable but has no deleter delegate was defined".format(name)
+                raise TypeError(error)
+        elif not self.serialized:
+            if self.serialize_to is not None:
+                error = "attribute {!r} can't set 'serialize_to' when 'serialized' is False".format(name)
+                raise TypeError(error)
+            if self.deserialize_from is not None:
+                error = "attribute {!r} can't set 'deserialize_from' when 'serialized' is False".format(name)
                 raise TypeError(error)
 
         # Set owner and name.
@@ -311,6 +335,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
             ("eq", self.eq),
             ("order", self.order),
             ("hash", self.hash),
+            ("serialized", self.serialized),
+            ("serialize_to", self.serialize_to),
+            ("deserialize_from", self.deserialize_from),
             ("metadata", self.metadata),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
@@ -357,16 +384,24 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
             raise RuntimeError(error)
         return default_value
 
-    def process_value(self, value):
-        # type: (Any) -> T_co
-        if self.relationship is not None:
-            try:
-                return self.relationship.process_value(value)
-            except Exception as e:
-                exc = type(e)("{!r} attribute; {}".format(self.name, e))
-                six.raise_from(exc, None)
-                raise exc
-        return value
+    def process_value(self, value, location=MISSING):
+        # type: (Any, Any) -> T_co
+        """
+        Process value (convert, check type, validate).
+
+        :param value: Value.
+        :param location: Optional value location information.
+        :return: Processed value.
+        :raises ProcessingError: Error while processing value.
+        """
+        if location is MISSING and self.named:
+            location = self.name
+        try:
+            return self.relationship.process_value(value, location)
+        except Exception as e:
+            exc = type(e)(e)
+            six.raise_from(exc, None)
+            raise exc
 
     @overload
     def getter(self, maybe_func):
@@ -554,7 +589,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
 
     @property
     def relationship(self):
-        # type: () -> RT | None
+        # type: () -> Relationship[T_co]
         return self._relationship
 
     @property
@@ -606,6 +641,24 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
         # type: () -> bool
         """Whether to include in the `__hash__` method."""
         return self._hash
+
+    @property
+    def serialized(self):
+        # type: () -> bool | None
+        """Whether it's serialized."""
+        return self._serialized
+
+    @property
+    def serialize_to(self):
+        # type: () -> str | None
+        """Name to use when serializing."""
+        return self._serialize_to
+
+    @property
+    def deserialize_from(self):
+        # type: () -> str | None
+        """Name to source from when deserializing."""
+        return self._deserialize_from
 
     @property
     def metadata(self):
@@ -709,7 +762,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co, RT]):
 SA = TypeVar("SA", bound=StructureAttribute)  # base attribute self type
 
 
-class MutableStructureAttribute(StructureAttribute[T, RT]):
+class MutableStructureAttribute(StructureAttribute[T]):
+    """Mutable structure attribute. To be used with :class:`MutableClassStructure`."""
+
     __slots__ = ()
 
     def __set__(self, instance, value):

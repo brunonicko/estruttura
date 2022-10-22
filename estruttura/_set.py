@@ -1,27 +1,30 @@
 import six
 import slotted
-from tippo import AbstractSet, Iterable, TypeVar
+from tippo import Any, AbstractSet, Iterable, Type, TypeVar
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 
 from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
-from ._relationship import Relationship
 from .exceptions import ProcessingError
 
 
 T = TypeVar("T")
-RT = TypeVar("RT", bound=Relationship)
 
 
-class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
+class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
+    """Set estructure."""
+
     __slots__ = ()
 
     def __init__(self, initial=()):  # noqa
         # type: (Iterable[T]) -> None
+        """
+        :param initial: Initial values.
+        """
         initial_values = frozenset(initial)
-        if self.relationship is not None and self.relationship.will_process:
+        if self.relationship.will_process:
             try:
-                initial_values = frozenset(self.relationship.process_value(v) for v in initial_values)
+                initial_values = frozenset(self.relationship.process_value(v, v) for v in initial_values)
             except ProcessingError as e:
                 exc = type(e)(e)
                 six.raise_from(exc, None)
@@ -278,9 +281,9 @@ class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
         :param iterable: Iterable.
         :return: Transformed.
         """
-        if self.relationship is not None and self.relationship.will_process:
+        if self.relationship.will_process:
             try:
-                new_values = frozenset(self.relationship.process_value(v) for v in iterable)
+                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
             except ProcessingError as e:
                 exc = type(e)(e)
                 six.raise_from(exc, None)
@@ -293,6 +296,22 @@ class SetStructure(CollectionStructure[RT, T], slotted.SlottedSet[T]):
             return self
 
         return self._do_update(new_values)
+
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[SS], frozenset[T]) -> SS
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> list[Any]
+        return [type(self).relationship.serialize_value(v) for v in self]
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[SS], Iterable[Any]) -> SS
+        values = frozenset(cls.relationship.deserialize_value(s) for s in serialized)
+        return cls._do_deserialize(values)
 
     @abstract
     def isdisjoint(self, iterable):
@@ -387,7 +406,9 @@ SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableSetStructure(SetStructure[RT, T], ImmutableCollectionStructure[RT, T]):
+class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
+    """Immutable set structure."""
+
     __slots__ = ()
 
     @final
@@ -440,7 +461,9 @@ ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure sel
 
 
 # noinspection PyAbstractClass
-class MutableSetStructure(SetStructure[RT, T], MutableCollectionStructure[RT, T], slotted.SlottedMutableSet[T]):
+class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+    """Mutable set structure."""
+
     __slots__ = ()
 
     @final

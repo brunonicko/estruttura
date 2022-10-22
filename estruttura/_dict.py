@@ -9,8 +9,9 @@ from tippo import (
     Iterator,
     SupportsKeysAndGetItem,
     Iterable,
+    Type,
+    Mapping,
     MutableMapping,
-    Generic,
     overload,
 )
 from basicco.mapping_proxy import MappingProxyType
@@ -21,17 +22,17 @@ from basicco.safe_repr import safe_repr
 from basicco.recursive_repr import recursive_repr
 
 from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
-from ._relationship import Relationship
 from .exceptions import ProcessingError
 from .constants import DeletedType, DELETED, MISSING
 
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
-RT = TypeVar("RT", bound=Relationship)
 
 
-class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT], Generic[RT, KT, VT]):
+class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
+    """Dictionary structure."""
+
     __slots__ = ()
 
     @overload
@@ -50,8 +51,11 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
         pass
 
     def __init__(self, *args, **kwargs):
+        """
+        Same parameters as :class:`dict`.
+        """
         initial_values = dict(*args, **kwargs)
-        if self.relationship is not None and self.relationship.will_process:
+        if self.relationship.will_process:
             try:
                 initial_values = dict(
                     (k, self.relationship.process_value(v, k)) for k, v in six.iteritems(initial_values)
@@ -194,7 +198,7 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
                 deletes[key] = self[key]
                 continue
 
-            if self.relationship is not None and self.relationship.will_process:
+            if self.relationship.will_process:
                 try:
                     value = self.relationship.process_value(value, key)
                 except ProcessingError as e:
@@ -216,6 +220,22 @@ class DictStructure(CollectionStructure[RT, KT], slotted.SlottedMapping[KT, VT],
             MappingProxyType(updates_new),
             MappingProxyType(updates_and_inserts),
         )
+
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[DS], MappingProxyType[KT, VT]) -> DS
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> dict[KT, Any]
+        return dict((n, type(self).relationship.serialize_value(v)) for n, v in six.iteritems(self))
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[DS], Mapping[KT, Any]) -> DS
+        values = dict((n, cls.relationship.deserialize_value(s)) for n, s in six.iteritems(serialized))
+        return cls._do_deserialize(MappingProxyType(values))
 
     @abstract
     def get(self, key, fallback=None):
@@ -297,7 +317,9 @@ DS = TypeVar("DS", bound=DictStructure)
 
 
 # noinspection PyAbstractClass
-class ImmutableDictStructure(DictStructure[RT, KT, VT], ImmutableCollectionStructure[RT, KT]):
+class ImmutableDictStructure(DictStructure[KT, VT], ImmutableCollectionStructure[KT]):
+    """Immutable dictionary structure."""
+
     __slots__ = ()
 
     @final
@@ -366,10 +388,12 @@ IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dict structure s
 
 # noinspection PyAbstractClass
 class MutableDictStructure(
-    DictStructure[RT, KT, VT],
-    MutableCollectionStructure[RT, KT],
+    DictStructure[KT, VT],
+    MutableCollectionStructure[KT],
     slotted.SlottedMutableMapping[KT, VT],
 ):
+    """Mutable dictionary structure."""
+
     __slots__ = ()
 
     @final

@@ -4,8 +4,9 @@ import slotted
 from basicco.abstract_class import abstract, is_abstract
 from basicco.explicit_hash import set_to_none
 from basicco.runtime_final import final
-from tippo import TypeVar, Type, Generic
+from tippo import Any, TypeVar, Type
 
+from .constants import MissingType, MISSING
 from ._relationship import Relationship
 
 
@@ -13,14 +14,11 @@ T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
 
-RT = TypeVar("RT", bound=Relationship)
-
-
 class StructureMeta(basicco.SlottedBaseMeta):
     """Metaclass for :class:`Structure`."""
 
 
-class Structure(six.with_metaclass(StructureMeta, basicco.SlottedBase, Generic[RT])):
+class Structure(six.with_metaclass(StructureMeta, basicco.SlottedBase)):
     """Forces the implementation of `__hash__` and `__eq__`."""
 
     __slots__ = ()
@@ -35,6 +33,20 @@ class Structure(six.with_metaclass(StructureMeta, basicco.SlottedBase, Generic[R
         # type: (object) -> bool
         raise NotImplementedError()
 
+    @abstract
+    def serialize(self):
+        # type: () -> Any
+        raise NotImplementedError()
+
+    @classmethod
+    @abstract
+    def deserialize(cls, serialized):
+        # type: (Type[S], Any) -> S
+        raise NotImplementedError()
+
+
+S = TypeVar("S")  # structure self type
+
 
 class ImmutableStructureMeta(StructureMeta):
     """Metaclass for :class:`ImmutableStructure`."""
@@ -48,7 +60,7 @@ class ImmutableStructureMeta(StructureMeta):
         return cls
 
 
-class ImmutableStructure(six.with_metaclass(ImmutableStructureMeta, Structure[RT], slotted.SlottedHashable)):
+class ImmutableStructure(six.with_metaclass(ImmutableStructureMeta, Structure, slotted.SlottedHashable)):
     """Forces an implementation of `__hash__` that is not None."""
 
     __slots__ = ()
@@ -75,7 +87,7 @@ class MutableStructureMeta(StructureMeta):
 
 
 # noinspection PyAbstractClass
-class MutableStructure(six.with_metaclass(MutableStructureMeta, Structure[RT])):
+class MutableStructure(six.with_metaclass(MutableStructureMeta, Structure)):
     """Non-hashable."""
 
     __slots__ = ()
@@ -87,9 +99,18 @@ class MutableStructure(six.with_metaclass(MutableStructureMeta, Structure[RT])):
 
 
 # noinspection PyAbstractClass
-class CollectionStructure(Structure[RT], slotted.SlottedCollection[T_co], Generic[RT, T_co]):
+class CollectionStructure(Structure, slotted.SlottedCollection[T_co]):
     __slots__ = ()
-    relationship = None  # type: RT | None
+    relationship = Relationship()  # type: Relationship[T_co]
+
+    def __init_subclass__(cls, relationship=MISSING, **kwargs):
+        # type: (Relationship[T_co] | MissingType, **Any) -> None
+
+        # Relationship.
+        if relationship is not MISSING:
+            cls.relationship = relationship
+
+        super(CollectionStructure, cls).__init_subclass__(**kwargs)  # noqa
 
     @abstract
     def _do_clear(self):
@@ -116,7 +137,7 @@ BC = TypeVar("BC", bound=CollectionStructure)
 
 
 # noinspection PyAbstractClass
-class ImmutableCollectionStructure(CollectionStructure[RT, T_co], ImmutableStructure):
+class ImmutableCollectionStructure(CollectionStructure[T_co], ImmutableStructure):
 
     __slots__ = ()
 
@@ -135,7 +156,7 @@ BIC = TypeVar("BIC", bound=ImmutableCollectionStructure)
 
 
 # noinspection PyAbstractClass
-class MutableCollectionStructure(CollectionStructure[RT, T_co], MutableStructure):
+class MutableCollectionStructure(CollectionStructure[T_co], MutableStructure):
     """Mutable collection structure."""
 
     __slots__ = ()

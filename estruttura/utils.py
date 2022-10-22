@@ -1,3 +1,5 @@
+"""General utilities."""
+
 __all__ = ["resolve_index", "resolve_continuous_slice", "pre_move"]
 
 

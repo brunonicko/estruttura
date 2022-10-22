@@ -14,12 +14,11 @@ from basicco.custom_repr import iterable_repr
 from basicco.explicit_hash import set_to_none
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Callable, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Mapping, Type, Generic, overload
+from tippo import Any, Callable, TypeVar, Iterator, Iterable, SupportsKeysAndGetItem, Mapping, Type, overload, cast
 
 from .constants import DELETED, DEFAULT, MISSING
 from .exceptions import ProcessingError
 from ._attribute import StructureAttribute, MutableStructureAttribute
-from ._relationship import Relationship
 from ._bases import (
     StructureMeta,
     Structure,
@@ -30,14 +29,13 @@ from ._bases import (
 )
 
 
-RT = TypeVar("RT", bound=Relationship)
-SAT = TypeVar("SAT", bound=StructureAttribute)
+KT_str = TypeVar("KT_str", bound=str)
 SAT_co = TypeVar("SAT_co", bound=StructureAttribute, covariant=True)
 MSAT = TypeVar("MSAT", bound=MutableStructureAttribute)
 
 
 @final
-class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[str, SAT_co]):
+class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co]):
     """Maps attributes by name."""
 
     __slots__ = ("__attribute_dict",)
@@ -90,9 +88,9 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[str, SAT_co]):
         return len(self.__attribute_dict)
 
     def __iter__(self):
-        # type: () -> Iterator[str]
+        # type: () -> Iterator[KT_str]
         for name in self.__attribute_dict:
-            yield name
+            yield cast(KT_str, name)
 
     def get_initial_values(self, args, kwargs, init_property="init", init_method="__init__"):
         # type: (tuple, dict[str, Any], str, str | None) -> dict[str, Any]
@@ -229,7 +227,9 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[str, SAT_co]):
 
 
 class ClassStructureMeta(StructureMeta):
-    __attribute_type__ = StructureAttribute  # type: Type[StructureAttribute]
+    """Metaclass for :class:`ClassStructure`."""
+
+    __attribute_type__ = StructureAttribute  # type: Type[StructureAttribute[Any]]
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
@@ -315,9 +315,6 @@ class ClassStructureMeta(StructureMeta):
             assert attribute.owner is cls
             assert attribute.name == attribute_name
 
-        # Store attribute map.
-        cls.__attributes = attribute_map
-
         # Check for non-default attributes declared after default ones.
         if cls.__kw_only__:
             seen_default = None
@@ -347,6 +344,31 @@ class ClassStructureMeta(StructureMeta):
                 )
                 raise TypeError(error)
 
+        # Check for serialization conflicts and assemble deserialization map.
+        serialize_to_counter = collections.Counter()
+        deserialization_map = {}  # type: dict[str, frozenset[str]]
+        for attribute_name, attribute in six.iteritems(attribute_map):
+            if attribute.serialized:
+
+                # Make sure we don't have multiple attributes serializing to the same name.
+                serialize_to = attribute.serialize_to or attribute_name
+                serialize_to_counter[serialize_to] += 1
+                if serialize_to_counter[serialize_to] > 1:
+                    error = "multiple attributes serialize to {!r}".format(serialize_to)
+                    raise TypeError(error)
+
+                # Store in deserialization map.
+                deserialize_from = attribute.deserialize_from or attribute_name
+                deserialization_map[deserialize_from] = deserialization_map.setdefault(
+                    deserialize_from, frozenset()
+                ).union({attribute_name})
+
+        # Store deserialization map.
+        cls.__deserialization_map = MappingProxyType(deserialization_map)
+
+        # Store attribute map.
+        cls.__attributes = attribute_map
+
         return cls
 
     # noinspection PyUnusedLocal
@@ -357,15 +379,22 @@ class ClassStructureMeta(StructureMeta):
 
     @property
     @final
+    def __deserialization_map__(cls):  # noqa
+        # type: () -> MappingProxyType[str, frozenset[str]]
+        return cls.__deserialization_map
+
+    @property
+    @final
     def __attributes__(cls):  # noqa
         # type: () -> AttributeMap
         return cls.__attributes
 
 
 # noinspection PyAbstractClass
-class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Generic[RT, SAT])):
+class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
     __slots__ = ()
-    __attributes__ = AttributeMap()  # type: AttributeMap[SAT]
+    __deserialization_map__ = MappingProxyType({})  # type: MappingProxyType[str, frozenset[str]]
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, StructureAttribute[Any]]
     __kw_only__ = False  # type: bool
 
     def __init_subclass__(cls, kw_only=None, **kwargs):
@@ -650,6 +679,35 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure[RT], Gener
             MappingProxyType(updates_and_inserts),
         )
 
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[CS], MappingProxyType[str, Any]) -> CS
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> dict[str, Any]
+        cls = type(self)
+        serialized = {}  # type: dict[str, Any]
+        for name, value in self:
+            attribute = cls.__attributes__[name]
+            serialized_name = attribute.serialize_to or name
+            serialized_value = attribute.relationship.serialize_value(value)
+            if serialized_value is not MISSING:
+                serialized[serialized_name] = serialized_value
+        return serialized
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[CS], Mapping[str, Any]) -> CS
+        values = {}  # type: dict[str, Any]
+        for serialized_name, serialized in six.iteritems(serialized):
+            for name in cls.__deserialization_map__[serialized_name]:
+                attribute = cls.__attributes__[name]
+                values[name] = attribute.relationship.deserialize_value(serialized)
+        # TODO: get default values somehow!
+        return cls._do_deserialize(MappingProxyType(values))
+
 
 CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
 
@@ -659,9 +717,7 @@ class ImmutableClassStructureMeta(ClassStructureMeta, ImmutableStructureMeta):
 
 
 # noinspection PyAbstractClass
-class ImmutableClassStructure(
-    six.with_metaclass(ImmutableClassStructureMeta, ClassStructure[RT, SAT], ImmutableStructure[RT])
-):
+class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, ClassStructure, ImmutableStructure)):
     __slots__ = ()
 
     def __hash__(self):
@@ -745,14 +801,17 @@ ICS = TypeVar("ICS", bound=ImmutableClassStructure)  # immutable class structure
 
 
 class MutableClassStructureMeta(ClassStructureMeta, MutableStructureMeta):
-    __attribute_type__ = MutableStructureAttribute  # type: Type[MutableStructureAttribute]
+    """Metaclass for :class:`MutableClassStructure`."""
+
+    __attribute_type__ = MutableStructureAttribute  # type: Type[MutableStructureAttribute[Any]]
 
 
 # noinspection PyAbstractClass
-class MutableClassStructure(
-    six.with_metaclass(MutableClassStructureMeta, ClassStructure[RT, MSAT], MutableStructure[RT])
-):
+class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, ClassStructure, MutableStructure)):
+    """Mutable class structure."""
+
     __slots__ = ()
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableStructureAttribute[Any]]
 
     @set_to_none
     def __hash__(self):
@@ -1013,9 +1072,9 @@ class _DelegateSelfInternals(SlottedBase):
                 with self.__getter_context(attribute):
                     value = attribute.fget(self.iobj)
                 try:
-                    value = attribute.process_value(value)
+                    value = attribute.process_value(value, name)
                 except (ProcessingError, TypeError, ValueError) as e:
-                    exc = type(e)("{!r} attribute; {}".format(name, e))
+                    exc = type(e)(e)
                     six.raise_from(exc, None)
                     raise exc
                 self.__set_new_value(name, value)
@@ -1064,9 +1123,9 @@ class _DelegateSelfInternals(SlottedBase):
 
         if process:
             try:
-                value = attribute.process_value(value)
+                value = attribute.process_value(value, name)
             except (ProcessingError, TypeError, ValueError) as e:
-                exc = type(e)("{!r} attribute; {}".format(name, e))
+                exc = type(e)(e)
                 six.raise_from(exc, None)
                 raise exc
         if attribute.delegated:

@@ -1,45 +1,28 @@
-from ._attribute import (
-    StructureAttribute,
-    MutableStructureAttribute,
-)
+from ._attribute import MutableStructureAttribute, StructureAttribute
 from ._bases import (
-    StructureMeta,
-    Structure,
-    ImmutableStructureMeta,
-    ImmutableStructure,
-    MutableStructureMeta,
-    MutableStructure,
     CollectionStructure,
     ImmutableCollectionStructure,
+    ImmutableStructure,
+    ImmutableStructureMeta,
     MutableCollectionStructure,
+    MutableStructure,
+    MutableStructureMeta,
+    Structure,
+    StructureMeta,
 )
 from ._class import (
     AttributeMap,
-    ClassStructureMeta,
     ClassStructure,
-    ImmutableClassStructureMeta,
+    ClassStructureMeta,
     ImmutableClassStructure,
-    MutableClassStructureMeta,
+    ImmutableClassStructureMeta,
     MutableClassStructure,
+    MutableClassStructureMeta,
 )
-from ._dict import (
-    DictStructure,
-    ImmutableDictStructure,
-    MutableDictStructure,
-)
-from ._list import (
-    ListStructure,
-    ImmutableListStructure,
-    MutableListStructure,
-)
-from ._relationship import (
-    Relationship,
-)
-from ._set import (
-    SetStructure,
-    ImmutableSetStructure,
-    MutableSetStructure,
-)
+from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
+from ._list import ImmutableListStructure, ListStructure, MutableListStructure
+from ._relationship import Relationship
+from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
 
 __all__ = [
     "StructureAttribute",

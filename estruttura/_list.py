@@ -2,12 +2,24 @@ import six
 import slotted
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Callable, overload, MutableSequence, Iterable, Type, Sequence, TypeVar
+from tippo import (
+    Any,
+    Callable,
+    Iterable,
+    MutableSequence,
+    Sequence,
+    Type,
+    TypeVar,
+    overload,
+)
 
-from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import (
+    CollectionStructure,
+    ImmutableCollectionStructure,
+    MutableCollectionStructure,
+)
 from .exceptions import ProcessingError
-from .utils import resolve_index, resolve_continuous_slice, pre_move
-
+from .utils import pre_move, resolve_continuous_slice, resolve_index
 
 T = TypeVar("T")
 
@@ -34,21 +46,21 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
         self._do_init(initial_values)
 
     @overload
-    def __getitem__(self, index):
+    def __getitem__(self, item):
         # type: (int) -> T
         pass
 
     @overload
-    def __getitem__(self, index):
+    def __getitem__(self, item):
         # type: (slice) -> MutableSequence[T]
         pass
 
     @abstract
-    def __getitem__(self, index):
+    def __getitem__(self, item):
         """
         Get value/values at index/slice.
 
-        :param index: Index/slice.
+        :param item: Index/slice.
         :return: Value/values.
         """
         raise NotImplementedError()

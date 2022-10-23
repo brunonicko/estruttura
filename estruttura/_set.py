@@ -1,18 +1,21 @@
 import six
 import slotted
-from tippo import Any, AbstractSet, Iterable, Type, TypeVar
-from basicco.runtime_final import final
 from basicco.abstract_class import abstract
+from basicco.runtime_final import final
+from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
-from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import (
+    CollectionStructure,
+    ImmutableCollectionStructure,
+    MutableCollectionStructure,
+)
 from .exceptions import ProcessingError
-
 
 T = TypeVar("T")
 
 
 class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
-    """Set estructure."""
+    """Set structure."""
 
     __slots__ = ()
 

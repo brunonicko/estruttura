@@ -1,30 +1,34 @@
 import six
 import slotted
-from tippo import (
-    Any,
-    TypeVar,
-    KeysView,
-    ItemsView,
-    ValuesView,
-    Iterator,
-    SupportsKeysAndGetItem,
-    Iterable,
-    Type,
-    Mapping,
-    MutableMapping,
-    overload,
-)
-from basicco.mapping_proxy import MappingProxyType
-from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 from basicco.custom_repr import mapping_repr
-from basicco.safe_repr import safe_repr
+from basicco.mapping_proxy import MappingProxyType
 from basicco.recursive_repr import recursive_repr
+from basicco.runtime_final import final
+from basicco.safe_repr import safe_repr
+from tippo import (
+    Any,
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    Mapping,
+    MutableMapping,
+    SupportsKeysAndGetItem,
+    Type,
+    TypeVar,
+    ValuesView,
+    overload,
+)
 
-from ._bases import CollectionStructure, ImmutableCollectionStructure, MutableCollectionStructure
+from ._bases import (
+    CollectionStructure,
+    ImmutableCollectionStructure,
+    MutableCollectionStructure,
+)
+from ._relationship import Relationship
+from .constants import DELETED, MISSING, DeletedType, MissingType
 from .exceptions import ProcessingError
-from .constants import DeletedType, DELETED, MISSING
-
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -34,6 +38,16 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
     """Dictionary structure."""
 
     __slots__ = ()
+    key_relationship = Relationship()  # type: Relationship[KT]
+
+    def __init_subclass__(cls, key_relationship=MISSING, **kwargs):
+        # type: (Relationship[KT] | MissingType, **Any) -> None
+
+        # Key relationship.
+        if key_relationship is not MISSING:
+            cls.key_relationship = key_relationship
+
+        super(DictStructure, cls).__init_subclass__(**kwargs)
 
     @overload
     def __init__(self, __m, **kwargs):
@@ -58,7 +72,8 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
         if self.relationship.will_process:
             try:
                 initial_values = dict(
-                    (k, self.relationship.process_value(v, k)) for k, v in six.iteritems(initial_values)
+                    (self.key_relationship.process_value(k), self.relationship.process_value(v, k))
+                    for k, v in six.iteritems(initial_values)
                 )
             except ProcessingError as e:
                 exc = type(e)(e)
@@ -192,6 +207,8 @@ class DictStructure(CollectionStructure[KT], slotted.SlottedMapping[KT, VT]):
         updates_new = {}
         updates_and_inserts = {}
         for key, value in six.iteritems(changes):
+            key = self.key_relationship.process_value(key)
+
             if value is DELETED:
                 if key not in self:
                     raise KeyError(key)

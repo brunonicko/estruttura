@@ -2,7 +2,7 @@ import copy
 
 import pytest
 
-from estruttura import ImmutableClassStructure, StructureAttribute, Relationship
+from estruttura import ImmutableClassStructure, Relationship, StructureAttribute
 
 
 class ImmutableClass(ImmutableClassStructure):
@@ -23,7 +23,7 @@ class ImmutableClass(ImmutableClassStructure):
         for d in deletes:
             del new_internal[d]
         new_self = copy.copy(self)
-        self.__internal = new_internal
+        new_self.__internal = new_internal
         return new_self
 
     @classmethod
@@ -34,21 +34,29 @@ class ImmutableClass(ImmutableClassStructure):
 
 
 class Employee(ImmutableClass):
+    company = StructureAttribute(
+        "foobar", constant=True, relationship=Relationship(converter=str.upper)
+    )  # type: StructureAttribute[str]
     name = StructureAttribute(relationship=Relationship(types=str))
     boss = StructureAttribute(
         default=None,
         relationship=Relationship(types=("Employee", None), extra_paths=(__name__,)),
-        serialize_to="manager",
-        deserialize_from="manager",
+        serialize_as="manager",
+        serialize_default=False,
     )  # type: StructureAttribute[Employee] | None
+    salary = StructureAttribute(100, serializable=False)  # type: StructureAttribute[int]
 
 
 def test_class():
     john = Employee("John")
     mark = Employee("Mark", boss=john)
 
+    assert Employee.company == "FOOBAR"
+    assert john.company == "FOOBAR"
+    assert mark.company == "FOOBAR"
+
     serialized_mark = mark.serialize()
-    assert serialized_mark == {'manager': {'manager': None, 'name': 'John'}, 'name': 'Mark'}
+    assert serialized_mark == {"name": "Mark", "manager": {"name": "John"}}
 
     deserialized_mark = Employee.deserialize(serialized_mark)
     assert deserialized_mark == mark

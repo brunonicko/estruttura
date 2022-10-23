@@ -6,7 +6,7 @@ __all__ = [
     "ConversionError",
     "ValidationError",
     "InvalidTypeError",
-    "SerializationError"
+    "SerializationError",
 ]
 
 

@@ -1,14 +1,13 @@
-import six
 import basicco
+import six
 import slotted
 from basicco.abstract_class import abstract, is_abstract
 from basicco.explicit_hash import set_to_none
 from basicco.runtime_final import final
-from tippo import Any, TypeVar, Type
+from tippo import Any, Type, TypeVar
 
-from .constants import MissingType, MISSING
 from ._relationship import Relationship
-
+from .constants import MISSING, MissingType
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)

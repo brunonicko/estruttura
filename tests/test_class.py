@@ -1,5 +1,5 @@
-import enum
 import copy
+import enum
 
 import pytest
 
@@ -47,12 +47,8 @@ class Position(enum.Enum):
 
 
 class Employee(ImmutableClass):
-    light = StructureAttribute(
-        relationship=Relationship(types=LightSwitch, serializer=EnumSerializer())
-    )
-    position = StructureAttribute(
-        relationship=Relationship(types=Position, serializer=EnumSerializer(by_name=True))
-    )
+    light = StructureAttribute(relationship=Relationship(types=LightSwitch, serializer=EnumSerializer()))
+    position = StructureAttribute(relationship=Relationship(types=Position, serializer=EnumSerializer(by_name=True)))
     company = StructureAttribute(
         "foobar", constant=True, relationship=Relationship(converter=str.upper)
     )  # type: StructureAttribute[str]
@@ -79,11 +75,7 @@ def test_class():
         "light": 1,
         "position": "LEFT",
         "name": "Mark",
-        "manager": {
-            "light": 0,
-            "position": "RIGHT",
-            "name": "John"
-        }
+        "manager": {"light": 0, "position": "RIGHT", "name": "John"},
     }
 
     deserialized_mark = Employee.deserialize(serialized_mark)

@@ -4,8 +4,8 @@ import enum
 
 from tippo import Any, Tuple, Type, TypeVar, cast
 
-from .exceptions import SerializationError
 from ._relationship import Relationship, Serializer, TypedSerializer
+from .exceptions import SerializationError
 
 __all__ = ["Serializer", "TypedSerializer", "EnumSerializer"]
 
@@ -50,7 +50,7 @@ class EnumSerializer(Serializer):
         """
         enum_types = cast(
             Tuple[Type[enum.Enum], ...],
-            tuple(t for t in relationship.types_info.complex_types if issubclass(t, enum.Enum))
+            tuple(t for t in relationship.types_info.complex_types if issubclass(t, enum.Enum)),
         )
         for enum_cls in enum_types:
             items = list(enum_cls)  # type: list[enum.Enum]

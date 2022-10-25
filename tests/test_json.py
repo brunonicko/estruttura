@@ -17,7 +17,7 @@ class ImmutableDict(ImmutableDictStructure):
     def __eq__(self, other):
         return type(self) is type(other) and self.__internal == other.__internal  # noqa
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self.__internal)
 
     def __iter__(self):
@@ -137,6 +137,8 @@ class JSONDict(ImmutableDict):
 def test_json():
     example = {
         "glossary": {
+            "__class__": "foo",
+            "__state__": "bar",
             "title": "example glossary",
             "GlossDiv": {
                 "title": "S",
@@ -155,10 +157,13 @@ def test_json():
                     }
                 },
             },
-        }
+        },
     }
     data = JSONDict.deserialize(example)
     assert data.serialize() == example
+
+    assert isinstance(data["glossary"], JSONDict)
+    assert isinstance(data["glossary"]["GlossDiv"]["GlossList"]["GlossEntry"]["GlossDef"]["GlossSeeAlso"], JSONList)
 
 
 if __name__ == "__main__":

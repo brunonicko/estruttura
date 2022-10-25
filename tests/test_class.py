@@ -1,8 +1,10 @@
+import enum
 import copy
 
 import pytest
 
 from estruttura import ImmutableClassStructure, Relationship, StructureAttribute
+from estruttura.serializers import EnumSerializer
 
 
 class ImmutableClass(ImmutableClassStructure):
@@ -33,7 +35,24 @@ class ImmutableClass(ImmutableClassStructure):
         return self
 
 
+class LightSwitch(enum.Enum):
+    OFF = 0
+    ON = 1
+
+
+class Position(enum.Enum):
+    LEFT = "left"
+    CENTER = "center"
+    RIGHT = "right"
+
+
 class Employee(ImmutableClass):
+    light = StructureAttribute(
+        relationship=Relationship(types=LightSwitch, serializer=EnumSerializer())
+    )
+    position = StructureAttribute(
+        relationship=Relationship(types=Position, serializer=EnumSerializer(by_name=True))
+    )
     company = StructureAttribute(
         "foobar", constant=True, relationship=Relationship(converter=str.upper)
     )  # type: StructureAttribute[str]
@@ -48,15 +67,24 @@ class Employee(ImmutableClass):
 
 
 def test_class():
-    john = Employee("John")
-    mark = Employee("Mark", boss=john)
+    john = Employee(LightSwitch.OFF, Position.RIGHT, "John")
+    mark = Employee(LightSwitch.ON, Position.LEFT, "Mark", boss=john)
 
     assert Employee.company == "FOOBAR"
     assert john.company == "FOOBAR"
     assert mark.company == "FOOBAR"
 
     serialized_mark = mark.serialize()
-    assert serialized_mark == {"name": "Mark", "manager": {"name": "John"}}
+    assert serialized_mark == {
+        "light": 1,
+        "position": "LEFT",
+        "name": "Mark",
+        "manager": {
+            "light": 0,
+            "position": "RIGHT",
+            "name": "John"
+        }
+    }
 
     deserialized_mark = Employee.deserialize(serialized_mark)
     assert deserialized_mark == mark

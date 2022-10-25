@@ -327,7 +327,7 @@ class ClassStructureMeta(StructureMeta):
         for attribute_name, attribute in six.iteritems(attribute_map):
 
             # Check for non-default attributes declared after default ones.
-            if cls.__kw_only__ and attribute.init:
+            if not cls.__kw_only__ and attribute.init:
                 if attribute.has_default:
                     seen_default = attribute_name
                 elif seen_default is not None:

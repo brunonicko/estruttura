@@ -21,7 +21,7 @@ from ._class import (
 )
 from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
 from ._list import ImmutableListStructure, ListStructure, MutableListStructure
-from ._relationship import Relationship
+from ._relationship import Relationship, RelationshipTypesInfo
 from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
 
 __all__ = [
@@ -50,6 +50,7 @@ __all__ = [
     "ImmutableListStructure",
     "MutableListStructure",
     "Relationship",
+    "RelationshipTypesInfo",
     "SetStructure",
     "ImmutableSetStructure",
     "MutableSetStructure",

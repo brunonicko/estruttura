@@ -210,7 +210,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
         """
         raise NotImplementedError()
 
-    @abstract
+    @final
     def _delete(self, item):
         # type: (LS, slice | int) -> LS
         """

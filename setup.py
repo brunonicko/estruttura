@@ -1,9 +1,22 @@
 import os
+
 import setuptools  # type: ignore
 
-
 with open("README.rst", "r") as fh:
-    long_description = fh.read()
+    long_description_lines = fh.read().split("\n")
+
+    line_nos = {}
+    for i, line in enumerate(long_description_lines):
+        if line == ".. logo_start":
+            line_nos["logo_start"] = i
+        elif line == ".. logo_end":
+            line_nos["logo_end"] = i
+            break
+
+    assert line_nos["logo_start"] < line_nos["logo_end"]
+
+    long_description = "Estruttura\n==========\n" + "\n".join(long_description_lines[line_nos["logo_end"] + 1 :])
+
 
 with open("requirements.txt", "r") as fh:
     install_requires = [line.strip(os.linesep) for line in fh.readlines()]
@@ -11,7 +24,7 @@ with open("requirements.txt", "r") as fh:
 
 setuptools.setup(
     name="estruttura",
-    version="0.1.0",
+    version="0.2.0",
     author="Bruno Nicko",
     author_email="brunonicko@gmail.com",
     description="Abstract structures.",
@@ -32,9 +45,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
-    python_requires=(
-        ">= 2.7, "
-        "!= 3.0.*, != 3.1.*, != 3.2.*, != 3.3.*, != 3.4.*, != 3.5.*, != 3.6.*"
-    ),
+    python_requires=">= 2.7, != 3.0.*, != 3.1.*, != 3.2.*, != 3.3.*, != 3.4.*, != 3.5.*, != 3.6.*",
     tests_require=["pytest"],
 )

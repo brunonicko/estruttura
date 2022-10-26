@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 1425 332" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
+    <g transform="matrix(24.4855,0,0,24.4855,-4667.51,-4690.09)">
+        <text x="192.566px" y="202.045px" style="font-family:'ShareTechMono-Regular', 'Share Tech Mono', monospace;font-size:12px;">e<tspan x="197.846px 203.126px 208.406px 213.686px " y="202.045px 202.045px 202.045px 202.045px ">stru</tspan></text>
+        <text x="218.966px" y="202.045px" style="font-family:'ShareTechMono-Regular', 'Share Tech Mono', monospace;font-size:12px;fill:rgb(58,173,95);">t<tspan x="224.246px " y="202.045px ">t</tspan></text>
+        <text x="229.526px" y="202.045px" style="font-family:'ShareTechMono-Regular', 'Share Tech Mono', monospace;font-size:12px;">u<tspan x="234.806px 240.086px " y="202.045px 202.045px ">ra</tspan></text>
+    </g>
+    <g transform="matrix(1.38977,0,0,1.00075,0.937913,-34.0255)">
+        <path d="M1024,100.474C1024,63.854 1002.59,34.124 976.222,34.124L47.778,34.124C21.408,34.124 0,63.854 0,100.474L0,365.876L976.222,365.876C1002.59,365.876 1024,336.146 1024,299.526L1024,100.474ZM1011.05,100.474L1011.05,299.526C1011.05,326.218 995.443,347.89 976.222,347.89L12.952,347.89C12.952,347.89 12.952,100.474 12.952,100.474C12.952,73.782 28.557,52.11 47.778,52.11L976.222,52.11C995.443,52.11 1011.05,73.782 1011.05,100.474Z" style="fill:rgb(58,173,96);"/>
+    </g>
+</svg>

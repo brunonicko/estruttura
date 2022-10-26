@@ -1,9 +1,4 @@
-"""List operations helper functions."""
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Optional, Tuple, Union
+"""General utilities."""
 
 __all__ = ["resolve_index", "resolve_continuous_slice", "pre_move"]
 
@@ -50,14 +45,14 @@ def resolve_continuous_slice(length, slc):
 
 
 def pre_move(length, item, target_index):
-    # type: (int, slice | int, int) -> tuple[int, int, int, int] | None
+    # type: (int, slice | int, int) -> tuple[int, int, int, int, int] | None
     """
     Perform checks before moving values internally.
 
     :param length: Length of the list.
     :param item: Index/slice.
     :param target_index: Target index.
-    :return: None or (index, stop, target index, post index).
+    :return: None or (target index, index, stop, post index, post_stop).
     """
 
     # Resolve slice/index.
@@ -69,7 +64,7 @@ def pre_move(length, item, target_index):
         index = resolve_index(length, item)
         stop = index + 1
 
-    # Calculate target index and post index.
+    # Calculate target index, post index, and post stop.
     target_index = resolve_index(length, target_index, clamp=True)
     if index <= target_index <= stop:
         return None
@@ -77,5 +72,6 @@ def pre_move(length, item, target_index):
         post_index = target_index - (stop - index)
     else:
         post_index = target_index
+    post_stop = post_index + (stop - index)
 
-    return index, stop, target_index, post_index
+    return target_index, index, stop, post_index, post_stop

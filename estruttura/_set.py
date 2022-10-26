@@ -1,98 +1,208 @@
-import pyrsistent
-from basicco import runtime_final, recursive_repr, custom_repr
-from tippo import Any, TypeVar, Iterable, Iterator
-from pyrsistent.typing import PSet
+import six
+import slotted
+from basicco.abstract_class import abstract
+from basicco.runtime_final import final
+from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
-from .bases import BaseSet, BaseProtectedSet, BaseInteractiveSet, BaseMutableSet
 from ._bases import (
-    BaseState,
-    BaseRelationship,
-    BaseStructure,
-    BaseProtectedStructure,
-    BaseInteractiveStructure,
-    BaseMutableStructure,
+    CollectionStructure,
+    ImmutableCollectionStructure,
+    MutableCollectionStructure,
 )
+from .exceptions import ProcessingError
+
+T = TypeVar("T")
 
 
-T = TypeVar("T")  # value type
-T_co = TypeVar("T_co", covariant=True)  # covariant value type
-RT = TypeVar("RT", bound=BaseRelationship)  # relationship type
-
-
-@runtime_final.final
-class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
-    """Immutable set state."""
+class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
+    """Set structure."""
 
     __slots__ = ()
 
-    @staticmethod
-    def _init_internal(initial):
-        # type: (Iterable[T]) -> PSet[T]
+    def __init__(self, initial=()):  # noqa
+        # type: (Iterable[T]) -> None
         """
-        Initialize internal state.
-
         :param initial: Initial values.
         """
-        return pyrsistent.pset(initial)
+        initial_values = frozenset(initial)
+        if self.relationship.will_process:
+            try:
+                initial_values = frozenset(self.relationship.process_value(v, v) for v in initial_values)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        self._do_init(initial_values)
 
-    def __init__(self, initial=()):
-        # type: (Iterable[T]) -> None
-        super(SetState, self).__init__(initial)
-
-    def __contains__(self, value):
-        # type: (Any) -> bool
+    @final
+    def __le__(self, other):
+        # type: (AbstractSet) -> bool
         """
-        Get whether value is present.
+        Less equal operator (self <= other).
 
-        :param value: Value.
-        :return: True if contains.
+        :param other: Another set or any object.
+        :return: True if considered less equal.
         """
-        return value in self._internal
+        if not isinstance(other, AbstractSet):
+            return NotImplemented
+        if type(other) not in (set, frozenset):
+            other = set(other)
+        return set(self).__le__(other)
 
-    def __iter__(self):
-        # type: () -> Iterator[T]
+    @final
+    def __lt__(self, other):
+        # type: (AbstractSet) -> bool
         """
-        Iterate over values.
+        Less than operator: `self < other`.
 
-        :return: Values iterator.
+        :param other: Another set or any object.
+        :return: True if considered less than.
         """
-        for key in self._internal:
-            yield key
+        if not isinstance(other, AbstractSet):
+            return NotImplemented
+        if type(other) not in (set, frozenset):
+            other = set(other)
+        return set(self).__lt__(other)
 
-    def __len__(self):
-        # type: () -> int
+    @final
+    def __gt__(self, other):
+        # type: (AbstractSet) -> bool
         """
-        Get value count.
+        Greater than operator: `self > other`.
 
-        :return: Value count.
+        :param other: Another set or any object.
+        :return: True if considered greater than.
         """
-        return len(self._internal)
+        if not isinstance(other, AbstractSet):
+            return NotImplemented
+        if type(other) not in (set, frozenset):
+            other = set(other)
+        return set(self).__gt__(other)
 
-    @recursive_repr.recursive_repr
-    def __repr__(self):
-        # type: () -> str
+    @final
+    def __ge__(self, other):
+        # type: (AbstractSet) -> bool
         """
-        Get representation.
+        Greater equal operator: `self >= other`.
 
-        :return: Representation.
+        :param other: Another set or any object.
+        :return: True if considered greater equal.
         """
-        return custom_repr.iterable_repr(
-            self._internal,
-            prefix="{}([".format(type(self).__name__),
-            suffix="])",
-            sorting=True,
-            sort_key=lambda v: hash(v),
-        )
+        if not isinstance(other, AbstractSet):
+            return NotImplemented
+        if type(other) not in (set, frozenset):
+            other = set(other)
+        return set(self).__ge__(other)
 
-    def _clear(self):
-        # type: (SS) -> SS
+    @final
+    def __and__(self, other):
+        # type: (Iterable) -> AbstractSet
         """
-        Clear.
+        Get intersection: `self & other`.
 
-        :return: Transformed.
+        :param other: Iterable or any other object.
+        :return: Intersection or `NotImplemented` if not an iterable.
         """
-        return self._make(pyrsistent.pset())
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        return self.intersection(other)
 
+    @final
+    def __rand__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get intersection: `other & self`.
+
+        :param other: Iterable or any other object.
+        :return: Intersection or `NotImplemented` if not an iterable.
+        """
+        return self.__and__(other)
+
+    @final
+    def __sub__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get difference: `self - other`.
+
+        :param other: Iterable or any other object.
+        :return: Difference or `NotImplemented` if not an iterable.
+        """
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        return self.difference(other)
+
+    @final
+    def __rsub__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get inverse difference: `other - self`.
+
+        :param other: Iterable or any other object.
+        :return: Inverse difference or `NotImplemented` if not an iterable.
+        """
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        return self.inverse_difference(other)
+
+    @final
+    def __or__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get union: `self | other`.
+
+        :param other: Iterable or any other object.
+        :return: Union or `NotImplemented` if not an iterable.
+        """
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        return self.union(other)
+
+    @final
+    def __ror__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get union: `other | self`.
+
+        :param other: Iterable or any other object.
+        :return: Union or `NotImplemented` if not an iterable.
+        """
+        return self.__or__(other)
+
+    @final
+    def __xor__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get symmetric difference: `self ^ other`.
+
+        :param other: Iterable or any other object.
+        :return: Symmetric difference or `NotImplemented` if not an iterable.
+        """
+        if not isinstance(other, Iterable):
+            return NotImplemented
+        return self.symmetric_difference(other)
+
+    @final
+    def __rxor__(self, other):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get symmetric difference: `other ^ self`.
+
+        :param other: Iterable or any other object.
+        :return: Symmetric difference or `NotImplemented` if not an iterable.
+        """
+        return self.__xor__(other)
+
+    @abstract
+    def _do_init(self, initial_values):
+        # type: (frozenset[T]) -> None
+        """
+        Initialize values.
+
+        :param initial_values: New values.
+        """
+        raise NotImplementedError()
+
+    @final
     def _add(self, value):
         # type: (SS, T) -> SS
         """
@@ -101,22 +211,20 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
         :param value: Value.
         :return: Transformed.
         """
-        return self._make(self._internal.add(value))
+        return self._update((value,))
 
-    def _discard(self, *values):
-        # type: (SS, T) -> SS
+    @abstract
+    def _do_remove(self, old_values):
+        # type: (SS, frozenset[T]) -> SS
         """
-        Discard value(s).
+        Remove values.
 
-        :param values: Value(s).
+        :param old_values: Old values.
         :return: Transformed.
-        :raises ValueError: No values provided.
         """
-        if not values:
-            error = "no values provided"
-            raise ValueError(error)
-        return self._make(self._internal.discard(*values))
+        raise NotImplementedError()
 
+    @final
     def _remove(self, *values):
         # type: (SS, T) -> SS
         """
@@ -124,26 +232,50 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
 
         :param values: Value(s).
         :return: Transformed.
-        :raises ValueError: No values provided.
         :raises KeyError: Value is not present.
+        """
+        old_values = frozenset(values)
+        if not old_values:
+            return self
+
+        missing = old_values.difference(old_values.intersection(self))
+        if len(missing) == 1:
+            raise KeyError(next(iter(missing)))
+        elif missing:
+            raise KeyError(tuple(missing))
+
+        return self._do_remove(old_values)
+
+    @final
+    def _discard(self, *values):
+        # type: (SS, T) -> SS
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
         """
         if not values:
-            error = "no values provided"
-            raise ValueError(error)
-        return self._make(self._internal.difference(values))
+            return self
 
-    def _replace(self, old_value, new_value):
-        # type: (SS, T, T) -> SS
+        old_values = frozenset(values).intersection(self)
+        if not old_values:
+            return self
+
+        return self._do_remove(old_values)
+
+    @abstract
+    def _do_update(self, new_values):
+        # type: (SS, frozenset[T]) -> SS
         """
-        Replace existing value with a new one.
+        Add values.
 
-        :param old_value: Existing value.
-        :param new_value: New value.
+        :param new_values: New values.
         :return: Transformed.
-        :raises KeyError: Value is not present.
         """
-        return self._make(self._internal.remove(old_value).add(new_value))
+        raise NotImplementedError()
 
+    @final
     def _update(self, iterable):
         # type: (SS, Iterable[T]) -> SS
         """
@@ -152,8 +284,39 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
         :param iterable: Iterable.
         :return: Transformed.
         """
-        return self._make(self._internal.update(iterable))
+        if self.relationship.will_process:
+            try:
+                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        else:
+            new_values = frozenset(iterable)
 
+        new_values = frozenset(self.difference(new_values))
+        if not new_values:
+            return self
+
+        return self._do_update(new_values)
+
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[SS], frozenset[T]) -> SS
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> list[Any]
+        return [type(self).relationship.serialize_value(v) for v in self]
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[SS], Iterable[Any]) -> SS
+        values = frozenset(cls.relationship.deserialize_value(s) for s in serialized)
+        return cls._do_deserialize(values)
+
+    @abstract
     def isdisjoint(self, iterable):
         # type: (Iterable) -> bool
         """
@@ -162,8 +325,9 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
         :param iterable: Iterable.
         :return: True if is disjoint.
         """
-        return self._internal.isdisjoint(iterable)
+        raise NotImplementedError()
 
+    @abstract
     def issubset(self, iterable):
         # type: (Iterable) -> bool
         """
@@ -172,8 +336,9 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
         :param iterable: Iterable.
         :return: True if is subset.
         """
-        return self._internal.issubset(iterable)
+        raise NotImplementedError()
 
+    @abstract
     def issuperset(self, iterable):
         # type: (Iterable) -> bool
         """
@@ -182,111 +347,264 @@ class SetState(BaseState[T, PSet[T]], BaseInteractiveSet[T]):
         :param iterable: Iterable.
         :return: True if is superset.
         """
-        return self._internal.issuperset(iterable)
+        raise NotImplementedError()
 
+    @abstract
     def intersection(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> AbstractSet
         """
         Get intersection.
 
         :param iterable: Iterable.
         :return: Intersection.
         """
-        return type(self)._make(self._internal.intersection(iterable))
+        raise NotImplementedError()
 
-    def difference(self, iterable):
-        # type: (Iterable) -> SetState
-        """
-        Get difference.
-
-        :param iterable: Iterable.
-        :return: Difference.
-        """
-        return type(self)._make(self._internal.difference(iterable))
-
-    def inverse_difference(self, iterable):
-        # type: (Iterable) -> SetState
-        """
-        Get an iterable's difference to this.
-
-        :param iterable: Iterable.
-        :return: Inverse Difference.
-        """
-        return type(self)._make(pyrsistent.pset(iterable).difference(self._internal))
-
+    @abstract
     def symmetric_difference(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> AbstractSet
         """
         Get symmetric difference.
 
         :param iterable: Iterable.
         :return: Symmetric difference.
         """
-        return type(self)._make(self._internal.symmetric_difference(iterable))
+        raise NotImplementedError()
 
+    @abstract
     def union(self, iterable):
-        # type: (Iterable) -> SetState
+        # type: (Iterable) -> AbstractSet
         """
         Get union.
 
         :param iterable: Iterable.
         :return: Union.
         """
-        return type(self)._make(self._internal.union(iterable))
+        raise NotImplementedError()
+
+    @abstract
+    def difference(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get difference.
+
+        :param iterable: Iterable.
+        :return: Difference.
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def inverse_difference(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get an iterable's difference to this.
+
+        :param iterable: Iterable.
+        :return: Inverse Difference.
+        """
+        raise NotImplementedError()
 
 
-SS = TypeVar("SS", bound=SetState)
+SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
-class BaseSetStructure(BaseStructure[T, T, SetState[T], int, RT], BaseSet[T]):
-    """Base list structure."""
+class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
+    """Immutable set structure."""
 
     __slots__ = ()
 
-    @runtime_final.final
-    def _get_value(self, location):
-        # type: (T) -> T
+    @final
+    def add(self, value):
+        # type: (ISS, T) -> ISS
         """
-        Get value at location.
+        Add value.
 
-        :param location: Location.
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._add(value)
+
+    @final
+    def discard(self, *values):
+        # type: (ISS, T) -> ISS
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        """
+        return self._discard(*values)
+
+    @final
+    def remove(self, *values):
+        # type: (ISS, T) -> ISS
+        """
+        Remove existing value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        :raises KeyError: Value is not present.
+        """
+        return self._remove(*values)
+
+    @final
+    def update(self, iterable):
+        # type: (ISS, Iterable[T]) -> ISS
+        """
+        Update with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        return self._update(iterable)
+
+
+ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
+
+
+# noinspection PyAbstractClass
+class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+    """Mutable set structure."""
+
+    __slots__ = ()
+
+    @final
+    def __iand__(self, iterable):
+        """
+        Intersect in place: `self &= iterable`.
+
+        :param iterable: Iterable.
+        :return: This mutable set.
+        """
+        self.intersection_update(iterable)
+        return self
+
+    @final
+    def __isub__(self, iterable):
+        """
+        Difference in place: `self -= iterable`.
+
+        :param iterable: Iterable.
+        :return: This mutable set.
+        """
+        self.difference(iterable)
+        return self
+
+    @final
+    def __ior__(self, iterable):
+        """
+        Update in place: `self |= iterable`.
+
+        :param iterable: Iterable.
+        :return: This mutable set.
+        """
+        self.update(iterable)
+        return self
+
+    @final
+    def __ixor__(self, iterable):
+        """
+        Symmetric difference in place: `self ^= iterable`.
+
+        :param iterable: Iterable.
+        :return: This mutable set.
+        """
+        if iterable is self:
+            self.clear()
+        else:
+            self.symmetric_difference_update(iterable)
+        return self
+
+    @final
+    def pop(self):
+        # type: () -> T
+        """
+        Pop value.
+
         :return: Value.
-        :raises KeyError: No value at location.
+        :raises KeyError: Empty set.
         """
-        if location not in self:
-            raise KeyError("not in set")
-        return location
+        value = next(iter(self))
+        self.remove(value)
+        return value
 
+    @final
+    def intersection_update(self, iterable):
+        # type: (Iterable[T]) -> None
+        """
+        Intersect.
 
-# noinspection PyAbstractClass
-class BaseProtectedSetStructure(
-    BaseSetStructure[T_co, RT],
-    BaseProtectedStructure[T_co, T_co, SetState[T_co], int, RT],
-    BaseProtectedSet[T_co],
-):
-    """Base interactive list structure."""
+        :param iterable: Iterable.
+        """
+        difference = self.difference(iterable)
+        if difference:
+            self.remove(*difference)
 
-    __slots__ = ()
+    @final
+    def symmetric_difference_update(self, iterable):
+        # type: (Iterable[T]) -> None
+        """
+        Symmetric difference.
 
+        :param iterable: Iterable.
+        """
+        inverse_difference = self.inverse_difference(iterable)
+        intersection = self.intersection(iterable)
+        if inverse_difference:
+            self._update(inverse_difference)
+        if intersection:
+            self.remove(*intersection)
 
-# noinspection PyAbstractClass
-class BaseInteractiveSetStructure(
-    BaseProtectedSetStructure[T_co, RT],
-    BaseInteractiveStructure[T_co, T_co, SetState[T_co], int, RT],
-    BaseInteractiveSet[T_co],
-):
-    """Base interactive list structure."""
+    @final
+    def difference_update(self, iterable):
+        # type: (Iterable[T]) -> None
+        """
+        Difference.
 
-    __slots__ = ()
+        :param iterable: Iterable.
+        """
+        intersection = self.intersection(iterable)
+        if intersection:
+            self.remove(*intersection)
 
+    @final
+    def add(self, value):
+        # type: (T) -> None
+        """
+        Add value.
 
-# noinspection PyAbstractClass
-class BaseMutableSetStructure(
-    BaseProtectedSetStructure[T_co, RT],
-    BaseMutableStructure[T_co, T_co, SetState[T_co], int, RT],
-    BaseMutableSet[T_co],
-):
-    """Base mutable list structure."""
+        :param value: Value.
+        """
+        self.add(value)
 
-    __slots__ = ()
+    @final
+    def discard(self, *values):
+        # type: (T) -> None
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        """
+        self.discard(*values)
+
+    @final
+    def remove(self, *values):
+        # type: (T) -> None
+        """
+        Remove existing value(s).
+
+        :param values: Value(s).
+        :raises KeyError: Value is not present.
+        """
+        self.remove(*values)
+
+    @final
+    def update(self, iterable):
+        # type: (Iterable[T]) -> None
+        """
+        Update with iterable.
+
+        :param iterable: Iterable.
+        """
+        self.update(iterable)

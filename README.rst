@@ -1,5 +1,18 @@
-Estruttura
-==========
+.. logo_start
+.. raw:: html
+
+   <p align="center">
+     <a href="https://github.com/brunonicko/estruttura">
+         <picture>
+            <object data="./_static/estruttura.svg" type="image/png">
+                <source srcset="./docs/source/_static/estruttura_white.svg" media="(prefers-color-scheme: dark)">
+                <img src="./docs/source/_static/estruttura.svg" width="60%" alt="estruttura" />
+            </object>
+         </picture>
+     </a>
+   </p>
+.. logo_end
+
 .. image:: https://github.com/brunonicko/estruttura/workflows/MyPy/badge.svg
    :target: https://github.com/brunonicko/estruttura/actions?query=workflow%3AMyPy
 
@@ -23,4 +36,9 @@ Estruttura
 
 Overview
 --------
-Abstract data structure classes.
+`estruttura` is a Python package that provides abstract data structure classes and utilities.
+This package is not yet ready for production use.
+
+Motivation
+----------
+`estruttura` was born out of needing a common interface for building the `datta` and `objetto` packages.

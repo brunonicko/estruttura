@@ -4,20 +4,8 @@ import six
 from basicco import SlottedBase, basic_data, fabricate_value, type_checking
 from basicco.abstract_class import abstract
 from basicco.import_path import get_path, import_path
-from tippo import (
-    Any,
-    Callable,
-    Generic,
-    Iterable,
-    Mapping,
-    SupportsKeysAndGetItem,
-    Tuple,
-    Type,
-    TypeVar,
-    cast,
-    get_origin,
-    overload,
-)
+from tippo import Any, Callable, Generic, Iterable, Mapping, Tuple, Type, TypeVar, cast, get_origin, overload
+from tippo import SupportsKeysAndGetItem
 
 from .constants import BASIC_TYPES, MISSING
 from .exceptions import (

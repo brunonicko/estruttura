@@ -11,10 +11,10 @@ class ImmutableDict(ImmutableDictStructure):
     def __getitem__(self, key):
         return self.__internal[key]
 
-    def __hash__(self):
+    def _hash(self):
         return hash(tuple(sorted(self.__internal.items(), key=lambda i: i[0])))
 
-    def __eq__(self, other):
+    def _eq(self, other):
         return type(self) is type(other) and self.__internal == other.__internal  # noqa
 
     def __len__(self):
@@ -110,10 +110,10 @@ class ImmutableList(ImmutableListStructure):
         new_self.__internal = []
         return new_self
 
-    def __hash__(self):
+    def _hash(self):
         return hash(tuple(self.__internal))
 
-    def __eq__(self, other):
+    def _eq(self, other):
         return type(self) is type(other) and self.__internal == other.__internal  # noqa
 
     def __len__(self):

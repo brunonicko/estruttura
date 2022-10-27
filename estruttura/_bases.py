@@ -1,7 +1,7 @@
 import basicco
 import six
 import slotted
-from basicco import explicit_hash, recursive_repr, safe_repr
+from basicco import recursive_repr, safe_repr
 from basicco.runtime_final import final
 from basicco.abstract_class import abstract
 from tippo import Any, Type, Iterator, TypeVar
@@ -27,10 +27,10 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         # type: () -> int
         raise NotImplementedError()
 
-    @abstract
+    @final
     def __eq__(self, other):
         # type: (object) -> bool
-        raise NotImplementedError()
+        return self._eq(other)
 
     @final
     @safe_repr.safe_repr
@@ -50,6 +50,17 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         :return: String representation.
         """
         return self._str()
+
+    @abstract
+    def _eq(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        raise NotImplementedError()
 
     @abstract
     def _repr(self):
@@ -98,22 +109,7 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
 S = TypeVar("S")  # structure self type
 
 
-class BaseImmutableStructureMeta(BaseStructureMeta):
-    """Metaclass for :class:`BaseImmutableStructure`."""
-
-    @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
-        cls = super(BaseImmutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-
-        # Force hashable.
-        if cls.__hash__ is None:
-            error = "'__hash__' in {!r} can't be None".format(name)
-            raise TypeError(error)
-
-        return cls
-
-
-class BaseImmutableStructure(six.with_metaclass(BaseImmutableStructureMeta, BaseStructure, slotted.SlottedHashable)):
+class BaseImmutableStructure(BaseStructure, slotted.SlottedHashable):
     """Base immutable structure class."""
 
     __slots__ = ()
@@ -134,37 +130,24 @@ class BaseImmutableStructure(six.with_metaclass(BaseImmutableStructureMeta, Base
         raise NotImplementedError()
 
 
-class BaseMutableStructureMeta(BaseStructureMeta):
-    """Metaclass for :class:`BaseMutableStructure`."""
-
-    @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
-
-        # If '__eq__' is declared but not '__hash__', force it to be None.
-        if "__eq__" in dct and "__hash__" not in dct:
-            dct = dict(dct)
-            dct["__hash__"] = None
-
-        cls = super(BaseMutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-
-        # Error out if for some reason '__hash__' is not set to None.
-        if cls.__hash__ is not None:
-            error = "'__hash__' in {!r} needs to be None".format(name)
-            raise TypeError(error)
-
-        return cls
-
-
 # noinspection PyAbstractClass
-class BaseMutableStructure(six.with_metaclass(BaseMutableStructureMeta, BaseStructure)):
+class BaseMutableStructure(BaseStructure):
     """Base mutable structure class."""
 
     __slots__ = ()
 
-    @explicit_hash.set_to_none
+    @final
     def __hash__(self):
         error = "{!r} object is not hashable".format(type(self).__name__)
         raise TypeError(error)
+
+
+# Add descriptor that forces final 'None' hash.
+type.__setattr__(
+    BaseMutableStructure,
+    "__hash__",
+    type("NullHash", (object,), {"__is_final_method__": True, "__get__": lambda *_: None})(),
+)
 
 
 # noinspection PyAbstractClass
@@ -186,52 +169,6 @@ class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
         if relationship is not MISSING:
             cls.relationship = relationship
         super(BaseCollectionStructure, cls).__init_subclass__(**kwargs)  # noqa
-
-    @final
-    def __contains__(self, item):
-        # type: (object) -> bool
-        return self._contains(item)
-
-    @final
-    def __iter__(self):
-        # type: () -> Iterator[T_co]
-        return self._iter()
-
-    @final
-    def __len__(self):
-        # type: () -> int
-        return self._len()
-
-    @abstract
-    def _contains(self, item):
-        # type: (object) -> bool
-        """
-        Get whether contains item.
-
-        :param item: Item.
-        :return: True if contains.
-        """
-        raise NotImplementedError()
-
-    @abstract
-    def _iter(self):
-        # type: () -> Iterator[T_co]
-        """
-        Iterate over collection contents.
-
-        :return: Iterator.
-        """
-        raise NotImplementedError()
-
-    @abstract
-    def _len(self):
-        # type: () -> int
-        """
-        Get length.
-
-        :return: Length.
-        """
-        raise NotImplementedError()
 
     @abstract
     def _do_clear(self):

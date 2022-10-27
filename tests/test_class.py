@@ -56,7 +56,7 @@ class Employee(ImmutableClass):
         relationship=Relationship(types=("Employee", None), extra_paths=(__name__,)),
         serialize_as="manager",
         serialize_default=False,
-    )  # type: Attribute[Employee] | None
+    )  # type: Attribute[Employee | None]
     salary = Attribute(100, serializable=False)  # type: Attribute[int]
 
 

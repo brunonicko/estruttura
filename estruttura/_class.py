@@ -7,35 +7,17 @@ import six
 from basicco import SlottedBase
 from basicco.abstract_class import abstract
 from basicco.custom_repr import iterable_repr
-from basicco.explicit_hash import set_to_none
 from basicco.get_mro import preview_mro
 from basicco.mapping_proxy import MappingProxyType
 from basicco.recursive_repr import recursive_repr
 from basicco.runtime_final import final
 from basicco.safe_repr import safe_repr
 from slotted import SlottedHashable, SlottedMapping
-from tippo import (
-    Any,
-    Callable,
-    Iterable,
-    Iterator,
-    Mapping,
-    SupportsKeysAndGetItem,
-    Type,
-    TypeVar,
-    cast,
-    overload,
-)
+from tippo import Any, Callable, Iterable, Iterator, Mapping, Type, TypeVar, cast, overload
+from tippo import SupportsKeysAndGetItem
 
 from ._attribute import MutableAttribute, Attribute
-from ._bases import (
-    BaseImmutableStructure,
-    BaseImmutableStructureMeta,
-    BaseMutableStructure,
-    BaseMutableStructureMeta,
-    BaseStructure,
-    BaseStructureMeta,
-)
+from ._bases import BaseImmutableStructure, BaseMutableStructure, BaseStructure, BaseStructureMeta
 from .constants import DEFAULT, DELETED, MISSING
 from .exceptions import ProcessingError
 
@@ -236,12 +218,16 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
 class ClassStructureMeta(BaseStructureMeta):
     """Metaclass for :class:`ClassStructure`."""
 
-    __attribute_type__ = Attribute  # type: Type[Attribute[Any]]
-
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+        dct = dict(dct)
 
-        # Scrape bases.
+        # Get attribute type.
+        attribute_type = dct["__attribute_type__"] = dct.get("__kwargs__", {}).pop(
+            "attribute_type", kwargs.get("attribute_type", dct.get("__attribute_type__", Attribute))
+        )
+
+        # Scrape bases for attributes.
         base_attributes = {}  # type: dict[str, Attribute]
         counter = collections.Counter()  # type: collections.Counter[str]
         for base in reversed(preview_mro(*bases)):
@@ -251,14 +237,13 @@ class ClassStructureMeta(BaseStructureMeta):
             # Prevent overriding attributes with non-attributes.
             for attribute_name in base_attributes:
                 if (isinstance(base, ClassStructureMeta) and attribute_name not in base.__attributes__) or (
-                    hasattr(base, attribute_name)
-                    and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
+                    hasattr(base, attribute_name) and not isinstance(getattr(base, attribute_name), attribute_type)
                 ):
                     error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
                         base.__name__,
                         attribute_name,
                         type(getattr(base, attribute_name)).__name__,
-                        mcs.__attribute_type__.__name__,
+                        attribute_type.__name__,
                     )
                     raise TypeError(error)
 
@@ -267,16 +252,12 @@ class ClassStructureMeta(BaseStructureMeta):
                 for attribute_name, attribute in six.iteritems(base.__attributes__):
 
                     # Attribute type changed and it's not compatible anymore.
-                    if not isinstance(attribute, mcs.__attribute_type__):
-                        error = (
-                            "metaclass {!r} for class {!r} defines '__attribute_type__' as {!r}, "
-                            "but base {!r} utilizes {!r}"
-                        ).format(
-                            mcs.__name__,
+                    if not isinstance(attribute, attribute_type):
+                        error = "class {!r} defines '__attribute_type__' as {!r}, but base {!r} utilizes {!r}".format(
                             name,
-                            mcs.__attribute_type__.__name__,
+                            attribute_type.__name__,
                             base.__qualname__,
-                            base.__attribute_type__,
+                            getattr(base, "__attribute_type__", Attribute).__name__,
                         )
                         raise TypeError(error)
 
@@ -291,9 +272,9 @@ class ClassStructureMeta(BaseStructureMeta):
         this_attributes = {}  # type: dict[str, Attribute]
         for member_name, member in six.iteritems(dct):
             if isinstance(member, Attribute):
-                if not isinstance(member, mcs.__attribute_type__):
+                if not isinstance(member, attribute_type):
                     error = "invalid {!r} attribute type {!r}, expected {!r}".format(
-                        member_name, type(member).__name__, mcs.__attribute_type__.__name__
+                        member_name, type(member).__name__, attribute_type.__name__
                     )
                     raise TypeError(error)
 
@@ -388,11 +369,18 @@ class ClassStructureMeta(BaseStructureMeta):
 # noinspection PyAbstractClass
 class ClassStructure(six.with_metaclass(ClassStructureMeta, BaseStructure)):
     __slots__ = ()
+
     __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
     __deserialization_map__ = MappingProxyType({})  # type: MappingProxyType[str, str]
+
+    __attribute_type__ = Attribute  # type: Type[Attribute[Any]]
     __kw_only__ = False  # type: bool
 
-    def __init_subclass__(cls, kw_only=None, **kwargs):
+    def __init_subclass__(cls, attribute_type=None, kw_only=None, **kwargs):
+
+        # Attribute type (should be set by the metaclass).
+        if attribute_type is not None:
+            assert attribute_type is cls.__attribute_type__
 
         # Keyword arguments only.
         if kw_only is not None:
@@ -441,32 +429,6 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, BaseStructure)):
         order_values = tuple(self[n] for n in attributes if n in self)
         other_order_values = tuple(other[n] for n in attributes if n in other)
         return func(order_values, other_order_values)
-
-    @abstract
-    def __hash__(self):
-        # type: () -> int
-        raise NotImplementedError()
-
-    def __eq__(self, other):
-        # type: (object) -> bool
-
-        # Same object
-        if self is object:
-            return True
-
-        # Require the exact same type for comparison.
-        cls = type(self)
-        if cls is not type(other):
-            return NotImplemented
-        assert isinstance(other, type(self))
-
-        # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
-
-        # Compare values.
-        eq_values = dict((n, self[n]) for n in attributes if n in self)
-        other_eq_values = dict((n, other[n]) for n in attributes if n in other)
-        return eq_values == other_eq_values
 
     def __lt__(self, other):
         # type: (object) -> bool
@@ -519,7 +481,28 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, BaseStructure)):
             if name in self:
                 yield name, self[name]
 
-    def do_repr(self):
+    def _eq(self, other):
+        # type: (object) -> bool
+
+        # Same object
+        if self is object:
+            return True
+
+        # Require the exact same type for comparison.
+        cls = type(self)
+        if cls is not type(other):
+            return NotImplemented
+        assert isinstance(other, type(self))
+
+        # Get attributes to compare.
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
+
+        # Compare values.
+        eq_values = dict((n, self[n]) for n in attributes if n in self)
+        other_eq_values = dict((n, other[n]) for n in attributes if n in other)
+        return eq_values == other_eq_values
+
+    def _repr(self):
         cls = type(self)
 
         args = []
@@ -713,17 +696,11 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, BaseStructure)):
 CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
 
 
-class ImmutableClassStructureMeta(ClassStructureMeta, BaseImmutableStructureMeta):
-    pass
-
-
 # noinspection PyAbstractClass
-class BaseImmutableClassStructure(
-    six.with_metaclass(ImmutableClassStructureMeta, ClassStructure, BaseImmutableStructure)
-):
+class BaseImmutableClassStructure(ClassStructure, BaseImmutableStructure):
     __slots__ = ()
 
-    def __hash__(self):
+    def _hash(self):
         # type: () -> int
         """
         Get hash.
@@ -803,7 +780,7 @@ class BaseImmutableClassStructure(
 ICS = TypeVar("ICS", bound=BaseImmutableClassStructure)  # immutable class structure self type
 
 
-class MutableClassStructureMeta(ClassStructureMeta, BaseMutableStructureMeta):
+class MutableClassStructureMeta(ClassStructureMeta):
     """Metaclass for :class:`BaseMutableClassStructure`."""
 
     __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
@@ -815,11 +792,6 @@ class BaseMutableClassStructure(six.with_metaclass(MutableClassStructureMeta, Cl
 
     __slots__ = ()
     __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
-
-    @set_to_none
-    def __hash__(self):
-        error = "{!r} object is not hashable".format(type(self).__name__)
-        raise TypeError(error)
 
     @final
     def __setitem__(self, name, value):

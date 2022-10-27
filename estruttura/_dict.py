@@ -68,22 +68,6 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
                 raise exc
         self._do_init(mapping_proxy.MappingProxyType(initial_values))
 
-    @final
-    def __contains__(self, key):
-        # type: (object) -> bool
-        """
-        Get whether contains key.
-
-        :param key: Key.
-        :return: True if contains.
-        """
-        try:
-            _ = self[key]  # type: ignore
-        except KeyError:
-            return False
-        else:
-            return True
-
     @abstract
     def __getitem__(self, key):
         # type: (KT) -> VT

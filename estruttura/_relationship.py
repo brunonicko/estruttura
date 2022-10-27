@@ -4,8 +4,20 @@ import six
 from basicco import SlottedBase, basic_data, fabricate_value, type_checking
 from basicco.abstract_class import abstract
 from basicco.import_path import get_path, import_path
-from tippo import Any, Callable, Generic, Iterable, Mapping, Tuple, Type, TypeVar, cast, get_origin, overload
-from tippo import SupportsKeysAndGetItem
+from tippo import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Mapping,
+    SupportsKeysAndGetItem,
+    Tuple,
+    Type,
+    TypeVar,
+    cast,
+    get_origin,
+    overload,
+)
 
 from .constants import BASIC_TYPES, MISSING
 from .exceptions import (
@@ -412,17 +424,17 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
     @overload
     def update(self, __m, **kwargs):
         # type: (R, SupportsKeysAndGetItem[str, Any], **Any) -> R
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (R, Iterable[tuple[str, Any]], **Any) -> R
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (R, **Any) -> R
-        pass
+        """."""
 
     def update(self, *args, **kwargs):
         """
@@ -482,7 +494,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
         # type: () -> RelationshipTypesInfo[T]
         """Information about relationship types."""
         if self._types_info is None:
-            self._types_info = RelationshipTypesInfo(self)
+            self._types_info = RelationshipTypesInfo(self.types, self.extra_paths, self.builtin_paths)
         return self._types_info
 
     @property
@@ -499,7 +511,7 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
     """Information about relationship types."""
 
     __slots__ = (
-        "_relationship",
+        "_input_types",
         "_all_types",
         "_basic_types",
         "_complex_types",
@@ -507,20 +519,20 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
         "_iterable_types",
     )
 
-    def __init__(self, relationship):
-        # type: (Relationship[T]) -> None
+    def __init__(self, input_types=(), extra_paths=(), builtin_paths=None):
+        # type: (tuple[Type[T] | str | None, ...], Iterable[str], Iterable[str] | None) -> None
         """
-        :param relationship: Relationship.
+        :param input_types: Input types.
         """
-        self._relationship = relationship
+        self._input_types = input_types
 
-        # Gather types.
+        # Import and gather types.
         self._all_types = cast(
             Tuple[Type[T], ...],
             type_checking.import_types(
-                relationship.types,
-                extra_paths=relationship.extra_paths,
-                builtin_paths=relationship.builtin_paths,
+                input_types,
+                extra_paths=extra_paths,
+                builtin_paths=builtin_paths,
             ),
         )
         self._basic_types = cast(Tuple[Type[T], ...], tuple(t for t in self._all_types if t in BASIC_TYPES))
@@ -567,24 +579,22 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
         :param usecase: Usecase.
         :return: Items.
         """
-        return [
-            ("relationship", self.relationship),
-        ]
+        return [("input_types", self.input_types)]
 
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, SupportsKeysAndGetItem[str, Any], **Any) -> RTI
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, Iterable[tuple[str, Any]], **Any) -> RTI
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (RTI, **Any) -> RTI
-        pass
+        """."""
 
     def update(self, *args, **kwargs):
         """
@@ -598,9 +608,10 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
         return cast(RTI, type(self)(**init_args))
 
     @property
-    def relationship(self):
-        # type: () -> Relationship[T]
-        return self._relationship
+    def input_types(self):
+        # type: () -> tuple[Type[T] | str | None, ...]
+        """Input types."""
+        return self._input_types
 
     @property
     def all_types(self):

@@ -1,17 +1,19 @@
+"""Example dictionary structures implementation."""
+
 import copy
 
 from tippo import TypeVar
 
 import estruttura
 
-
-T = TypeVar("T")
 KT = TypeVar("KT")
 VT = TypeVar("VT")
 
 
 # noinspection PyAbstractClass
-class Dict(estruttura.DictStructure[KT, VT]):
+class BaseDict(estruttura.DictStructure[KT, VT]):
+    """Base dictionary."""
+
     __slots__ = ("_internal",)
 
     def __iter__(self):
@@ -34,12 +36,14 @@ class Dict(estruttura.DictStructure[KT, VT]):
 
     @classmethod
     def _do_deserialize(cls, values):
-        self = cls()
+        self = cls.__new__(cls)
         self._internal = dict(values)
         return self
 
 
-class ImmutableDict(Dict[KT, VT], estruttura.ImmutableDictStructure[KT, VT]):
+class ImmutableDict(BaseDict[KT, VT], estruttura.ImmutableDictStructure[KT, VT]):
+    """Immutable dictionary."""
+
     def _hash(self):
         return hash(tuple(sorted(self._internal.items(), key=lambda i: id(i[0]))))
 
@@ -54,7 +58,9 @@ class ImmutableDict(Dict[KT, VT], estruttura.ImmutableDictStructure[KT, VT]):
         return type(self)()
 
 
-class MutableDict(Dict[KT, VT], estruttura.MutableDictStructure[KT, VT]):
+class MutableDict(BaseDict[KT, VT], estruttura.MutableDictStructure[KT, VT]):
+    """Mutable dictionary."""
+
     def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):
         for key in deletes:
             del self._internal[key]

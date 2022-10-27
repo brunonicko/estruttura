@@ -1,3 +1,5 @@
+"""Set structures."""
+
 import six
 import slotted
 from basicco import custom_repr
@@ -5,7 +7,11 @@ from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
-from ._bases import BaseCollectionStructure, BaseImmutableCollectionStructure, BaseMutableCollectionStructure
+from ._bases import (
+    BaseCollectionStructure,
+    BaseImmutableCollectionStructure,
+    BaseMutableCollectionStructure,
+)
 from .exceptions import ProcessingError
 
 T = TypeVar("T")
@@ -196,13 +202,15 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
 
         :return: Representation.
         """
-        return custom_repr.iterable_repr(self, prefix="{}({{".format(type(self).__qualname__), suffix="})")
+        return custom_repr.iterable_repr(
+            self, prefix="{}({{".format(type(self).__qualname__), suffix="})", sort_key=lambda v: id(v), sorting=True
+        )
 
     @abstract
     def _do_init(self, initial_values):
         # type: (frozenset[T]) -> None
         """
-        Initialize values.
+        Initialize values (internal).
 
         :param initial_values: New values.
         """
@@ -223,7 +231,7 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
     def _do_remove(self, old_values):
         # type: (SS, frozenset[T]) -> SS
         """
-        Remove values.
+        Remove values (internal).
 
         :param old_values: Old values.
         :return: Transformed.
@@ -274,7 +282,7 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
     def _do_update(self, new_values):
         # type: (SS, frozenset[T]) -> SS
         """
-        Add values.
+        Add values (internal).
 
         :param new_values: New values.
         :return: Transformed.
@@ -314,11 +322,24 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
 
     def serialize(self):
         # type: () -> list[Any]
+        """
+        Serialize.
+
+        :return: Serialized list.
+        :raises SerializationError: Error while serializing.
+        """
         return [type(self).relationship.serialize_value(v) for v in self]
 
     @classmethod
     def deserialize(cls, serialized):
         # type: (Type[SS], Iterable[Any]) -> SS
+        """
+        Deserialize.
+
+        :param serialized: Serialized iterable.
+        :return: Structure.
+        :raises SerializationError: Error while deserializing.
+        """
         values = frozenset(cls.relationship.deserialize_value(s) for s in serialized)
         return cls._do_deserialize(values)
 
@@ -558,7 +579,7 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
         inverse_difference = self.inverse_difference(iterable)
         intersection = self.intersection(iterable)
         if inverse_difference:
-            self._update(inverse_difference)
+            self.update(inverse_difference)
         if intersection:
             self.remove(*intersection)
 
@@ -582,7 +603,7 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
 
         :param value: Value.
         """
-        self.add(value)
+        self._add(value)
 
     @final
     def discard(self, *values):
@@ -592,7 +613,7 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
 
         :param values: Value(s).
         """
-        self.discard(*values)
+        self._discard(*values)
 
     @final
     def remove(self, *values):
@@ -603,7 +624,7 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
         :param values: Value(s).
         :raises KeyError: Value is not present.
         """
-        self.remove(*values)
+        self._remove(*values)
 
     @final
     def update(self, iterable):
@@ -613,4 +634,4 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
 
         :param iterable: Iterable.
         """
-        self.update(iterable)
+        self._update(iterable)

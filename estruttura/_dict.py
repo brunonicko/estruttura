@@ -1,11 +1,25 @@
+"""Dictionary structures."""
+
 import six
 import slotted
 from basicco import custom_repr, mapping_proxy
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Iterable, Mapping, Type, TypeVar, SupportsKeysAndGetItem, overload
+from tippo import (
+    Any,
+    Iterable,
+    Mapping,
+    SupportsKeysAndGetItem,
+    Type,
+    TypeVar,
+    overload,
+)
 
-from ._bases import BaseCollectionStructure, BaseImmutableCollectionStructure, BaseMutableCollectionStructure
+from ._bases import (
+    BaseCollectionStructure,
+    BaseImmutableCollectionStructure,
+    BaseMutableCollectionStructure,
+)
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
 from .exceptions import ProcessingError
@@ -249,7 +263,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         """
         Deserialize.
 
-        :param serialized: Serialized dictionary.
+        :param serialized: Serialized mapping.
         :return: Dictionary structure.
         :raises SerializationError: Error while deserializing.
         """
@@ -315,17 +329,17 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
     @overload
     def update(self, __m, **kwargs):
         # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (IDS, Iterable[tuple[KT, VT]], **VT) -> IDS
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (IDS, **VT) -> IDS
-        pass
+        """."""
 
     @final
     def update(self, *args, **kwargs):
@@ -456,17 +470,17 @@ class MutableDictStructure(
     @overload
     def update(self, __m, **kwargs):
         # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> None
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (Iterable[tuple[KT, VT]], **VT) -> None
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (**VT) -> None
-        pass
+        """."""
 
     @final
     def update(self, *args, **kwargs):

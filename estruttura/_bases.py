@@ -1,10 +1,12 @@
+"""Base abstract classes."""
+
 import basicco
 import six
 import slotted
 from basicco import recursive_repr, safe_repr
-from basicco.runtime_final import final
 from basicco.abstract_class import abstract
-from tippo import Any, Type, Iterator, TypeVar
+from basicco.runtime_final import final
+from tippo import Any, Type, TypeVar
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -172,7 +174,7 @@ class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
 
     @abstract
     def _do_clear(self):
-        # type: (BC) -> BC
+        # type: (BCS) -> BCS
         """
         Clear (internal).
 
@@ -182,7 +184,7 @@ class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
 
     @final
     def _clear(self):
-        # type: (BC) -> BC
+        # type: (BCS) -> BCS
         """
         Clear.
 
@@ -191,7 +193,7 @@ class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
         return self._do_clear()
 
 
-BC = TypeVar("BC", bound=BaseCollectionStructure)
+BCS = TypeVar("BCS", bound=BaseCollectionStructure)
 
 
 # noinspection PyAbstractClass

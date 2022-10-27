@@ -1,12 +1,25 @@
+"""Attribute descriptors."""
+
 import six
 from basicco import basic_data, fabricate_value, unique_iterator
 from basicco.runtime_final import final
-from tippo import Any, Callable, Generic, Iterable, Literal, Type, TypeVar, dataclass_transform, cast, overload
-from tippo import SupportsGetItem, SupportsGetSetDeleteItem, SupportsKeysAndGetItem
+from tippo import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Literal,
+    SupportsGetItem,
+    SupportsGetSetDeleteItem,
+    SupportsKeysAndGetItem,
+    Type,
+    TypeVar,
+    cast,
+    overload,
+)
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
-
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
@@ -36,6 +49,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_eq",
         "_order",
         "_hash",
+        "_doc",
         "_metadata",
         "_extra_paths",
         "_builtin_paths",
@@ -67,6 +81,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
+        doc="",  # type: str
         metadata=None,  # type: Any
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
@@ -88,6 +103,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :param eq: Whether to include in the `__eq__` method.
         :param order: Whether to include in the `__lt__`, `__le__`, `__gt__`, `__ge__` methods.
         :param hash: Whether to include in the `__hash__` method.
+        :param doc: Documentation.
         :param metadata: User metadata.
         :param extra_paths: Extra module paths in fallback order.
         :param builtin_paths: Builtin module paths in fallback order.
@@ -218,6 +234,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
+        self._doc = doc
         self._metadata = metadata
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
@@ -364,6 +381,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("eq", self.eq),
             ("order", self.order),
             ("hash", self.hash),
+            ("doc", self.doc),
             ("metadata", self.metadata),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
@@ -438,12 +456,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def getter(self, maybe_func):
         # type: (A, Callable[[Any], T_co]) -> A
-        pass
+        """."""
 
     @overload
     def getter(self, *dependencies):
         # type: (A, *Attribute) -> Callable[[Callable[[Any], T_co]], A]
-        pass
+        """."""
 
     def getter(self, *dependencies):
         """
@@ -460,6 +478,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             raise RuntimeError(error_)
 
         def getter_decorator(func):
+            """Getter decorator."""
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -487,12 +506,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def setter(self, maybe_func=None):
         # type: (A, None) -> Callable[[Callable[[Any, T_co], None]], A]
-        pass
+        """."""
 
     @overload
     def setter(self, maybe_func):
         # type: (A, Callable[[Any, T_co], None]) -> A
-        pass
+        """."""
 
     def setter(self, maybe_func=None):
         """
@@ -510,6 +529,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             raise RuntimeError(error_)
 
         def setter_decorator(func):
+            """Setter decorator."""
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -533,12 +553,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def deleter(self, maybe_func=None):
         # type: (A, None) -> Callable[[Callable[[SupportsGetItem], None]], A]
-        pass
+        """."""
 
     @overload
     def deleter(self, maybe_func):
         # type: (A, Callable[[SupportsGetItem], None]) -> A
-        pass
+        """."""
 
     def deleter(self, maybe_func=None):
         """
@@ -556,6 +576,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             raise RuntimeError(error_)
 
         def deleter_decorator(func):
+            """Deleter decorator."""
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
@@ -579,17 +600,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def update(self, __m, **kwargs):
         # type: (A, SupportsKeysAndGetItem[str, Any], **Any) -> A
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (A, Iterable[tuple[str, Any]], **Any) -> A
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (A, **Any) -> A
-        pass
+        """."""
 
     def update(self, *args, **kwargs):
         """
@@ -709,6 +730,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._hash
 
     @property
+    def doc(self):
+        # type: () -> str
+        """Documentation."""
+        return self._doc
+
+    @property
     def metadata(self):
         # type: () -> Any
         """User metadata."""
@@ -823,7 +850,7 @@ A = TypeVar("A", bound=Attribute)  # base attribute self type
 
 
 class MutableAttribute(Attribute[T]):
-    """Mutable attribute. To be used with :class:`BaseMutableClassStructure`."""
+    """Mutable attribute descriptor."""
 
     __slots__ = ()
 
@@ -866,52 +893,3 @@ def _traverse(attribute, direction):
         for sub_dep in getattr(dep, direction):
             unvisited.add(sub_dep)
     return tuple(sorted(visited, key=lambda d: d.count))
-
-
-def getter(attribute, dependencies=()):
-    # type: (Attribute[T_co], Iterable[Attribute]) -> Callable[[Callable[[Any], T_co]], None]
-    """
-    Decorator that sets a getter delegate for an attribute.
-    The decorated function should be named as a single underscore: `_`.
-
-    :param attribute: Attribute.
-    :param dependencies: Dependencies.
-    :return: Delegate function decorator.
-    """
-
-    def decorator(func):
-        attribute.getter(func, *dependencies)
-
-    return decorator
-
-
-def setter(attribute):
-    # type: (Attribute[T_co]) -> Callable[[Callable[[Any, T_co], None]], None]
-    """
-    Decorator that sets a setter delegate for an attribute.
-    The decorated function should be named as a single underscore: `_`.
-
-    :param attribute: Attribute.
-    :return: Delegate function decorator.
-    """
-
-    def decorator(func):
-        attribute.setter(func)
-
-    return decorator
-
-
-def deleter(attribute):
-    # type: (Attribute[T_co]) -> Callable[[Callable[[Any], None]], None]
-    """
-    Decorator that sets a deleter delegate for an attribute.
-    The decorated function should be named as a single underscore: `_`.
-
-    :param attribute: Attribute.
-    :return: Delegate function decorator.
-    """
-
-    def decorator(func):
-        attribute.deleter(func)
-
-    return decorator

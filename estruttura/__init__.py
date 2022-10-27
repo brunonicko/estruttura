@@ -1,10 +1,6 @@
-from ._attribute import (
-    Attribute,
-    MutableAttribute,
-    getter,
-    setter,
-    deleter,
-)
+"""Estruttura package."""
+
+from ._attribute import Attribute, MutableAttribute
 from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
@@ -14,25 +10,22 @@ from ._bases import (
     BaseStructure,
     BaseStructureMeta,
 )
-from ._class import (
-    AttributeMap,
-    ClassStructure,
-    ClassStructureMeta,
-    BaseImmutableClassStructure,
-    BaseMutableClassStructure,
-    MutableClassStructureMeta,
-)
 from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
 from ._list import ImmutableListStructure, ListStructure, MutableListStructure
+from ._make import attribute, deleter, getter, relationship, setter
 from ._relationship import Relationship, RelationshipTypesInfo
 from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
+from ._structure import (
+    AttributeMap,
+    ImmutableStructure,
+    MutableStructure,
+    Structure,
+    StructureMeta,
+)
 
 __all__ = [
     "Attribute",
     "MutableAttribute",
-    "getter",
-    "setter",
-    "deleter",
     "BaseStructureMeta",
     "BaseStructure",
     "BaseImmutableStructure",
@@ -41,11 +34,15 @@ __all__ = [
     "BaseImmutableCollectionStructure",
     "BaseMutableCollectionStructure",
     "AttributeMap",
-    "ClassStructureMeta",
-    "ClassStructure",
-    "BaseImmutableClassStructure",
-    "MutableClassStructureMeta",
-    "BaseMutableClassStructure",
+    "Structure",
+    "StructureMeta",
+    "ImmutableStructure",
+    "MutableStructure",
+    "relationship",
+    "attribute",
+    "getter",
+    "setter",
+    "deleter",
     "DictStructure",
     "ImmutableDictStructure",
     "MutableDictStructure",

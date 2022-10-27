@@ -6,7 +6,7 @@ __all__ = ["resolve_index", "resolve_continuous_slice", "pre_move"]
 def resolve_index(length, index, clamp=False):
     # type: (int, int, bool) -> int
     """
-    Resolve index to a positive number.
+    Resolve list index to a positive number.
 
     :param length: Length of the list.
     :param index: Input index.
@@ -30,7 +30,7 @@ def resolve_index(length, index, clamp=False):
 def resolve_continuous_slice(length, slc):
     # type: (int, slice) -> tuple[int, int]
     """
-    Resolve continuous slice according to length.
+    Resolve continuous list slice according to length.
 
     :param length: Length of the list.
     :param slc: Continuous slice.
@@ -47,7 +47,7 @@ def resolve_continuous_slice(length, slc):
 def pre_move(length, item, target_index):
     # type: (int, slice | int, int) -> tuple[int, int, int, int, int] | None
     """
-    Perform checks before moving values internally.
+    Perform checks before moving list values internally and get move indexes.
 
     :param length: Length of the list.
     :param item: Index/slice.

@@ -1,12 +1,6 @@
 """Estruttura package."""
 
-from ._attribute import (
-    Attribute,
-    MutableAttribute,
-    getter,
-    setter,
-    deleter,
-)
+from ._attribute import Attribute, MutableAttribute, deleter, getter, setter
 from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
@@ -16,25 +10,10 @@ from ._bases import (
     BaseStructure,
     BaseStructureMeta,
 )
-from ._dict import (
-    DictStructure,
-    ImmutableDictStructure,
-    MutableDictStructure,
-)
-from ._list import (
-    ImmutableListStructure,
-    ListStructure,
-    MutableListStructure,
-)
-from ._relationship import (
-    Relationship,
-    RelationshipTypesInfo,
-)
-from ._set import (
-    ImmutableSetStructure,
-    MutableSetStructure,
-    SetStructure,
-)
+from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
+from ._list import ImmutableListStructure, ListStructure, MutableListStructure
+from ._relationship import Relationship, RelationshipTypesInfo
+from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
 from ._structure import (
     AttributeMap,
     ImmutableStructure,

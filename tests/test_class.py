@@ -2,7 +2,8 @@ import enum
 
 import pytest
 
-from estruttura.examples import ImmutableClass, attribute
+from estruttura import Attribute, Relationship
+from estruttura.examples import ImmutableClass
 from estruttura.serializers import EnumSerializer
 
 
@@ -18,18 +19,29 @@ class Position(enum.Enum):
 
 
 class Employee(ImmutableClass):
-    light = attribute(types=LightSwitch, serializer=EnumSerializer())  # type: LightSwitch
-    position = attribute(types=Position, serializer=EnumSerializer(by_name=True))  # type: Position
-    company = attribute("foobar", constant=True, converter=str.upper)  # type: str
-    name = attribute(types=str)  # type: str
-    boss = attribute(
+    light = Attribute(
+        relationship=Relationship(types=LightSwitch, serializer=EnumSerializer())
+    )  # type: Attribute[LightSwitch]
+
+    position = Attribute(
+        relationship=Relationship(types=Position, serializer=EnumSerializer(by_name=True))
+    )  # type: Attribute[Position]
+
+    company = Attribute("foobar", constant=True, relationship=Relationship(converter=str.upper))  # type: Attribute[str]
+
+    name = Attribute(relationship=Relationship(types=str))  # type: Attribute[str]
+
+    boss = Attribute(
         default=None,
-        types=("Employee", None),
-        extra_paths=(__name__,),
+        relationship=Relationship(
+            types=("Employee", None),
+            extra_paths=(__name__,),
+        ),
         serialize_as="manager",
         serialize_default=False,
-    )  # type: Employee | None
-    salary = attribute(100, serializable=False)  # type: int
+    )  # type: Attribute[Employee | None]
+
+    salary = Attribute(100, serializable=False)  # type: Attribute[int]
 
 
 def test_class():

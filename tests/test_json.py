@@ -1,16 +1,38 @@
 import pytest
+from tippo import Iterable, Mapping
 
-from estruttura.examples import ImmutableDict, ImmutableList, relationship
+from estruttura import Relationship
+from estruttura.examples import ImmutableDict, ImmutableList
 
-json_relationship = relationship(types=(str, int, bool, float, None, "JSONDict", "JSONList"))
+
+def json_converter(value):
+    """JSON value converter."""
+    if isinstance(value, Mapping):
+        if not isinstance(value, JSONDict):
+            value = JSONDict(value)
+    elif isinstance(value, Iterable):
+        if not isinstance(value, JSONList):
+            value = JSONList(value)
+    return value
+
+
+json_relationship = Relationship(
+    types=(str, int, bool, float, None, "JSONDict", "JSONList"),
+    converter=json_converter,
+    extra_paths=(__name__,),
+)
 
 
 class JSONList(ImmutableList):
+    """JSON list."""
+
     relationship = json_relationship
 
 
 class JSONDict(ImmutableDict):
-    key_relationship = relationship(types=(str,))
+    """JSON dictionary."""
+
+    key_relationship = Relationship(types=(str,), extra_paths=(__name__,))
     relationship = json_relationship
 
 
@@ -20,6 +42,10 @@ def test_json():
             "__class__": "foo",
             "__state__": "bar",
             "title": "example glossary",
+            "version": 1,
+            "approx": 2.2,
+            "schema": True,
+            "something": None,
             "GlossDiv": {
                 "title": "S",
                 "GlossList": {
@@ -41,6 +67,7 @@ def test_json():
     }
     data = JSONDict.deserialize(example)
     assert data.serialize() == example
+    assert JSONDict(data) == data
 
     assert isinstance(data["glossary"], JSONDict)
     assert isinstance(data["glossary"]["GlossDiv"]["GlossList"]["GlossEntry"]["GlossDef"]["GlossSeeAlso"], JSONList)

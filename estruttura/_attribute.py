@@ -893,3 +893,67 @@ def _traverse(attribute, direction):
         for sub_dep in getattr(dep, direction):
             unvisited.add(sub_dep)
     return tuple(sorted(visited, key=lambda d: d.count))
+
+
+def getter(delegated_attribute, dependencies=()):
+    # type: (T, Iterable) -> Callable[[Callable[[Any], T]], None]
+    """
+    Decorator that sets a getter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param delegated_attribute: Attribute.
+    :param dependencies: Dependencies.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        # type: (Callable[[Any], T]) -> None
+        """Getter decorator."""
+        if func.__name__ != "_":
+            error = "getter function needs to be named '_' instead of {!r}".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute[T], delegated_attribute).getter(*dependencies)(func)
+
+    return decorator
+
+
+def setter(delegated_attribute):
+    # type: (T) -> Callable[[Callable[[Any, T], None]], None]
+    """
+    Decorator that sets a setter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param delegated_attribute: Attribute.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        # type: (Callable[[Any, T], None]) -> None
+        """Setter decorator."""
+        if func.__name__ != "_":
+            error = "setter function needs to be named '_' instead of {!r}".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute[T], delegated_attribute).setter(func)
+
+    return decorator
+
+
+def deleter(delegated_attribute):
+    # type: (T) -> Callable[[Callable[[Any], None]], None]
+    """
+    Decorator that sets a deleter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param delegated_attribute: Attribute.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        # type: (Callable[[Any], None]) -> None
+        """Deleter decorator."""
+        if func.__name__ != "_":
+            error = "deleter function needs to be named '_' instead of {!r}".format(func.__name__)
+            raise NameError(error)
+        cast(Attribute[T], delegated_attribute).deleter(func)
+
+    return decorator

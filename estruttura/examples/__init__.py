@@ -1,7 +1,5 @@
 """Example concrete implementations."""
 
-from estruttura import attribute, deleter, getter, relationship, setter
-
 from ._class import BaseClass, ImmutableClass, MutableClass
 from ._dict import BaseDict, ImmutableDict, MutableDict
 from ._list import BaseList, ImmutableList, MutableList
@@ -20,9 +18,4 @@ __all__ = [
     "BaseClass",
     "ImmutableClass",
     "MutableClass",
-    "relationship",
-    "attribute",
-    "getter",
-    "setter",
-    "deleter",
 ]

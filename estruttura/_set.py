@@ -1,20 +1,17 @@
 import six
 import slotted
+from basicco import custom_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
-from ._bases import (
-    CollectionStructure,
-    ImmutableCollectionStructure,
-    MutableCollectionStructure,
-)
+from ._bases import BaseCollectionStructure, BaseImmutableCollectionStructure, BaseMutableCollectionStructure
 from .exceptions import ProcessingError
 
 T = TypeVar("T")
 
 
-class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
+class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
     """Set structure."""
 
     __slots__ = ()
@@ -191,6 +188,15 @@ class SetStructure(CollectionStructure[T], slotted.SlottedSet[T]):
         :return: Symmetric difference or `NotImplemented` if not an iterable.
         """
         return self.__xor__(other)
+
+    def _repr(self):
+        # type: () -> str
+        """
+        Get representation.
+
+        :return: Representation.
+        """
+        return custom_repr.iterable_repr(self, prefix="{}({{".format(type(self).__qualname__), suffix="})")
 
     @abstract
     def _do_init(self, initial_values):
@@ -409,7 +415,7 @@ SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableSetStructure(SetStructure[T], ImmutableCollectionStructure[T]):
+class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable set structure."""
 
     __slots__ = ()
@@ -464,7 +470,7 @@ ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure sel
 
 
 # noinspection PyAbstractClass
-class MutableSetStructure(SetStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
     """Mutable set structure."""
 
     __slots__ = ()

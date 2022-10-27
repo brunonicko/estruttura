@@ -1,30 +1,18 @@
 import six
 import slotted
+from basicco import custom_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import (
-    Any,
-    Callable,
-    Iterable,
-    MutableSequence,
-    Sequence,
-    Type,
-    TypeVar,
-    overload,
-)
+from tippo import Any, Callable, Iterable, MutableSequence, Sequence, Type, TypeVar, overload
 
-from ._bases import (
-    CollectionStructure,
-    ImmutableCollectionStructure,
-    MutableCollectionStructure,
-)
+from ._bases import BaseCollectionStructure, BaseImmutableCollectionStructure, BaseMutableCollectionStructure
 from .exceptions import ProcessingError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
 
 T = TypeVar("T")
 
 
-class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
+class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
     """List structure."""
 
     __slots__ = ()
@@ -64,6 +52,15 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
         :return: Value/values.
         """
         raise NotImplementedError()
+
+    def _repr(self):
+        # type: () -> str
+        """
+        Get representation.
+
+        :return: Representation.
+        """
+        return custom_repr.iterable_repr(self, prefix="{}([".format(type(self).__qualname__), suffix="])")
 
     @abstract
     def _do_init(self, initial_values):
@@ -390,7 +387,7 @@ LS = TypeVar("LS", bound=ListStructure)  # list structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableListStructure(ListStructure[T], ImmutableCollectionStructure[T]):
+class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable list structure."""
 
     __slots__ = ()
@@ -524,7 +521,7 @@ ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure s
 
 
 # noinspection PyAbstractClass
-class MutableListStructure(ListStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
+class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
     """Mutable list structure."""
 
     __slots__ = ()

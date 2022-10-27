@@ -27,21 +27,22 @@ from tippo import (
     overload,
 )
 
-from ._attribute import MutableStructureAttribute, StructureAttribute
+from ._attribute import MutableAttribute, Attribute
 from ._bases import (
-    ImmutableStructure,
-    ImmutableStructureMeta,
-    MutableStructure,
-    MutableStructureMeta,
-    Structure,
-    StructureMeta,
+    BaseImmutableStructure,
+    BaseImmutableStructureMeta,
+    BaseMutableStructure,
+    BaseMutableStructureMeta,
+    BaseStructure,
+    BaseStructureMeta,
 )
 from .constants import DEFAULT, DELETED, MISSING
 from .exceptions import ProcessingError
 
+
 KT_str = TypeVar("KT_str", bound=str)
-SAT_co = TypeVar("SAT_co", bound=StructureAttribute, covariant=True)
-MSAT = TypeVar("MSAT", bound=MutableStructureAttribute)
+SAT_co = TypeVar("SAT_co", bound=Attribute, covariant=True)
+MSAT = TypeVar("MSAT", bound=MutableAttribute)
 
 
 @final
@@ -52,7 +53,7 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
 
     @overload
     def __init__(self, ordered_attributes):
-        # type: (collections.OrderedDict[str, StructureAttribute]) -> None
+        # type: (collections.OrderedDict[str, Attribute]) -> None
         pass
 
     @overload
@@ -232,16 +233,16 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
         return new_values, old_values
 
 
-class ClassStructureMeta(StructureMeta):
+class ClassStructureMeta(BaseStructureMeta):
     """Metaclass for :class:`ClassStructure`."""
 
-    __attribute_type__ = StructureAttribute  # type: Type[StructureAttribute[Any]]
+    __attribute_type__ = Attribute  # type: Type[Attribute[Any]]
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
 
         # Scrape bases.
-        base_attributes = {}  # type: dict[str, StructureAttribute]
+        base_attributes = {}  # type: dict[str, Attribute]
         counter = collections.Counter()  # type: collections.Counter[str]
         for base in reversed(preview_mro(*bases)):
             if base is object:
@@ -287,9 +288,9 @@ class ClassStructureMeta(StructureMeta):
                         counter[attribute_name] = attribute.count
 
         # Collect attributes for this class.
-        this_attributes = {}  # type: dict[str, StructureAttribute]
+        this_attributes = {}  # type: dict[str, Attribute]
         for member_name, member in six.iteritems(dct):
-            if isinstance(member, StructureAttribute):
+            if isinstance(member, Attribute):
                 if not isinstance(member, mcs.__attribute_type__):
                     error = "invalid {!r} attribute type {!r}, expected {!r}".format(
                         member_name, type(member).__name__, mcs.__attribute_type__.__name__
@@ -385,9 +386,9 @@ class ClassStructureMeta(StructureMeta):
 
 
 # noinspection PyAbstractClass
-class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
+class ClassStructure(six.with_metaclass(ClassStructureMeta, BaseStructure)):
     __slots__ = ()
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, StructureAttribute[Any]]
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
     __deserialization_map__ = MappingProxyType({})  # type: MappingProxyType[str, str]
     __kw_only__ = False  # type: bool
 
@@ -518,9 +519,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
             if name in self:
                 yield name, self[name]
 
-    @safe_repr
-    @recursive_repr
-    def __repr__(self):
+    def do_repr(self):
         cls = type(self)
 
         args = []
@@ -714,12 +713,14 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
 
 
-class ImmutableClassStructureMeta(ClassStructureMeta, ImmutableStructureMeta):
+class ImmutableClassStructureMeta(ClassStructureMeta, BaseImmutableStructureMeta):
     pass
 
 
 # noinspection PyAbstractClass
-class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, ClassStructure, ImmutableStructure)):
+class BaseImmutableClassStructure(
+    six.with_metaclass(ImmutableClassStructureMeta, ClassStructure, BaseImmutableStructure)
+):
     __slots__ = ()
 
     def __hash__(self):
@@ -799,21 +800,21 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
         return self._update(*args, **kwargs)
 
 
-ICS = TypeVar("ICS", bound=ImmutableClassStructure)  # immutable class structure self type
+ICS = TypeVar("ICS", bound=BaseImmutableClassStructure)  # immutable class structure self type
 
 
-class MutableClassStructureMeta(ClassStructureMeta, MutableStructureMeta):
-    """Metaclass for :class:`MutableClassStructure`."""
+class MutableClassStructureMeta(ClassStructureMeta, BaseMutableStructureMeta):
+    """Metaclass for :class:`BaseMutableClassStructure`."""
 
-    __attribute_type__ = MutableStructureAttribute  # type: Type[MutableStructureAttribute[Any]]
+    __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
 
 
 # noinspection PyAbstractClass
-class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, ClassStructure, MutableStructure)):
+class BaseMutableClassStructure(six.with_metaclass(MutableClassStructureMeta, ClassStructure, BaseMutableStructure)):
     """Mutable class structure."""
 
     __slots__ = ()
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableStructureAttribute[Any]]
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
 
     @set_to_none
     def __hash__(self):
@@ -1024,8 +1025,8 @@ class _DelegateSelfInternals(SlottedBase):
         self.__delegate_self_ref = weakref.ref(delegate_self)
         self.__attribute_map = attribute_map
         self.__structure = structure
-        self.__dependencies = None  # type: tuple[StructureAttribute, ...] | None
-        self.__in_getter = None  # type: StructureAttribute | None
+        self.__dependencies = None  # type: tuple[Attribute, ...] | None
+        self.__in_getter = None  # type: Attribute | None
         self.__new_values = {}  # type: dict[str, Any]
         self.__old_values = {}  # type: dict[str, Any]
         self.__dirty = set(attribute_map).difference(
@@ -1111,7 +1112,7 @@ class _DelegateSelfInternals(SlottedBase):
             raise AttributeError(error)
 
         attribute = self.__get_attribute(name)
-        if not attribute.updatable:
+        if not attribute.settable:
             if attribute.delegated:
                 error = "attribute {!r} is read-only".format(name)
                 raise AttributeError(error)
@@ -1160,7 +1161,7 @@ class _DelegateSelfInternals(SlottedBase):
 
     @contextlib.contextmanager
     def __getter_context(self, attribute):
-        # type: (StructureAttribute) -> Iterator
+        # type: (Attribute) -> Iterator
         """
         Getter context.
 
@@ -1280,6 +1281,6 @@ class _DelegateSelfInternals(SlottedBase):
 
     @property
     def in_getter(self):
-        # type: () -> StructureAttribute | None
+        # type: () -> Attribute | None
         """Whether running in an attribute's getter delegate."""
         return self.__in_getter

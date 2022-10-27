@@ -1,24 +1,12 @@
 import six
-from basicco.basic_data import ImmutableBasicData, ItemUsecase
-from basicco.fabricate_value import fabricate_value
-from basicco.unique_iterator import unique_iterator
-from tippo import (
-    Any,
-    Callable,
-    Generic,
-    Iterable,
-    Literal,
-    SupportsGetItem,
-    SupportsGetSetDeleteItem,
-    SupportsKeysAndGetItem,
-    Type,
-    TypeVar,
-    cast,
-    overload,
-)
+from basicco import basic_data, fabricate_value, unique_iterator
+from basicco.runtime_final import final
+from tippo import Any, Callable, Generic, Iterable, Literal, Type, TypeVar, dataclass_transform, cast, overload
+from tippo import SupportsGetItem, SupportsGetSetDeleteItem, SupportsKeysAndGetItem
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
+
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
@@ -27,8 +15,8 @@ _attribute_count = 0
 
 
 # noinspection PyAbstractClass
-class StructureAttribute(ImmutableBasicData, Generic[T_co]):
-    """Structure attribute."""
+class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
+    """Attribute descriptor."""
 
     __slots__ = (
         "_owner",
@@ -38,7 +26,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         "_relationship",
         "_required",
         "_init",
-        "_updatable",
+        "_settable",
         "_deletable",
         "_serializable",
         "_serialize_as",
@@ -64,12 +52,12 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     def __init__(
         self,
-        default=MISSING,  # type: Any
+        default=MISSING,  # type: T_co | MissingType
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
         relationship=Relationship(),  # type: Relationship[T_co]
         required=None,  # type: bool | None
         init=None,  # type: bool | None
-        updatable=None,  # type: bool | None
+        settable=None,  # type: bool | None
         deletable=None,  # type: bool | None
         serializable=None,  # type: bool | None
         serialize_as=None,  # type: str | None
@@ -83,11 +71,32 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
+        # type: (...) -> None
+        """
+        :param default: Default value.
+        :param factory: Default factory.
+        :param relationship: Relationship.
+        :param required: Whether it is required to have a value.
+        :param init: Whether to include in the `__init__` method.
+        :param settable: Whether the value can be changed after being set.
+        :param deletable: Whether the value can be deleted.
+        :param serializable: Whether it's serializable.
+        :param serialize_as: Name to use when serializing.
+        :param serialize_default: Whether to serialize default value.
+        :param constant: Whether attribute is a class constant.
+        :param repr: Whether to include in the `__repr__` method.
+        :param eq: Whether to include in the `__eq__` method.
+        :param order: Whether to include in the `__lt__`, `__le__`, `__gt__`, `__ge__` methods.
+        :param hash: Whether to include in the `__hash__` method.
+        :param metadata: User metadata.
+        :param extra_paths: Extra module paths in fallback order.
+        :param builtin_paths: Builtin module paths in fallback order.
+        """
         global _attribute_count
 
+        # Resolve/check parameters based on whether attribute is a constant.
         if constant:
 
-            # Resolve/check parameters based on whether attribute is a constant.
             if default is MISSING:
                 error = "constant attribute needs a default value"
                 raise ValueError(error)
@@ -108,10 +117,10 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
                 error = "constant attribute can't be in init"
                 raise ValueError(error)
 
-            if updatable is None:
-                updatable = False
-            elif updatable:
-                error = "constant attribute can't be updatable"
+            if settable is None:
+                settable = False
+            elif settable:
+                error = "constant attribute can't be settable"
                 raise ValueError(error)
 
             if deletable is None:
@@ -150,9 +159,9 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
                 error = "constant attribute can't be in hash"
                 raise ValueError(error)
 
+        # Not a constant, set default parameter values.
         else:
 
-            # Not a constant, set default parameter values.
             if required is None:
                 required = True
 
@@ -198,13 +207,13 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         self._relationship = relationship
         self._required = bool(required)
         self._init = bool(init) if init is not None else None
-        self._updatable = bool(updatable) if updatable is not None else None
+        self._settable = bool(settable) if settable is not None else None
         self._deletable = bool(deletable) if deletable is not None else None
         self._serializable = bool(serializable) if serializable is not None else None
         self._serialize_as = serialize_as
         self._serialize_default = bool(serialize_default)
         self._constant = bool(constant)
-        self._dependencies = ()  # type: tuple[StructureAttribute, ...]
+        self._dependencies = ()  # type: tuple[Attribute, ...]
         self._repr = bool(repr)
         self._eq = bool(eq)
         self._order = bool(order)
@@ -214,38 +223,40 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
 
         self._processed_default = False  # type: bool
-        self._recursive_dependencies = None  # type: tuple[StructureAttribute, ...] | None
-        self._dependents = ()  # type: tuple[StructureAttribute, ...]
-        self._recursive_dependents = None  # type: tuple[StructureAttribute, ...] | None
-        self._fget = None  # type: Callable[[SupportsGetItem], T_co] | None
-        self._fset = None  # type: Callable[[SupportsGetItem, T_co], None] | None
-        self._fdel = None  # type: Callable[[SupportsGetItem], None] | None
+        self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
+        self._dependents = ()  # type: tuple[Attribute, ...]
+        self._recursive_dependents = None  # type: tuple[Attribute, ...] | None
+        self._fget = None  # type: Callable[[Any], T_co] | None
+        self._fset = None  # type: Callable[[Any, T_co], None] | None
+        self._fdel = None  # type: Callable[[Any], None] | None
 
-        # Increment count.
+        # Increment global count.
         _attribute_count += 1
         self._count = _attribute_count
 
+    @final
     def __hash__(self):
         # type: () -> int
         return object.__hash__(self)
 
+    @final
     def __eq__(self, other):
         # type: (object) -> bool
         return self is other
 
     @overload
     def __get__(self, instance, owner):
-        # type: (SA, None, None) -> SA
+        # type: (A, None, None) -> A
         pass
 
     @overload
     def __get__(self, instance, owner):
-        # type: (SA, None, Type[SupportsGetItem]) -> SA | T_co
+        # type: (A, None, Type) -> A | T_co
         pass
 
     @overload
     def __get__(self, instance, owner):
-        # type: (SupportsGetItem, Type[SupportsGetItem]) -> T_co
+        # type: (object, Type) -> T_co
         pass
 
     def __get__(self, instance, owner):
@@ -260,7 +271,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
                 assert self.owner is None
                 error = "attribute not named/owned"
                 raise RuntimeError(error)
-            return instance[self.name]
+            return cast(SupportsGetItem, instance)[self.name]
 
         return self
 
@@ -279,27 +290,27 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
         # Resolve automatic parameters.
         if self.delegated:
-            if self.updatable is None:
-                self._updatable = self.fset is not None
+            if self.settable is None:
+                self._settable = self.fset is not None
             if self.deletable is None:
                 self._deletable = self.fdel is not None
             if self.init is None:
-                self._init = self.updatable and all((d.has_default or d.delegated) for d in self.recursive_dependencies)
+                self._init = self.settable and all((d.has_default or d.delegated) for d in self.recursive_dependencies)
         else:
-            if self.updatable is None:
-                self._updatable = True
+            if self.settable is None:
+                self._settable = True
             if self.deletable is None:
                 self._deletable = False
             if self.init is None:
                 self._init = True
 
         if self._serializable is None:
-            self._serializable = self._init or self.updatable
+            self._serializable = self._init or self.settable
 
         assert not any(
             p is None
             for p in (
-                self._updatable,
+                self._settable,
                 self._deletable,
                 self._init,
                 self._serializable,
@@ -312,8 +323,8 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
                 error = "delegated attribute {!r} is in __init__ but has no setter delegate was defined".format(name)
                 raise TypeError(error)
             if self.fset is None:
-                if self.updatable:
-                    error = "delegated attribute {!r} is updatable but has no setter delegate was defined".format(name)
+                if self.settable:
+                    error = "delegated attribute {!r} is settable but has no setter delegate was defined".format(name)
                     raise TypeError(error)
                 if self.has_default:
                     error = "delegated attribute {!r} has no setter but has a default".format(name)
@@ -331,13 +342,19 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         self._name = name
 
     def to_items(self, usecase=None):
-        # type: (ItemUsecase | None) -> list[tuple[str, Any]]
+        # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
+        """
+        Convert to items.
+
+        :param usecase: Use case.
+        :return: Items.
+        """
         items = [
             ("default", self.default),
             ("factory", self.factory),
             ("required", self.required),
             ("init", self.init),
-            ("updatable", self.updatable),
+            ("settable", self.settable),
             ("deletable", self.deletable),
             ("serializable", self.serializable),
             ("serialize_as", self.serialize_as),
@@ -351,7 +368,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
         ]
-        if usecase is not ItemUsecase.INIT:
+        if usecase is not basic_data.ItemUsecase.INIT:
             items.extend(
                 [
                     ("name", self.name),
@@ -360,7 +377,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
                     ("count", self.count),
                 ]
             )
-            if usecase is not ItemUsecase.REPR:
+            if usecase is not basic_data.ItemUsecase.REPR:
                 items.extend(
                     [
                         ("dependencies", self.dependencies),
@@ -380,16 +397,22 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     def get_default_value(self):
         # type: () -> T_co
+        """
+        Get default value.
+
+        :return: Default value.
+        :raises RuntimeError: No valid default value/factory defined.
+        """
         if self.default is not MISSING:
             default_value = self.default
         elif self.factory is not MISSING:
-            default_value = fabricate_value(
+            default_value = fabricate_value.fabricate_value(
                 self.factory,
                 extra_paths=self.extra_paths,
                 builtin_paths=self.builtin_paths,
             )
         else:
-            error = "no valid default/factory"
+            error = "no valid default/factory defined"
             raise RuntimeError(error)
         return default_value
 
@@ -414,12 +437,12 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @overload
     def getter(self, maybe_func):
-        # type: (SA, Callable[[SupportsGetItem], T_co]) -> SA
+        # type: (A, Callable[[Any], T_co]) -> A
         pass
 
     @overload
     def getter(self, *dependencies):
-        # type: (SA, *StructureAttribute) -> Callable[[Callable[[SupportsGetItem], T_co]], SA]
+        # type: (A, *Attribute) -> Callable[[Callable[[Any], T_co]], A]
         pass
 
     def getter(self, *dependencies):
@@ -428,13 +451,12 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
         :param dependencies: Attribute dependencies.
         :return: Getter method decorator.
-        :raises ValueError: Cannot define a getter for a non-delegated attribute.
+        :raises RuntimeError: Can't define a delegate for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
         :raises ValueError: Getter delegate already defined.
-        :raises TypeError: Invalid delegate type.
         """
         if self.constant:
-            error_ = "can't delegate a constant attribute"
+            error_ = "can't define a delegate for a constant attribute"
             raise RuntimeError(error_)
 
         def getter_decorator(func):
@@ -447,7 +469,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
             assert not self._dependencies
 
             self._dependencies = ()
-            for dependency in unique_iterator(dependencies):
+            for dependency in unique_iterator.unique_iterator(dependencies):
                 if dependency.owned:
                     error = "dependency attribute {!r} already named and owned by a class".format(dependency.name)
                     raise ValueError(error)
@@ -457,19 +479,19 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
             self._fget = func
             return self
 
-        if len(dependencies) == 1 and not isinstance(dependencies[0], StructureAttribute) and callable(dependencies[0]):
+        if len(dependencies) == 1 and not isinstance(dependencies[0], Attribute) and callable(dependencies[0]):
             return getter_decorator(dependencies[0])
         else:
             return getter_decorator
 
     @overload
     def setter(self, maybe_func=None):
-        # type: (SA, None) -> Callable[[Callable[[SupportsGetItem, T_co], None]], SA]
+        # type: (A, None) -> Callable[[Callable[[Any, T_co], None]], A]
         pass
 
     @overload
     def setter(self, maybe_func):
-        # type: (SA, Callable[[SupportsGetItem, T_co], None]) -> SA
+        # type: (A, Callable[[Any, T_co], None]) -> A
         pass
 
     def setter(self, maybe_func=None):
@@ -477,23 +499,22 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         Define a setter delegate method by using a decorator.
 
         :return: Setter method decorator.
-        :raises ValueError: Cannot define a setter for a non-delegated attribute.
+        :raises RuntimeError: Can't define a delegate for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
-        :raises ValueError: Attribute is not updatable.
+        :raises ValueError: Attribute is not settable.
         :raises ValueError: Need to define a getter before defining a setter.
         :raises ValueError: Setter delegate already defined.
-        :raises TypeError: Invalid delegate type.
         """
         if self.constant:
-            error_ = "can't delegate a constant attribute"
+            error_ = "can't define a delegate for a constant attribute"
             raise RuntimeError(error_)
 
         def setter_decorator(func):
             if self.owned:
                 error = "attribute {!r} already named and owned by a class".format(self.name)
                 raise ValueError(error)
-            if self.updatable is False:
-                error = "attribute is not updatable, can't define setter delegate"
+            if self.settable is False:
+                error = "attribute is not settable, can't define setter delegate"
                 raise ValueError(error)
             if self.fget is None:
                 error = "need to define a getter delegate before defining a setter delegate"
@@ -511,12 +532,12 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @overload
     def deleter(self, maybe_func=None):
-        # type: (SA, None) -> Callable[[Callable[[SupportsGetItem], None]], SA]
+        # type: (A, None) -> Callable[[Callable[[SupportsGetItem], None]], A]
         pass
 
     @overload
     def deleter(self, maybe_func):
-        # type: (SA, Callable[[SupportsGetItem], None]) -> SA
+        # type: (A, Callable[[SupportsGetItem], None]) -> A
         pass
 
     def deleter(self, maybe_func=None):
@@ -524,15 +545,14 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         Define a deleter delegate method by using a decorator.
 
         :return: Deleter method decorator.
-        :raises ValueError: Cannot define a deleter for a non-delegated attribute.
+        :raises RuntimeError: Can't define a delegate for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
         :raises ValueError: Attribute is not deletable.
         :raises ValueError: Need to define a getter before defining a deleter.
         :raises ValueError: Deleter delegate already defined.
-        :raises TypeError: Invalid delegate type.
         """
         if self.constant:
-            error_ = "can't delegate a constant attribute"
+            error_ = "can't define a delegate for a constant attribute"
             raise RuntimeError(error_)
 
         def deleter_decorator(func):
@@ -558,37 +578,46 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (SA, SupportsKeysAndGetItem[str, Any], **Any) -> SA
+        # type: (A, SupportsKeysAndGetItem[str, Any], **Any) -> A
         pass
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (SA, Iterable[tuple[str, Any]], **Any) -> SA
+        # type: (A, Iterable[tuple[str, Any]], **Any) -> A
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (SA, **Any) -> SA
+        # type: (A, **Any) -> A
         pass
 
     def update(self, *args, **kwargs):
-        init_args = self.to_dict(ItemUsecase.INIT)
+        """
+        Make a new attribute with updates.
+
+        :params: Same parameters as :class:`dict`.
+        :return: Updated attribute.
+        """
+        init_args = self.to_dict(basic_data.ItemUsecase.INIT)
         init_args.update(*args, **kwargs)
-        return cast(SA, type(self)(**init_args))
+        return cast(A, type(self)(**init_args))
 
     @property
     def name(self):
         # type: () -> str | None
+        """Attribute name."""
         return self._name
 
     @property
     def owner(self):
         # type: () -> Type[SupportsGetItem] | None
+        """Owner class."""
         return self._owner
 
     @property
     def default(self):
-        # type: () -> Any
+        # type: () -> T_co | MissingType
+        """Default value."""
         if not self._processed_default:
             if self._default is not MISSING:
                 self._default = self.process_value(self._default)
@@ -598,16 +627,19 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
     @property
     def factory(self):
         # type: () -> Callable[..., T_co] | str | MissingType
+        """Default factory."""
         return self._factory
 
     @property
     def relationship(self):
         # type: () -> Relationship[T_co]
+        """Relationship."""
         return self._relationship
 
     @property
     def required(self):
         # type: () -> bool
+        """Whether it is required to have a value."""
         return self._required
 
     @property
@@ -617,13 +649,15 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
         return self._init
 
     @property
-    def updatable(self):
+    def settable(self):
         # type: () -> bool | None
-        return self._updatable
+        """Whether the value can be changed after being set."""
+        return self._settable
 
     @property
     def deletable(self):
         # type: () -> bool | None
+        """Whether the value can be deleted."""
         return self._deletable
 
     @property
@@ -647,6 +681,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
     @property
     def constant(self):
         # type: () -> bool
+        """Whether attribute is a class constant."""
         return self._constant
 
     @property
@@ -693,12 +728,14 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @property
     def dependencies(self):
-        # type: () -> tuple[StructureAttribute, ...]
+        # type: () -> tuple[Attribute, ...]
+        """Getter dependencies."""
         return self._dependencies
 
     @property
     def recursive_dependencies(self):
-        # type: () -> tuple[StructureAttribute, ...]
+        # type: () -> tuple[Attribute, ...]
+        """Recursive getter dependencies."""
         if self._recursive_dependencies is not None:
             return self._recursive_dependencies
         recursive_dependencies = _traverse(self, direction="dependencies")
@@ -711,12 +748,14 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @property
     def dependents(self):
-        # type: () -> tuple[StructureAttribute, ...]
+        # type: () -> tuple[Attribute, ...]
+        """Dependents."""
         return self._dependents
 
     @property
     def recursive_dependents(self):
-        # type: () -> tuple[StructureAttribute, ...]
+        # type: () -> tuple[Attribute, ...]
+        """Recursive dependents."""
         if self._recursive_dependents is not None:
             return self._recursive_dependents
         recursive_dependents = _traverse(self, direction="dependents")
@@ -729,27 +768,32 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
 
     @property
     def fget(self):
-        # type: () -> Callable[[SupportsGetItem], T_co] | None
+        # type: () -> Callable[[Any], T_co] | None
+        """Getter function."""
         return self._fget
 
     @property
     def fset(self):
-        # type: () -> Callable[[SupportsGetItem, T_co], None] | None
+        # type: () -> Callable[[Any, T_co], None] | None
+        """Setter function."""
         return self._fset
 
     @property
     def fdel(self):
-        # type: () -> Callable[[SupportsGetItem], None] | None
+        # type: () -> Callable[[Any], None] | None
+        """Deleter function."""
         return self._fdel
 
     @property
     def count(self):
         # type: () -> int
+        """Global count number for this attribute."""
         return self._count
 
     @property
     def owned(self):
         # type: () -> bool
+        """Whether attribute is owned by a class or not."""
         owned = self._owner is not None
         assert owned is (self._name is not None)
         return owned
@@ -757,6 +801,7 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
     @property
     def named(self):
         # type: () -> bool
+        """Whether attribute is named by a class or not."""
         named = self._name is not None
         assert named is (self._owner is not None)
         return named
@@ -764,49 +809,55 @@ class StructureAttribute(ImmutableBasicData, Generic[T_co]):
     @property
     def delegated(self):
         # type: () -> bool
+        """Whether attribute has at least a getter delegate."""
         return any(d is not None for d in (self.fget, self.fset, self.fdel))
 
     @property
     def has_default(self):
         # type: () -> bool
+        """Whehter attribute has a default value/default factory."""
         return self._default is not MISSING or self._factory is not MISSING
 
 
-SA = TypeVar("SA", bound=StructureAttribute)  # base attribute self type
+A = TypeVar("A", bound=Attribute)  # base attribute self type
 
 
-class MutableStructureAttribute(StructureAttribute[T]):
-    """Mutable structure attribute. To be used with :class:`MutableClassStructure`."""
+class MutableAttribute(Attribute[T]):
+    """Mutable attribute. To be used with :class:`BaseMutableClassStructure`."""
 
     __slots__ = ()
 
     def __set__(self, instance, value):
-        # type: (SupportsGetSetDeleteItem, T) -> None
+        # type: (object, T) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
             raise RuntimeError(error)
+
         if self.constant:
             error = "can't change constant class attribute {!r}".format(self.name)
             raise AttributeError(error)
-        instance[self.name] = value
+
+        cast(SupportsGetSetDeleteItem, instance)[self.name] = value
 
     def __delete__(self, instance):
-        # type: (SupportsGetSetDeleteItem) -> None
+        # type: (object) -> None
         if self.name is None:
             assert self.owner is None
             error = "attribute not named/owned"
             raise RuntimeError(error)
+
         if self.constant:
             error = "can't delete constant class attribute {!r}".format(self.name)
             raise AttributeError(error)
-        del instance[self.name]
+
+        del cast(SupportsGetSetDeleteItem, instance)[self.name]
 
 
 def _traverse(attribute, direction):
-    # type: (StructureAttribute, Literal["dependencies", "dependents"]) -> tuple[StructureAttribute, ...]
-    unvisited = set(getattr(attribute, direction))  # type: set[StructureAttribute]
-    visited = set()  # type: set[StructureAttribute]
+    # type: (Attribute, Literal["dependencies", "dependents"]) -> tuple[Attribute, ...]
+    unvisited = set(getattr(attribute, direction))  # type: set[Attribute]
+    visited = set()  # type: set[Attribute]
     while unvisited:
         dep = unvisited.pop()
         if dep in visited:
@@ -815,3 +866,52 @@ def _traverse(attribute, direction):
         for sub_dep in getattr(dep, direction):
             unvisited.add(sub_dep)
     return tuple(sorted(visited, key=lambda d: d.count))
+
+
+def getter(attribute, dependencies=()):
+    # type: (Attribute[T_co], Iterable[Attribute]) -> Callable[[Callable[[Any], T_co]], None]
+    """
+    Decorator that sets a getter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param attribute: Attribute.
+    :param dependencies: Dependencies.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        attribute.getter(func, *dependencies)
+
+    return decorator
+
+
+def setter(attribute):
+    # type: (Attribute[T_co]) -> Callable[[Callable[[Any, T_co], None]], None]
+    """
+    Decorator that sets a setter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param attribute: Attribute.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        attribute.setter(func)
+
+    return decorator
+
+
+def deleter(attribute):
+    # type: (Attribute[T_co]) -> Callable[[Callable[[Any], None]], None]
+    """
+    Decorator that sets a deleter delegate for an attribute.
+    The decorated function should be named as a single underscore: `_`.
+
+    :param attribute: Attribute.
+    :return: Delegate function decorator.
+    """
+
+    def decorator(func):
+        attribute.deleter(func)
+
+    return decorator

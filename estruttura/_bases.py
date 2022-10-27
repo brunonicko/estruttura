@@ -1,10 +1,10 @@
 import basicco
 import six
 import slotted
-from basicco.abstract_class import abstract, is_abstract
-from basicco.explicit_hash import set_to_none
+from basicco import explicit_hash, recursive_repr, safe_repr
 from basicco.runtime_final import final
-from tippo import Any, Type, TypeVar
+from basicco.abstract_class import abstract
+from tippo import Any, Type, Iterator, TypeVar
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -13,12 +13,12 @@ T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
 
-class StructureMeta(basicco.SlottedBaseMeta):
-    """Metaclass for :class:`Structure`."""
+class BaseStructureMeta(basicco.SlottedBaseMeta):
+    """Metaclass for :class:`BaseStructure`."""
 
 
-class Structure(six.with_metaclass(StructureMeta, basicco.SlottedBase)):
-    """Forces the implementation of `__hash__` and `__eq__`."""
+class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
+    """Base structure class."""
 
     __slots__ = ()
 
@@ -32,90 +32,212 @@ class Structure(six.with_metaclass(StructureMeta, basicco.SlottedBase)):
         # type: (object) -> bool
         raise NotImplementedError()
 
+    @final
+    @safe_repr.safe_repr
+    @recursive_repr.recursive_repr
+    def __repr__(self):
+        # type: () -> str
+        return self._repr()
+
+    @final
+    @safe_repr.safe_repr
+    @recursive_repr.recursive_repr
+    def __str__(self):
+        # type: () -> str
+        """
+        Get string representation.
+
+        :return: String representation.
+        """
+        return self._str()
+
+    @abstract
+    def _repr(self):
+        # type: () -> str
+        """
+        Get representation.
+
+        :return: Representation.
+        """
+        raise NotImplementedError()
+
+    def _str(self):
+        # type: () -> str
+        """
+        Get string representation.
+
+        :return: String representation.
+        """
+        return self._repr()
+
     @abstract
     def serialize(self):
         # type: () -> Any
+        """
+        Serialize.
+
+        :return: Serialized.
+        :raises SerializationError: Error while serializing.
+        """
         raise NotImplementedError()
 
     @classmethod
     @abstract
     def deserialize(cls, serialized):
         # type: (Type[S], Any) -> S
+        """
+        Deserialize.
+
+        :param serialized: Serialized.
+        :return: Structure.
+        :raises SerializationError: Error while deserializing.
+        """
         raise NotImplementedError()
 
 
 S = TypeVar("S")  # structure self type
 
 
-class ImmutableStructureMeta(StructureMeta):
-    """Metaclass for :class:`ImmutableStructure`."""
+class BaseImmutableStructureMeta(BaseStructureMeta):
+    """Metaclass for :class:`BaseImmutableStructure`."""
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
-        cls = super(ImmutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+        cls = super(BaseImmutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+
+        # Force hashable.
         if cls.__hash__ is None:
-            error = "{!r} in {!r} can't be None".format(cls.__hash__, name)
+            error = "'__hash__' in {!r} can't be None".format(name)
             raise TypeError(error)
+
         return cls
 
 
-class ImmutableStructure(six.with_metaclass(ImmutableStructureMeta, Structure, slotted.SlottedHashable)):
-    """Forces an implementation of `__hash__` that is not None."""
+class BaseImmutableStructure(six.with_metaclass(BaseImmutableStructureMeta, BaseStructure, slotted.SlottedHashable)):
+    """Base immutable structure class."""
 
     __slots__ = ()
 
-    @abstract
+    @final
     def __hash__(self):
         # type: () -> int
+        return self._hash()
+
+    @abstract
+    def _hash(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
         raise NotImplementedError()
 
 
-class MutableStructureMeta(StructureMeta):
-    """Metaclass for :class:`MutableStructure`."""
+class BaseMutableStructureMeta(BaseStructureMeta):
+    """Metaclass for :class:`BaseMutableStructure`."""
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+
+        # If '__eq__' is declared but not '__hash__', force it to be None.
         if "__eq__" in dct and "__hash__" not in dct:
             dct = dict(dct)
             dct["__hash__"] = None
-        cls = super(MutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-        if cls.__hash__ is not None and not is_abstract(cls.__hash__):
+
+        cls = super(BaseMutableStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+
+        # Error out if for some reason '__hash__' is not set to None.
+        if cls.__hash__ is not None:
             error = "'__hash__' in {!r} needs to be None".format(name)
             raise TypeError(error)
+
         return cls
 
 
 # noinspection PyAbstractClass
-class MutableStructure(six.with_metaclass(MutableStructureMeta, Structure)):
-    """Non-hashable."""
+class BaseMutableStructure(six.with_metaclass(BaseMutableStructureMeta, BaseStructure)):
+    """Base mutable structure class."""
 
     __slots__ = ()
 
-    @set_to_none
+    @explicit_hash.set_to_none
     def __hash__(self):
         error = "{!r} object is not hashable".format(type(self).__name__)
         raise TypeError(error)
 
 
 # noinspection PyAbstractClass
-class CollectionStructure(Structure, slotted.SlottedCollection[T_co]):
+class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
+    """Base collection structure class."""
+
     __slots__ = ()
+
     relationship = Relationship()  # type: Relationship[T_co]
+    """Relationship with values."""
 
     def __init_subclass__(cls, relationship=MISSING, **kwargs):
         # type: (Relationship[T_co] | MissingType, **Any) -> None
+        """
+        Initialize subclass with parameters.
 
-        # Relationship.
+        :param relationship: Relationship.
+        """
         if relationship is not MISSING:
             cls.relationship = relationship
+        super(BaseCollectionStructure, cls).__init_subclass__(**kwargs)  # noqa
 
-        super(CollectionStructure, cls).__init_subclass__(**kwargs)  # noqa
+    @final
+    def __contains__(self, item):
+        # type: (object) -> bool
+        return self._contains(item)
+
+    @final
+    def __iter__(self):
+        # type: () -> Iterator[T_co]
+        return self._iter()
+
+    @final
+    def __len__(self):
+        # type: () -> int
+        return self._len()
+
+    @abstract
+    def _contains(self, item):
+        # type: (object) -> bool
+        """
+        Get whether contains item.
+
+        :param item: Item.
+        :return: True if contains.
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def _iter(self):
+        # type: () -> Iterator[T_co]
+        """
+        Iterate over collection contents.
+
+        :return: Iterator.
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def _len(self):
+        # type: () -> int
+        """
+        Get length.
+
+        :return: Length.
+        """
+        raise NotImplementedError()
 
     @abstract
     def _do_clear(self):
         # type: (BC) -> BC
         """
-        Clear.
+        Clear (internal).
 
         :return: Transformed (immutable) or self (mutable).
         """
@@ -132,17 +254,18 @@ class CollectionStructure(Structure, slotted.SlottedCollection[T_co]):
         return self._do_clear()
 
 
-BC = TypeVar("BC", bound=CollectionStructure)
+BC = TypeVar("BC", bound=BaseCollectionStructure)
 
 
 # noinspection PyAbstractClass
-class ImmutableCollectionStructure(CollectionStructure[T_co], ImmutableStructure):
+class BaseImmutableCollectionStructure(BaseCollectionStructure[T_co], BaseImmutableStructure):
+    """Immutable collection structure class."""
 
     __slots__ = ()
 
     @final
     def clear(self):
-        # type: (BIC) -> BIC
+        # type: (BICS) -> BICS
         """
         Clear.
 
@@ -151,19 +274,14 @@ class ImmutableCollectionStructure(CollectionStructure[T_co], ImmutableStructure
         return self._clear()
 
 
-BIC = TypeVar("BIC", bound=ImmutableCollectionStructure)
+BICS = TypeVar("BICS", bound=BaseImmutableCollectionStructure)
 
 
 # noinspection PyAbstractClass
-class MutableCollectionStructure(CollectionStructure[T_co], MutableStructure):
-    """Mutable collection structure."""
+class BaseMutableCollectionStructure(BaseCollectionStructure[T_co], BaseMutableStructure):
+    """Base mutable collection structure."""
 
     __slots__ = ()
-
-    @set_to_none
-    def __hash__(self):
-        error = "{!r} object is not hashable".format(type(self).__name__)
-        raise TypeError(error)
 
     @final
     def clear(self):

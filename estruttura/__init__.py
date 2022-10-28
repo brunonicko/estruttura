@@ -1,48 +1,45 @@
-from ._attribute import MutableStructureAttribute, StructureAttribute
+"""Estruttura package."""
+
+from ._attribute import Attribute, MutableAttribute, deleter, getter, setter
 from ._bases import (
-    CollectionStructure,
-    ImmutableCollectionStructure,
-    ImmutableStructure,
-    ImmutableStructureMeta,
-    MutableCollectionStructure,
-    MutableStructure,
-    MutableStructureMeta,
-    Structure,
-    StructureMeta,
-)
-from ._class import (
-    AttributeMap,
-    ClassStructure,
-    ClassStructureMeta,
-    ImmutableClassStructure,
-    ImmutableClassStructureMeta,
-    MutableClassStructure,
-    MutableClassStructureMeta,
+    BaseCollectionStructure,
+    BaseImmutableCollectionStructure,
+    BaseImmutableStructure,
+    BaseMutableCollectionStructure,
+    BaseMutableStructure,
+    BaseStructure,
+    BaseStructureMeta,
 )
 from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
 from ._list import ImmutableListStructure, ListStructure, MutableListStructure
 from ._relationship import Relationship, RelationshipTypesInfo
 from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
+from ._structure import (
+    AttributeMap,
+    ImmutableStructure,
+    MutableStructure,
+    Structure,
+    StructureMeta,
+)
 
 __all__ = [
-    "StructureAttribute",
-    "MutableStructureAttribute",
-    "StructureMeta",
-    "Structure",
-    "ImmutableStructureMeta",
-    "ImmutableStructure",
-    "MutableStructureMeta",
-    "MutableStructure",
-    "CollectionStructure",
-    "ImmutableCollectionStructure",
-    "MutableCollectionStructure",
+    "Attribute",
+    "MutableAttribute",
+    "getter",
+    "setter",
+    "deleter",
+    "BaseStructureMeta",
+    "BaseStructure",
+    "BaseImmutableStructure",
+    "BaseMutableStructure",
+    "BaseCollectionStructure",
+    "BaseImmutableCollectionStructure",
+    "BaseMutableCollectionStructure",
     "AttributeMap",
-    "ClassStructureMeta",
-    "ClassStructure",
-    "ImmutableClassStructureMeta",
-    "ImmutableClassStructure",
-    "MutableClassStructureMeta",
-    "MutableClassStructure",
+    "Structure",
+    "StructureMeta",
+    "ImmutableStructure",
+    "MutableStructure",
     "DictStructure",
     "ImmutableDictStructure",
     "MutableDictStructure",

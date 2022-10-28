@@ -1,22 +1,16 @@
+"""List structures."""
+
 import six
 import slotted
+from basicco import custom_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import (
-    Any,
-    Callable,
-    Iterable,
-    MutableSequence,
-    Sequence,
-    Type,
-    TypeVar,
-    overload,
-)
+from tippo import Any, Callable, Iterable, MutableSequence, Type, TypeVar, overload
 
 from ._bases import (
-    CollectionStructure,
-    ImmutableCollectionStructure,
-    MutableCollectionStructure,
+    BaseCollectionStructure,
+    BaseImmutableCollectionStructure,
+    BaseMutableCollectionStructure,
 )
 from .exceptions import ProcessingError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
@@ -24,7 +18,7 @@ from .utils import pre_move, resolve_continuous_slice, resolve_index
 T = TypeVar("T")
 
 
-class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
+class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
     """List structure."""
 
     __slots__ = ()
@@ -65,11 +59,20 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
         """
         raise NotImplementedError()
 
+    def _repr(self):
+        # type: () -> str
+        """
+        Get representation.
+
+        :return: Representation.
+        """
+        return custom_repr.iterable_repr(self, prefix="{}([".format(type(self).__qualname__), suffix="])")
+
     @abstract
     def _do_init(self, initial_values):
         # type: (tuple[T, ...]) -> None
         """
-        Initialize values.
+        Initialize values (internal).
 
         :param initial_values: New values.
         """
@@ -134,7 +137,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     def _do_insert(self, index, new_values):
         # type: (LS, int, tuple[T, ...]) -> LS
         """
-        Insert value(s) at index.
+        Insert value(s) at index (internal).
 
         :param index: Index.
         :param new_values: New values.
@@ -168,7 +171,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     def _do_move(self, target_index, index, stop, post_index, post_stop, values):
         # type: (LS, int, int, int, int, int, tuple[T, ...]) -> LS
         """
-        Move values internally.
+        Move values internally (internal).
 
         :param target_index: Target index.
         :param index: Index (pre-move).
@@ -201,7 +204,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     def _do_delete(self, index, stop, old_values):
         # type: (LS, int, int, tuple[T, ...]) -> LS
         """
-        Delete values at index/slice.
+        Delete values at index/slice (internal).
 
         :param index: Index.
         :param index: Stop.
@@ -251,7 +254,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     def _do_update(self, index, stop, old_values, new_values):
         # type: (LS, int, int, tuple[T, ...], tuple[T, ...]) -> LS
         """
-        Update value(s).
+        Update value(s) (internal).
 
         :param index: Index.
         :param stop: Stop.
@@ -311,15 +314,35 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     @abstract
     def _do_deserialize(cls, values):
         # type: (Type[LS], tuple[T, ...]) -> LS
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: List structure.
+        :raises SerializationError: Error while deserializing.
+        """
         raise NotImplementedError()
 
     def serialize(self):
         # type: () -> list[Any]
+        """
+        Serialize.
+
+        :return: Serialized list.
+        :raises SerializationError: Error while serializing.
+        """
         return [type(self).relationship.serialize_value(v) for v in self]
 
     @classmethod
     def deserialize(cls, serialized):
-        # type: (Type[LS], Sequence[Any]) -> LS
+        # type: (Type[LS], Iterable[Any]) -> LS
+        """
+        Deserialize.
+
+        :param serialized: Serialized iterable.
+        :return: List structure.
+        :raises SerializationError: Error while deserializing.
+        """
         values = tuple(cls.relationship.deserialize_value(s) for s in serialized)
         return cls._do_deserialize(values)
 
@@ -377,7 +400,7 @@ class ListStructure(CollectionStructure[T], slotted.SlottedSequence[T]):
     def pre_move(self, item, target_index):
         # type: (slice | int, int) -> tuple[int, int, int, int, int] | None
         """
-        Perform checks before moving values internally.
+        Perform checks before moving values internally and get move indexes.
 
         :param item: Index/slice.
         :param target_index: Target index.
@@ -390,7 +413,7 @@ LS = TypeVar("LS", bound=ListStructure)  # list structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableListStructure(ListStructure[T], ImmutableCollectionStructure[T]):
+class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable list structure."""
 
     __slots__ = ()
@@ -501,12 +524,12 @@ class ImmutableListStructure(ListStructure[T], ImmutableCollectionStructure[T]):
     @overload
     def update(self, item, value):
         # type: (ILS, int, T) -> ILS
-        pass
+        """."""
 
     @overload
     def update(self, item, value):
         # type: (ILS, slice, Iterable[T]) -> ILS
-        pass
+        """."""
 
     @final
     def update(self, item, value):
@@ -524,7 +547,7 @@ ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure s
 
 
 # noinspection PyAbstractClass
-class MutableListStructure(ListStructure[T], MutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
+class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
     """Mutable list structure."""
 
     __slots__ = ()
@@ -691,12 +714,12 @@ class MutableListStructure(ListStructure[T], MutableCollectionStructure[T], slot
     @overload
     def update(self, item, value):
         # type: (int, T) -> None
-        pass
+        """."""
 
     @overload
     def update(self, item, value):
         # type: (slice, Iterable[T]) -> None
-        pass
+        """."""
 
     @final
     def update(self, item, value):

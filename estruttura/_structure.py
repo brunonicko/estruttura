@@ -1,19 +1,22 @@
+"""Attribute class structures."""
+
 import collections
 import contextlib
 import operator
 import weakref
 
 import six
-from basicco import SlottedBase
+import slotted
+from basicco import (
+    SlottedBase,
+    custom_repr,
+    get_mro,
+    mapping_proxy,
+    recursive_repr,
+    safe_repr,
+)
 from basicco.abstract_class import abstract
-from basicco.custom_repr import iterable_repr
-from basicco.explicit_hash import set_to_none
-from basicco.get_mro import preview_mro
-from basicco.mapping_proxy import MappingProxyType
-from basicco.recursive_repr import recursive_repr
 from basicco.runtime_final import final
-from basicco.safe_repr import safe_repr
-from slotted import SlottedHashable, SlottedMapping
 from tippo import (
     Any,
     Callable,
@@ -27,37 +30,34 @@ from tippo import (
     overload,
 )
 
-from ._attribute import MutableStructureAttribute, StructureAttribute
+from ._attribute import Attribute, MutableAttribute
 from ._bases import (
-    ImmutableStructure,
-    ImmutableStructureMeta,
-    MutableStructure,
-    MutableStructureMeta,
-    Structure,
-    StructureMeta,
+    BaseImmutableStructure,
+    BaseMutableStructure,
+    BaseStructure,
+    BaseStructureMeta,
 )
 from .constants import DEFAULT, DELETED, MISSING
 from .exceptions import ProcessingError
 
 KT_str = TypeVar("KT_str", bound=str)
-SAT_co = TypeVar("SAT_co", bound=StructureAttribute, covariant=True)
-MSAT = TypeVar("MSAT", bound=MutableStructureAttribute)
+AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)
 
 
 @final
-class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co]):
+class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[KT_str, AT_co]):
     """Maps attributes by name."""
 
     __slots__ = ("__attribute_dict",)
 
     @overload
     def __init__(self, ordered_attributes):
-        # type: (collections.OrderedDict[str, StructureAttribute]) -> None
+        # type: (collections.OrderedDict[str, Attribute]) -> None
         pass
 
     @overload
     def __init__(self, ordered_attributes=()):
-        # type: (Iterable[tuple[str, SAT_co]]) -> None
+        # type: (Iterable[tuple[str, AT_co]]) -> None
         pass
 
     def __init__(self, ordered_attributes=()):
@@ -65,17 +65,17 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
         :param ordered_attributes: Ordered attributes (ordered dict or items).
         """
         if isinstance(ordered_attributes, collections.OrderedDict):
-            self.__attribute_dict = ordered_attributes  # type: collections.OrderedDict[str, SAT_co]
+            self.__attribute_dict = ordered_attributes  # type: collections.OrderedDict[str, AT_co]
         else:
             self.__attribute_dict = collections.OrderedDict()
             for name, attribute in ordered_attributes:
                 self.__attribute_dict[name] = attribute
 
-    @safe_repr
-    @recursive_repr
+    @safe_repr.safe_repr
+    @recursive_repr.recursive_repr
     def __repr__(self):
         # type: () -> str
-        return "{}({})".format(type(self).__name__, iterable_repr(self.items()))
+        return "{}({})".format(type(self).__name__, custom_repr.iterable_repr(self.items()))
 
     def __hash__(self):
         # type: () -> int
@@ -86,7 +86,7 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
         return self is other
 
     def __getitem__(self, name):
-        # type: (str) -> SAT_co
+        # type: (str) -> AT_co
         return self.__attribute_dict[name]
 
     def __contains__(self, name):
@@ -207,7 +207,7 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
         return initial_values
 
     def get_update_values(self, updates, structure=None):
-        # type: (Mapping[str, Any], ClassStructure | None) -> tuple[dict[str, Any], dict[str, Any]]
+        # type: (Mapping[str, Any], Structure | None) -> tuple[dict[str, Any], dict[str, Any]]
         """
         Get values for an update.
 
@@ -232,50 +232,49 @@ class AttributeMap(SlottedBase, SlottedHashable, SlottedMapping[KT_str, SAT_co])
         return new_values, old_values
 
 
-class ClassStructureMeta(StructureMeta):
-    """Metaclass for :class:`ClassStructure`."""
-
-    __attribute_type__ = StructureAttribute  # type: Type[StructureAttribute[Any]]
+class StructureMeta(BaseStructureMeta):
+    """Metaclass for :class:`Structure`."""
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
 
-        # Scrape bases.
-        base_attributes = {}  # type: dict[str, StructureAttribute]
-        counter = collections.Counter()  # type: collections.Counter[str]
-        for base in reversed(preview_mro(*bases)):
+        # Get/set attribute type for this class.
+        dct = dict(dct)
+        attribute_type = dct["__attribute_type__"] = dct.get("__kwargs__", {}).get(
+            "attribute_type", kwargs.get("attribute_type", dct.get("__attribute_type__", Attribute))
+        )
+
+        # Scrape bases for attributes.
+        base_attributes = {}  # type: dict[str, Attribute]
+        counter = {}  # type: dict[str, int]
+        for base in reversed(get_mro.preview_mro(*bases)):
             if base is object:
                 continue
 
             # Prevent overriding attributes with non-attributes.
             for attribute_name in base_attributes:
-                if (isinstance(base, ClassStructureMeta) and attribute_name not in base.__attributes__) or (
-                    hasattr(base, attribute_name)
-                    and not isinstance(getattr(base, attribute_name), mcs.__attribute_type__)
+                if (isinstance(base, StructureMeta) and attribute_name not in base.__attributes__) or (
+                    hasattr(base, attribute_name) and not isinstance(getattr(base, attribute_name), attribute_type)
                 ):
                     error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
                         base.__name__,
                         attribute_name,
                         type(getattr(base, attribute_name)).__name__,
-                        mcs.__attribute_type__.__name__,
+                        attribute_type.__name__,
                     )
                     raise TypeError(error)
 
             # Collect base's attributes.
-            if isinstance(base, ClassStructureMeta):
+            if isinstance(base, StructureMeta):
                 for attribute_name, attribute in six.iteritems(base.__attributes__):
 
                     # Attribute type changed and it's not compatible anymore.
-                    if not isinstance(attribute, mcs.__attribute_type__):
-                        error = (
-                            "metaclass {!r} for class {!r} defines '__attribute_type__' as {!r}, "
-                            "but base {!r} utilizes {!r}"
-                        ).format(
-                            mcs.__name__,
+                    if not isinstance(attribute, attribute_type):
+                        error = "class {!r} defines '__attribute_type__' as {!r}, but base {!r} utilizes {!r}".format(
                             name,
-                            mcs.__attribute_type__.__name__,
+                            attribute_type.__name__,
                             base.__qualname__,
-                            base.__attribute_type__,
+                            getattr(base, "__attribute_type__", Attribute).__name__,
                         )
                         raise TypeError(error)
 
@@ -287,12 +286,12 @@ class ClassStructureMeta(StructureMeta):
                         counter[attribute_name] = attribute.count
 
         # Collect attributes for this class.
-        this_attributes = {}  # type: dict[str, StructureAttribute]
+        this_attributes = {}  # type: dict[str, Attribute]
         for member_name, member in six.iteritems(dct):
-            if isinstance(member, StructureAttribute):
-                if not isinstance(member, mcs.__attribute_type__):
+            if isinstance(member, Attribute):
+                if not isinstance(member, attribute_type):
                     error = "invalid {!r} attribute type {!r}, expected {!r}".format(
-                        member_name, type(member).__name__, mcs.__attribute_type__.__name__
+                        member_name, type(member).__name__, attribute_type.__name__
                     )
                     raise TypeError(error)
 
@@ -313,7 +312,7 @@ class ClassStructureMeta(StructureMeta):
         dct_copy = mcs.__edit_dct__(this_attribute_map, attribute_map, name, bases, dct_copy, **kwargs)
 
         # Build class.
-        cls = super(ClassStructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
+        cls = super(StructureMeta, mcs).__new__(mcs, name, bases, dct_copy, **kwargs)
 
         # Name and claim attributes.
         for attribute_name, attribute in six.iteritems(this_attributes):
@@ -361,7 +360,7 @@ class ClassStructureMeta(StructureMeta):
 
         # Store attribute map and deserialization map.
         cls.__attributes = attribute_map
-        cls.__deserialization_map = MappingProxyType(deserialization_map)
+        cls.__deserialization_map = mapping_proxy.MappingProxyType(deserialization_map)
 
         return cls
 
@@ -369,29 +368,57 @@ class ClassStructureMeta(StructureMeta):
     @staticmethod
     def __edit_dct__(this_attribute_map, attribute_map, name, bases, dct, **kwargs):
         # type: (AttributeMap, AttributeMap, str, tuple[Type, ...], dict[str, Any], **Any) -> dict[str, Any]
+        """
+        Static method hook to edit the class dictionary.
+
+        :param this_attribute_map: Attribute map for this class only.
+        :param attribute_map: Attribute map with all attributes.
+        :param name: Class name.
+        :param bases: Class bases.
+        :param dct: Class dictionary.
+        :param kwargs: Class keyword arguments.
+        :return: Edited class dictionary.
+        """
         return dct
 
     @property
     @final
     def __attributes__(cls):  # noqa
         # type: () -> AttributeMap
+        """Attribute map."""
         return cls.__attributes
 
     @property
     @final
     def __deserialization_map__(cls):  # noqa
-        # type: () -> MappingProxyType[str, str]
+        # type: () -> mapping_proxy.MappingProxyType[str, str]
+        """Deserialization map."""
         return cls.__deserialization_map
 
 
 # noinspection PyAbstractClass
-class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
+class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
+    """Attribute class structure."""
+
     __slots__ = ()
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, StructureAttribute[Any]]
-    __deserialization_map__ = MappingProxyType({})  # type: MappingProxyType[str, str]
+
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
+    __deserialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
+
+    __attribute_type__ = Attribute  # type: Type[Attribute[Any]]
     __kw_only__ = False  # type: bool
 
-    def __init_subclass__(cls, kw_only=None, **kwargs):
+    def __init_subclass__(cls, attribute_type=None, kw_only=None, **kwargs):
+        # type: (Type[Attribute] | None, bool | None, **Any) -> None
+        """
+        Initialize subclass with parameters.
+
+        :param attribute_type: Attribute type.
+        :param kw_only: Whether '__init__' should accept keyword arguments only.
+        """
+        # Attribute type (should be set by the metaclass).
+        if attribute_type is not None:
+            assert attribute_type is cls.__attribute_type__
 
         # Keyword arguments only.
         if kw_only is not None:
@@ -402,7 +429,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
                 raise TypeError(error)
             cls.__kw_only__ = bool(kw_only)
 
-        super(ClassStructure, cls).__init_subclass__(**kwargs)  # noqa
+        super(Structure, cls).__init_subclass__(**kwargs)  # noqa
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
@@ -416,7 +443,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
                 init_property="init",
                 init_method="__init__",
             )
-            self._do_init(MappingProxyType(initial_values))
+            self._do_init(mapping_proxy.MappingProxyType(initial_values))
         except (ProcessingError, TypeError, ValueError) as e:
             exc = type(e)(e)
             six.raise_from(exc, None)
@@ -440,32 +467,6 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
         order_values = tuple(self[n] for n in attributes if n in self)
         other_order_values = tuple(other[n] for n in attributes if n in other)
         return func(order_values, other_order_values)
-
-    @abstract
-    def __hash__(self):
-        # type: () -> int
-        raise NotImplementedError()
-
-    def __eq__(self, other):
-        # type: (object) -> bool
-
-        # Same object
-        if self is object:
-            return True
-
-        # Require the exact same type for comparison.
-        cls = type(self)
-        if cls is not type(other):
-            return NotImplemented
-        assert isinstance(other, type(self))
-
-        # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
-
-        # Compare values.
-        eq_values = dict((n, self[n]) for n in attributes if n in self)
-        other_eq_values = dict((n, other[n]) for n in attributes if n in other)
-        return eq_values == other_eq_values
 
     def __lt__(self, other):
         # type: (object) -> bool
@@ -518,9 +519,40 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
             if name in self:
                 yield name, self[name]
 
-    @safe_repr
-    @recursive_repr
-    def __repr__(self):
+    def _eq(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+
+        # Same object
+        if self is other:
+            return True
+
+        # Require the exact same type for comparison.
+        cls = type(self)
+        if cls is not type(other):
+            return NotImplemented
+        assert isinstance(other, type(self))
+
+        # Get attributes to compare.
+        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
+
+        # Compare values.
+        eq_values = dict((n, self[n]) for n in attributes if n in self)
+        other_eq_values = dict((n, other[n]) for n in attributes if n in other)
+        return eq_values == other_eq_values
+
+    def _repr(self):
+        # type: () -> str
+        """
+        Get representation.
+
+        :return: Representation.
+        """
         cls = type(self)
 
         args = []
@@ -550,9 +582,9 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @abstract
     def _do_init(self, initial_values):
-        # type: (MappingProxyType[str, Any]) -> None
+        # type: (mapping_proxy.MappingProxyType[str, Any]) -> None
         """
-        Initialize attribute values.
+        Initialize attribute values (internal).
 
         :param initial_values: Initial values.
         """
@@ -560,7 +592,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @final
     def _discard(self, name):
-        # type: (CS, str) -> CS
+        # type: (S, str) -> S
         """
         Discard attribute value if it's set.
 
@@ -574,7 +606,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @final
     def _delete(self, name):
-        # type: (CS, str) -> CS
+        # type: (S, str) -> S
         """
         Delete existing attribute value.
 
@@ -586,7 +618,7 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @final
     def _set(self, name, value):
-        # type: (CS, str, Any) -> CS
+        # type: (S, str, Any) -> S
         """
         Set value for attribute.
 
@@ -598,16 +630,16 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @abstract
     def _do_update(
-        self,  # type: CS
-        inserts,  # type: MappingProxyType[str, Any]
-        deletes,  # type: MappingProxyType[str, Any]
-        updates_old,  # type: MappingProxyType[str, Any]
-        updates_new,  # type: MappingProxyType[str, Any]
-        updates_and_inserts,  # type: MappingProxyType[str, Any]
+        self,  # type: S
+        inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
     ):
-        # type: (...) -> CS
+        # type: (...) -> S
         """
-        Update attribute values.
+        Update attribute values (internal).
 
         :param inserts: Keys and values being inserted.
         :param deletes: Keys and values being deleted.
@@ -620,17 +652,17 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (CS, SupportsKeysAndGetItem[str, Any], **Any) -> CS
+        # type: (S, SupportsKeysAndGetItem[str, Any], **Any) -> S
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (CS, Iterable[tuple[str, Any]], **Any) -> CS
+        # type: (S, Iterable[tuple[str, Any]], **Any) -> S
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (CS, **Any) -> CS
+        # type: (S, **Any) -> S
         pass
 
     @final
@@ -666,21 +698,34 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
                 deletes[name] = value
 
         return self._do_update(
-            MappingProxyType(inserts),
-            MappingProxyType(deletes),
-            MappingProxyType(updates_old),
-            MappingProxyType(updates_new),
-            MappingProxyType(updates_and_inserts),
+            mapping_proxy.MappingProxyType(inserts),
+            mapping_proxy.MappingProxyType(deletes),
+            mapping_proxy.MappingProxyType(updates_old),
+            mapping_proxy.MappingProxyType(updates_new),
+            mapping_proxy.MappingProxyType(updates_and_inserts),
         )
 
     @classmethod
     @abstract
     def _do_deserialize(cls, values):
-        # type: (Type[CS], MappingProxyType[str, Any]) -> CS
+        # type: (Type[S], mapping_proxy.MappingProxyType[str, Any]) -> S
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Structure.
+        :raises SerializationError: Error while deserializing.
+        """
         raise NotImplementedError()
 
     def serialize(self):
         # type: () -> dict[str, Any]
+        """
+        Serialize.
+
+        :return: Serialized dictionary.
+        :raises SerializationError: Error while serializing.
+        """
         cls = type(self)
         serialized = {}  # type: dict[str, Any]
         for name, value in self:
@@ -696,7 +741,14 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
 
     @classmethod
     def deserialize(cls, serialized):
-        # type: (Type[CS], Mapping[str, Any]) -> CS
+        # type: (Type[S], Mapping[str, Any]) -> S
+        """
+        Deserialize.
+
+        :param serialized: Serialized dictionary.
+        :return: Structure.
+        :raises SerializationError: Error while deserializing.
+        """
         values = {}  # type: dict[str, Any]
         for serialized_name, serialized in six.iteritems(serialized):
             name = cls.__deserialization_map__[serialized_name]
@@ -708,21 +760,19 @@ class ClassStructure(six.with_metaclass(ClassStructureMeta, Structure)):
             init_property="serializable",
             init_method="deserialize",
         )
-        return cls._do_deserialize(MappingProxyType(values))
+        return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
 
 
-CS = TypeVar("CS", bound=ClassStructure)  # class structure self type
-
-
-class ImmutableClassStructureMeta(ClassStructureMeta, ImmutableStructureMeta):
-    pass
+S = TypeVar("S", bound=Structure)  # structure self type
 
 
 # noinspection PyAbstractClass
-class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, ClassStructure, ImmutableStructure)):
+class ImmutableStructure(Structure, BaseImmutableStructure):
+    """Immutable attribute class structure."""
+
     __slots__ = ()
 
-    def __hash__(self):
+    def _hash(self):
         # type: () -> int
         """
         Get hash.
@@ -740,7 +790,7 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
 
     @final
     def discard(self, name):
-        # type: (ICS, str) -> ICS
+        # type: (IS, str) -> IS
         """
         Discard attribute value if it's set.
 
@@ -751,7 +801,7 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
 
     @final
     def delete(self, name):
-        # type: (ICS, str) -> ICS
+        # type: (IS, str) -> IS
         """
         Delete existing attribute value.
 
@@ -763,7 +813,7 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
 
     @final
     def set(self, name, value):
-        # type: (ICS, str, Any) -> ICS
+        # type: (IS, str, Any) -> IS
         """
         Set value for attribute.
 
@@ -775,18 +825,18 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (ICS, SupportsKeysAndGetItem[str, Any], **Any) -> ICS
-        pass
+        # type: (IS, SupportsKeysAndGetItem[str, Any], **Any) -> IS
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (ICS, Iterable[tuple[str, Any]], **Any) -> ICS
-        pass
+        # type: (IS, Iterable[tuple[str, Any]], **Any) -> IS
+        """."""
 
     @overload
     def update(self, **kwargs):
-        # type: (ICS, **Any) -> ICS
-        pass
+        # type: (IS, **Any) -> IS
+        """."""
 
     @final
     def update(self, *args, **kwargs):
@@ -799,26 +849,16 @@ class ImmutableClassStructure(six.with_metaclass(ImmutableClassStructureMeta, Cl
         return self._update(*args, **kwargs)
 
 
-ICS = TypeVar("ICS", bound=ImmutableClassStructure)  # immutable class structure self type
-
-
-class MutableClassStructureMeta(ClassStructureMeta, MutableStructureMeta):
-    """Metaclass for :class:`MutableClassStructure`."""
-
-    __attribute_type__ = MutableStructureAttribute  # type: Type[MutableStructureAttribute[Any]]
+IS = TypeVar("IS", bound=ImmutableStructure)  # immutable structure self type
 
 
 # noinspection PyAbstractClass
-class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, ClassStructure, MutableStructure)):
-    """Mutable class structure."""
+class MutableStructure(Structure, BaseMutableStructure):
+    """Mutable attribute class structure."""
 
     __slots__ = ()
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableStructureAttribute[Any]]
-
-    @set_to_none
-    def __hash__(self):
-        error = "{!r} object is not hashable".format(type(self).__name__)
-        raise TypeError(error)
+    __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
+    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
 
     @final
     def __setitem__(self, name, value):
@@ -879,17 +919,17 @@ class MutableClassStructure(six.with_metaclass(MutableClassStructureMeta, ClassS
     @overload
     def update(self, __m, **kwargs):
         # type: (SupportsKeysAndGetItem[str, Any], **Any) -> None
-        pass
+        """."""
 
     @overload
     def update(self, __m, **kwargs):
         # type: (Iterable[tuple[str, Any]], **Any) -> None
-        pass
+        """."""
 
     @overload
     def update(self, **kwargs):
         # type: (**Any) -> None
-        pass
+        """."""
 
     @final
     def update(self, *args, **kwargs):
@@ -909,7 +949,7 @@ class _DelegateSelf(SlottedBase):
     __slots__ = ("__",)
 
     def __init__(self, attribute_map, structure=None):
-        # type: (AttributeMap, ClassStructure | None) -> None
+        # type: (AttributeMap, Structure | None) -> None
         """
         :param attribute_map: Attribute map.
         :param structure: Structure that owns attributes.
@@ -1015,7 +1055,7 @@ class _DelegateSelfInternals(SlottedBase):
     )
 
     def __init__(self, delegate_self, attribute_map, structure):
-        # type: (_DelegateSelf, AttributeMap, ClassStructure | None) -> None
+        # type: (_DelegateSelf, AttributeMap, Structure | None) -> None
         """
         :param delegate_self: Internal object.
         :param attribute_map: Attribute map.
@@ -1024,8 +1064,8 @@ class _DelegateSelfInternals(SlottedBase):
         self.__delegate_self_ref = weakref.ref(delegate_self)
         self.__attribute_map = attribute_map
         self.__structure = structure
-        self.__dependencies = None  # type: tuple[StructureAttribute, ...] | None
-        self.__in_getter = None  # type: StructureAttribute | None
+        self.__dependencies = None  # type: tuple[Attribute, ...] | None
+        self.__in_getter = None  # type: Attribute | None
         self.__new_values = {}  # type: dict[str, Any]
         self.__old_values = {}  # type: dict[str, Any]
         self.__dirty = set(attribute_map).difference(
@@ -1111,7 +1151,7 @@ class _DelegateSelfInternals(SlottedBase):
             raise AttributeError(error)
 
         attribute = self.__get_attribute(name)
-        if not attribute.updatable:
+        if not attribute.settable:
             if attribute.delegated:
                 error = "attribute {!r} is read-only".format(name)
                 raise AttributeError(error)
@@ -1160,7 +1200,7 @@ class _DelegateSelfInternals(SlottedBase):
 
     @contextlib.contextmanager
     def __getter_context(self, attribute):
-        # type: (StructureAttribute) -> Iterator
+        # type: (Attribute) -> Iterator
         """
         Getter context.
 
@@ -1274,12 +1314,12 @@ class _DelegateSelfInternals(SlottedBase):
 
     @property
     def structure(self):
-        # type: () -> ClassStructure | None
+        # type: () -> Structure | None
         """Structure that owns attributes."""
         return self.__structure
 
     @property
     def in_getter(self):
-        # type: () -> StructureAttribute | None
+        # type: () -> Attribute | None
         """Whether running in an attribute's getter delegate."""
         return self.__in_getter

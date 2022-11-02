@@ -17,6 +17,7 @@ from basicco import (
 )
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
+from basicco.namespace import Namespace
 from tippo import (
     Any,
     Callable,
@@ -358,9 +359,14 @@ class StructureMeta(BaseStructureMeta):
                     raise TypeError(error)
                 deserialization_map[serialized_name] = attribute_name
 
-        # Store attribute map and deserialization map.
-        cls.__attributes = attribute_map
-        cls.__deserialization_map = mapping_proxy.MappingProxyType(deserialization_map)
+        # Store attribute map, attribute namespace, and deserialization map.
+        type.__setattr__(cls, "__attributes__", attribute_map)
+        type.__setattr__(cls, "__attrs__", Namespace(attribute_map))
+        type.__setattr__(cls, "__deserialization_map__", mapping_proxy.MappingProxyType(deserialization_map))
+
+        # Run callbacks.
+        for attribute in six.itervalues(this_attribute_map):
+            attribute.__run_callback__()
 
         return cls
 
@@ -381,20 +387,6 @@ class StructureMeta(BaseStructureMeta):
         """
         return dct
 
-    @property
-    @final
-    def __attributes__(cls):  # noqa
-        # type: () -> AttributeMap
-        """Attribute map."""
-        return cls.__attributes
-
-    @property
-    @final
-    def __deserialization_map__(cls):  # noqa
-        # type: () -> mapping_proxy.MappingProxyType[str, str]
-        """Deserialization map."""
-        return cls.__deserialization_map
-
 
 # noinspection PyAbstractClass
 class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
@@ -403,6 +395,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
     __slots__ = ()
 
     __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
+    __attrs__ = Namespace()  # type: Namespace[Attribute[Any]]
     __deserialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
 
     __attribute_type__ = Attribute  # type: Type[Attribute[Any]]

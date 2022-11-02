@@ -4,6 +4,7 @@ from ._class import BaseClass, ImmutableClass, MutableClass
 from ._dict import BaseDict, ImmutableDict, MutableDict
 from ._list import BaseList, ImmutableList, MutableList
 from ._set import BaseSet, ImmutableSet, MutableSet
+from ._helpers import dict_attribute
 
 __all__ = [
     "BaseDict",
@@ -18,4 +19,5 @@ __all__ = [
     "BaseClass",
     "ImmutableClass",
     "MutableClass",
+    "dict_attribute",
 ]

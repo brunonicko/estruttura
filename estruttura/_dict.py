@@ -255,7 +255,10 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :return: Serialized dictionary.
         :raises SerializationError: Error while serializing.
         """
-        return dict((n, type(self).relationship.serialize_value(v)) for n, v in six.iteritems(self))
+        return dict(
+            (type(self).relationship.serialize_value(k), type(self).relationship.serialize_value(v))
+            for k, v in six.iteritems(self)
+        )
 
     @classmethod
     def deserialize(cls, serialized):
@@ -267,7 +270,10 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :return: Dictionary structure.
         :raises SerializationError: Error while deserializing.
         """
-        values = dict((n, cls.relationship.deserialize_value(s)) for n, s in six.iteritems(serialized))
+        values = dict(
+            (cls.relationship.deserialize_value(k), cls.relationship.deserialize_value(v))
+            for k, v in six.iteritems(serialized)
+        )
         return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
 
 

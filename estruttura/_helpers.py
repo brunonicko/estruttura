@@ -584,3 +584,107 @@ def list_attribute(
             relationship_kwargs=relationship_kwargs,
         )
     )
+
+
+def set_attribute(
+    default=MISSING,  # type: Iterable[T] | MissingType
+    factory=MISSING,  # type: Callable[..., Iterable[T]] | str | MissingType
+    converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
+    validator=None,  # type: Callable[[Any], None] | str | None
+    types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
+    subtypes=False,  # type: bool
+    serializer=TypedSerializer(),  # type: Serializer[T] | None
+    required=None,  # type: bool | None
+    init=None,  # type: bool | None
+    settable=None,  # type: bool | None
+    deletable=None,  # type: bool | None
+    serializable=None,  # type: bool | None
+    serialize_as=None,  # type: str | None
+    serialize_default=True,  # type: bool
+    constant=False,  # type: bool
+    repr=None,  # type: bool | None
+    eq=None,  # type: bool | None
+    order=None,  # type: bool | None
+    hash=None,  # type: bool | None
+    doc="",  # type: str
+    metadata=None,  # type: Any
+    callback=None,  # type: Callable[[Attribute[SetStructure[T]]], None] | None
+    extra_paths=(),  # type: Iterable[str]
+    builtin_paths=None,  # type: Iterable[str] | None
+    attribute_type=Attribute,  # type: Type[Attribute[SetStructure[T]]]
+    attribute_kwargs=None,  # type: Mapping[str, Any] | None
+    set_type=SetStructure,  # type: Type[SetStructure[T]]
+    cls_dct=None,  # type: Mapping[str, Any] | None
+    cls_module=None,  # type: str | None
+    relationship_type=Relationship,  # type: Type[Relationship[T]]
+    relationship_kwargs=None,  # type: Mapping[str, Any] | None
+):
+    # type: (...) -> SetStructure[T]
+    caller_mod = caller_module.caller_module()
+    extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
+    if cls_module is None:
+        cls_module = caller_mod
+
+    cls = set_cls(
+        qualified_name=set_type.__name__,
+        cls_module=cls_module,
+        converter=converter,
+        validator=validator,
+        types=types,
+        subtypes=subtypes,
+        serializer=serializer,
+        extra_paths=extra_paths,
+        builtin_paths=builtin_paths,
+        set_type=set_type,
+        cls_dct=cls_dct,
+        relationship_type=relationship_type,
+        relationship_kwargs=relationship_kwargs,
+    )  # type: Type[SetStructure[T]]
+
+    _namespace = {}  # type: dict[str, Any]
+
+    def _callback(attr, _ns=_namespace, _cls=cls, _cb=callback):  # noqa
+        _ns[_cls.__name__] = _cls
+        _cls.__qualname__ = "{}.__attrs__.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
+        if _cb is not None:
+            _cb(attr)
+
+    def _converter(value, _cls=cls, _conv=converter):
+        if _conv is not None:
+            value = [fabricate_value.fabricate_value(_conv, v) for v in value]
+        return _cls(value)
+
+    return cast(
+        SetStructure[T],
+        attribute(
+            default=default,
+            factory=factory,
+            converter=_converter,
+            validator=validator,
+            types=(cls,),
+            subtypes=False,
+            serializer=serializer,
+            required=required,
+            init=init,
+            settable=settable,
+            deletable=deletable,
+            serializable=serializable,
+            serialize_as=serialize_as,
+            serialize_default=serialize_default,
+            constant=constant,
+            repr=repr,
+            eq=eq,
+            order=order,
+            hash=hash,
+            doc=doc,
+            metadata=metadata,
+            namespace=_namespace,
+            callback=_callback,
+            extra_paths=extra_paths,
+            builtin_paths=builtin_paths,
+            attribute_type=attribute_type,
+            relationship_type=relationship_type,
+            attribute_kwargs=attribute_kwargs,
+            relationship_kwargs=relationship_kwargs,
+        )
+    )

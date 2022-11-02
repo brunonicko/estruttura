@@ -14,7 +14,7 @@ from ._dict import DictStructure, ImmutableDictStructure, MutableDictStructure
 from ._list import ImmutableListStructure, ListStructure, MutableListStructure
 from ._relationship import Relationship, RelationshipTypesInfo
 from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
-from ._helpers import dict_cls, attribute, dict_attribute
+from ._helpers import dict_cls, list_cls, set_cls, attribute, dict_attribute, list_attribute, set_attribute
 from ._structure import (
     AttributeMap,
     ImmutableStructure,
@@ -53,6 +53,10 @@ __all__ = [
     "ImmutableSetStructure",
     "MutableSetStructure",
     "dict_cls",
+    "list_cls",
+    "set_cls",
     "attribute",
     "dict_attribute",
+    "list_attribute",
+    "set_attribute",
 ]

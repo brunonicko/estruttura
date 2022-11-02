@@ -1,7 +1,7 @@
 """Helper functions."""
 
 import six
-from basicco import dynamic_class, caller_module, fabricate_value
+from basicco import dynamic_class, caller_module, fabricate_value, custom_repr
 from basicco.namespace import Namespace
 from tippo import Any, Iterable, Callable, TypeVar, Type, Mapping, cast
 
@@ -267,7 +267,7 @@ def attribute(
     serialize_as=None,  # type: str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
-    repr=None,  # type: bool | None
+    repr=None,  # type: bool | Callable[[T], str] | None
     eq=None,  # type: bool | None
     order=None,  # type: bool | None
     hash=None,  # type: bool | None
@@ -382,7 +382,7 @@ def dict_attribute(
     serialize_as=None,  # type: str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
-    repr=None,  # type: bool | None
+    repr=None,  # type: bool | Callable[[DictStructure[KT, VT]], str] | None
     eq=None,  # type: bool | None
     order=None,  # type: bool | None
     hash=None,  # type: bool | None
@@ -406,6 +406,9 @@ def dict_attribute(
     extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
     if cls_module is None:
         cls_module = caller_mod
+
+    if not constant and repr is None:
+        repr = custom_repr.mapping_repr
 
     cls = dict_cls(
         qualified_name=dict_type.__name__,
@@ -498,7 +501,7 @@ def list_attribute(
     serialize_as=None,  # type: str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
-    repr=None,  # type: bool | None
+    repr=None,  # type: bool | Callable[[ListStructure[T]], str] | None
     eq=None,  # type: bool | None
     order=None,  # type: bool | None
     hash=None,  # type: bool | None
@@ -520,6 +523,9 @@ def list_attribute(
     extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
     if cls_module is None:
         cls_module = caller_mod
+
+    if not constant and repr is None:
+        repr = custom_repr.iterable_repr
 
     cls = list_cls(
         qualified_name=list_type.__name__,
@@ -602,7 +608,7 @@ def set_attribute(
     serialize_as=None,  # type: str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
-    repr=None,  # type: bool | None
+    repr=None,  # type: bool | Callable[[SetStructure[T]], str] | None
     eq=None,  # type: bool | None
     order=None,  # type: bool | None
     hash=None,  # type: bool | None
@@ -624,6 +630,9 @@ def set_attribute(
     extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
     if cls_module is None:
         cls_module = caller_mod
+
+    if not constant and repr is None:
+        repr = lambda s: custom_repr.iterable_repr(s, prefix="{", suffix="}")
 
     cls = set_cls(
         qualified_name=set_type.__name__,

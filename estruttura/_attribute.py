@@ -82,7 +82,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         serialize_as=None,  # type: str | None
         serialize_default=True,  # type: bool
         constant=False,  # type: bool
-        repr=None,  # type: bool | None
+        repr=None,  # type: bool | Callable[[T_co], str] | None
         eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
@@ -106,7 +106,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :param serialize_as: Name to use when serializing.
         :param serialize_default: Whether to serialize default value.
         :param constant: Whether attribute is a class constant.
-        :param repr: Whether to include in the `__repr__` method.
+        :param repr: Whether to include in the `__repr__` method (or a custom repr function).
         :param eq: Whether to include in the `__eq__` method.
         :param order: Whether to include in the `__lt__`, `__le__`, `__gt__`, `__ge__` methods.
         :param hash: Whether to include in the `__hash__` method.
@@ -239,7 +239,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._serialize_default = bool(serialize_default)
         self._constant = bool(constant)
         self._dependencies = ()  # type: tuple[Attribute, ...]
-        self._repr = bool(repr)
+        self._repr = repr if callable(repr) else bool(repr)
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
@@ -727,8 +727,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def repr(self):
-        # type: () -> bool
-        """Whether to include in the `__repr__` method."""
+        # type: () -> bool | Callable[[T_co], str]
+        """Whether to include in the `__repr__` method (or a custom repr function)."""
         return self._repr
 
     @property

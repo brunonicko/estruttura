@@ -41,6 +41,7 @@ from ._bases import (
 from .constants import DEFAULT, DELETED, MISSING
 from .exceptions import ProcessingError
 
+
 KT_str = TypeVar("KT_str", bound=str)
 AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)
 
@@ -551,9 +552,11 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         args = []
         kwargs = []
         delegated = []
+        reprs = {}  # type: dict[str, Callable[[Any], str]]
         for name, attribute in six.iteritems(cls.__attributes__):
             if not attribute.repr:
                 continue
+            reprs[name] = repr if not callable(attribute.repr) else attribute.repr
             if attribute.has_default:
                 kwargs.append(name)
             elif attribute.delegated:
@@ -565,11 +568,11 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
         parts = []
         for name, value in six.iteritems(dict((n, self[n]) for n in args if n in self)):
-            parts.append(repr(value))
+            parts.append(reprs[name](value))
         for name, value in six.iteritems(dict((n, self[n]) for n in kwargs if n in self)):
-            parts.append("{}={!r}".format(name, value))
+            parts.append("{}={}".format(name, reprs[name](value)))
         for name, value in six.iteritems(dict((n, self[n]) for n in delegated if n in self)):
-            parts.append("<{}={!r}>".format(name, value))
+            parts.append("<{}={}>".format(name, reprs[name](value)))
 
         return "{}({})".format(cls.__qualname__, ", ".join(parts))
 

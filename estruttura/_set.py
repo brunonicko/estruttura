@@ -9,8 +9,11 @@ from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
 from ._bases import (
     BaseCollectionStructure,
+    BaseUserCollectionStructure,
     BaseImmutableCollectionStructure,
+    BaseUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from .exceptions import ProcessingError
 
@@ -216,104 +219,6 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
         """
         raise NotImplementedError()
 
-    @final
-    def _add(self, value):
-        # type: (SS, T) -> SS
-        """
-        Add value.
-
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._update((value,))
-
-    @abstract
-    def _do_remove(self, old_values):
-        # type: (SS, frozenset[T]) -> SS
-        """
-        Remove values (internal).
-
-        :param old_values: Old values.
-        :return: Transformed.
-        """
-        raise NotImplementedError()
-
-    @final
-    def _remove(self, *values):
-        # type: (SS, T) -> SS
-        """
-        Remove existing value(s).
-
-        :param values: Value(s).
-        :return: Transformed.
-        :raises KeyError: Value is not present.
-        """
-        old_values = frozenset(values)
-        if not old_values:
-            return self
-
-        missing = old_values.difference(old_values.intersection(self))
-        if len(missing) == 1:
-            raise KeyError(next(iter(missing)))
-        elif missing:
-            raise KeyError(tuple(missing))
-
-        return self._do_remove(old_values)
-
-    @final
-    def _discard(self, *values):
-        # type: (SS, T) -> SS
-        """
-        Discard value(s).
-
-        :param values: Value(s).
-        :return: Transformed.
-        """
-        if not values:
-            return self
-
-        old_values = frozenset(values).intersection(self)
-        if not old_values:
-            return self
-
-        return self._do_remove(old_values)
-
-    @abstract
-    def _do_update(self, new_values):
-        # type: (SS, frozenset[T]) -> SS
-        """
-        Add values (internal).
-
-        :param new_values: New values.
-        :return: Transformed.
-        """
-        raise NotImplementedError()
-
-    @final
-    def _update(self, iterable):
-        # type: (SS, Iterable[T]) -> SS
-        """
-        Update with iterable.
-
-        :param iterable: Iterable.
-        :return: Transformed.
-        """
-        if self.relationship.will_process:
-            try:
-                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
-            except ProcessingError as e:
-                exc = type(e)(e)
-                six.raise_from(exc, None)
-                raise exc
-        else:
-            new_values = frozenset(iterable)
-
-        new_values = frozenset(self.difference(new_values))
-        if not new_values:
-            return self
-
-        return self._do_update(new_values)
-
     @classmethod
     @abstract
     def _do_deserialize(cls, values):
@@ -436,14 +341,136 @@ SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
+class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
+    """User set structure."""
+
+    __slots__ = ()
+
+    @final
+    def _add(self, value):
+        # type: (USS, T) -> USS
+        """
+        Add value.
+
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._update((value,))
+
+    @abstract
+    def _do_remove(self, old_values):
+        # type: (USS, frozenset[T]) -> USS
+        """
+        Remove values (internal).
+
+        :param old_values: Old values.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @final
+    def _remove(self, *values):
+        # type: (USS, T) -> USS
+        """
+        Remove existing value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        :raises KeyError: Value is not present.
+        """
+        old_values = frozenset(values)
+        if not old_values:
+            return self
+
+        missing = old_values.difference(old_values.intersection(self))
+        if len(missing) == 1:
+            raise KeyError(next(iter(missing)))
+        elif missing:
+            raise KeyError(tuple(missing))
+
+        return self._do_remove(old_values)
+
+    @final
+    def _discard(self, *values):
+        # type: (USS, T) -> USS
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        """
+        if not values:
+            return self
+
+        old_values = frozenset(values).intersection(self)
+        if not old_values:
+            return self
+
+        return self._do_remove(old_values)
+
+    @abstract
+    def _do_update(self, new_values):
+        # type: (USS, frozenset[T]) -> USS
+        """
+        Add values (internal).
+
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        raise NotImplementedError()
+
+    @final
+    def _update(self, iterable):
+        # type: (USS, Iterable[T]) -> USS
+        """
+        Update with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        if self.relationship.will_process:
+            try:
+                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        else:
+            new_values = frozenset(iterable)
+
+        new_values = frozenset(self.difference(new_values))
+        if not new_values:
+            return self
+
+        return self._do_update(new_values)
+
+
+USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
+
+
+# noinspection PyAbstractClass
 class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable set structure."""
 
     __slots__ = ()
 
+
+ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableSetStructure(
+    ImmutableSetStructure[T],
+    UserSetStructure[T],
+    BaseUserImmutableCollectionStructure[T],
+):
+    """User immutable set structure."""
+
+    __slots__ = ()
+
     @final
     def add(self, value):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Add value.
 
@@ -454,7 +481,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def discard(self, *values):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Discard value(s).
 
@@ -465,7 +492,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def remove(self, *values):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Remove existing value(s).
 
@@ -477,7 +504,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def update(self, iterable):
-        # type: (ISS, Iterable[T]) -> ISS
+        # type: (UISS, Iterable[T]) -> UISS
         """
         Update with iterable.
 
@@ -487,12 +514,26 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
         return self._update(iterable)
 
 
-ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
+UISS = TypeVar("UISS", bound=UserImmutableSetStructure)  # user immutable set structure self type
 
 
 # noinspection PyAbstractClass
 class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
     """Mutable set structure."""
+
+    __slots__ = ()
+
+
+MSS = TypeVar("MSS", bound=MutableSetStructure)  # mutable set structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableSetStructure(
+    MutableSetStructure[T],
+    UserSetStructure[T],
+    BaseUserMutableCollectionStructure[T],
+):
+    """User mutable set structure."""
 
     __slots__ = ()
 
@@ -635,3 +676,6 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
         :param iterable: Iterable.
         """
         self._update(iterable)
+
+
+UMSS = TypeVar("UMSS", bound=UserMutableSetStructure)  # user mutable set structure self type

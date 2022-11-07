@@ -9,8 +9,11 @@ from tippo import Any, Callable, Iterable, MutableSequence, Type, TypeVar, overl
 
 from ._bases import (
     BaseCollectionStructure,
+    BaseUserCollectionStructure,
     BaseImmutableCollectionStructure,
+    BaseUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from .exceptions import ProcessingError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
@@ -77,238 +80,6 @@ class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
         :param initial_values: New values.
         """
         raise NotImplementedError()
-
-    @final
-    def _append(self, value):
-        # type: (LS, T) -> LS
-        """
-        Append value at the end.
-
-        :param value: Value.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._insert(len(self), value)
-
-    @final
-    def _extend(self, iterable):
-        # type: (LS, Iterable[T]) -> LS
-        """
-        Extend at the end with iterable.
-
-        :param iterable: Iterable.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._insert(len(self), *iterable)
-
-    @final
-    def _remove(self, value):
-        # type: (LS, T) -> LS
-        """
-        Remove first occurrence of value.
-
-        :param value: Value.
-        :return: Transformed (immutable) or self (mutable).
-        :raises ValueError: Value is not present.
-        """
-        return self._delete(self.index(value))
-
-    @final
-    def _reverse(self):
-        # type: (LS) -> LS
-        """
-        Reverse values.
-
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._update(slice(0, len(self)), reversed(self))
-
-    @final
-    def _sort(self, key=None):
-        # type: (LS, Callable[[T], Any] | None) -> LS
-        """
-        Sort values.
-
-        :param key: Sorting key function.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._update(slice(0, len(self)), sorted(self, key=key))
-
-    @abstract
-    def _do_insert(self, index, new_values):
-        # type: (LS, int, tuple[T, ...]) -> LS
-        """
-        Insert value(s) at index (internal).
-
-        :param index: Index.
-        :param new_values: New values.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @final
-    def _insert(self, index, *values):
-        # type: (LS, int, T) -> LS
-        """
-        Insert value(s) at index.
-
-        :param index: Index.
-        :param values: Value(s).
-        :return: Transformed (immutable) or self (mutable).
-        """
-        if not values:
-            return self
-        index = self.resolve_index(index, clamp=True)
-        if self.relationship.will_process:
-            try:
-                values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(values))
-            except ProcessingError as e:
-                exc = type(e)(e)
-                six.raise_from(exc, None)
-                raise exc
-        return self._do_insert(index, values)
-
-    @abstract
-    def _do_move(self, target_index, index, stop, post_index, post_stop, values):
-        # type: (LS, int, int, int, int, int, tuple[T, ...]) -> LS
-        """
-        Move values internally (internal).
-
-        :param target_index: Target index.
-        :param index: Index (pre-move).
-        :param index: Stop (pre-move).
-        :param post_index: Post index (post-move).
-        :param post_index: Post stop (post-move).
-        :param values: Values being moved.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @final
-    def _move(self, item, target_index):
-        # type: (LS, slice | int, int) -> LS
-        """
-        Move values internally.
-
-        :param item: Index/slice.
-        :param target_index: Target index.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        result = self.pre_move(item, target_index)
-        if result is None:
-            return self
-        target_index, index, stop, post_index, post_stop = result
-        values = tuple(self[index:stop])
-        return self._do_move(target_index, index, stop, post_index, post_stop, values)
-
-    @abstract
-    def _do_delete(self, index, stop, old_values):
-        # type: (LS, int, int, tuple[T, ...]) -> LS
-        """
-        Delete values at index/slice (internal).
-
-        :param index: Index.
-        :param index: Stop.
-        :param old_values: Values being deleted.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @final
-    def _delete(self, item):
-        # type: (LS, slice | int) -> LS
-        """
-        Delete values at index/slice.
-
-        :param item: Index/slice.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        if isinstance(item, slice):
-            index, stop = self.resolve_continuous_slice(item)
-            if index == stop:
-                return self
-        else:
-            index = self.resolve_index(item)
-            stop = index + 1
-
-        values = tuple(self[index:stop])
-        if not values:
-            return self
-
-        return self._do_delete(index, stop, values)
-
-    @final
-    def _set(self, index, value):
-        # type: (LS, int, T) -> LS
-        """
-        Set value at index.
-
-        :param index: Index.
-        :param value: Value.
-        :return: Transformed (immutable) or self (mutable).
-        :raises IndexError: Invalid index.
-        """
-        index = self.resolve_index(index)
-        return self._update(index, value)
-
-    @abstract
-    def _do_update(self, index, stop, old_values, new_values):
-        # type: (LS, int, int, tuple[T, ...], tuple[T, ...]) -> LS
-        """
-        Update value(s) (internal).
-
-        :param index: Index.
-        :param stop: Stop.
-        :param old_values: Old values.
-        :param new_values: New values.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @overload
-    def _update(self, item, value):
-        # type: (LS, int, T) -> LS
-        pass
-
-    @overload
-    def _update(self, item, value):
-        # type: (LS, slice, Iterable[T]) -> LS
-        pass
-
-    @final
-    def _update(self, item, value):
-        """
-        Update value(s).
-
-        :param item: Index/slice.
-        :param value: Value(s).
-        :return: Transformed (immutable) or self (mutable).
-        """
-        if isinstance(item, slice):
-            index, stop = self.resolve_continuous_slice(item)
-            if index == stop:
-                return self._insert(index, *value)
-            new_values = tuple(value)
-        else:
-            index = self.resolve_index(item)
-            stop = index + 1
-            new_values = (value,)
-
-        if not new_values:
-            return self
-        old_values = tuple(self[index:stop])
-
-        if self.relationship.will_process:
-            try:
-                if isinstance(item, slice):
-                    new_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(new_values))
-                else:
-                    new_values = tuple(self.relationship.process_value(v) for v in new_values)
-            except ProcessingError as e:
-                exc = type(e)(e)
-                six.raise_from(exc, None)
-                raise exc
-
-        return self._do_update(index, stop, old_values, new_values)
 
     @classmethod
     @abstract
@@ -413,14 +184,270 @@ LS = TypeVar("LS", bound=ListStructure)  # list structure self type
 
 
 # noinspection PyAbstractClass
+class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
+    """User list structure."""
+
+    __slots__ = ()
+
+    @final
+    def _append(self, value):
+        # type: (ULS, T) -> ULS
+        """
+        Append value at the end.
+
+        :param value: Value.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._insert(len(self), value)
+
+    @final
+    def _extend(self, iterable):
+        # type: (ULS, Iterable[T]) -> ULS
+        """
+        Extend at the end with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._insert(len(self), *iterable)
+
+    @final
+    def _remove(self, value):
+        # type: (ULS, T) -> ULS
+        """
+        Remove first occurrence of value.
+
+        :param value: Value.
+        :return: Transformed (immutable) or self (mutable).
+        :raises ValueError: Value is not present.
+        """
+        return self._delete(self.index(value))
+
+    @final
+    def _reverse(self):
+        # type: (ULS) -> ULS
+        """
+        Reverse values.
+
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update(slice(0, len(self)), reversed(self))
+
+    @final
+    def _sort(self, key=None):
+        # type: (ULS, Callable[[T], Any] | None) -> ULS
+        """
+        Sort values.
+
+        :param key: Sorting key function.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update(slice(0, len(self)), sorted(self, key=key))
+
+    @abstract
+    def _do_insert(self, index, new_values):
+        # type: (ULS, int, tuple[T, ...]) -> ULS
+        """
+        Insert value(s) at index (internal).
+
+        :param index: Index.
+        :param new_values: New values.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
+    def _insert(self, index, *values):
+        # type: (ULS, int, T) -> ULS
+        """
+        Insert value(s) at index.
+
+        :param index: Index.
+        :param values: Value(s).
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if not values:
+            return self
+        index = self.resolve_index(index, clamp=True)
+        if self.relationship.will_process:
+            try:
+                values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(values))
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        return self._do_insert(index, values)
+
+    @abstract
+    def _do_move(self, target_index, index, stop, post_index, post_stop, values):
+        # type: (ULS, int, int, int, int, int, tuple[T, ...]) -> ULS
+        """
+        Move values internally (internal).
+
+        :param target_index: Target index.
+        :param index: Index (pre-move).
+        :param index: Stop (pre-move).
+        :param post_index: Post index (post-move).
+        :param post_index: Post stop (post-move).
+        :param values: Values being moved.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
+    def _move(self, item, target_index):
+        # type: (ULS, slice | int, int) -> ULS
+        """
+        Move values internally.
+
+        :param item: Index/slice.
+        :param target_index: Target index.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        result = self.pre_move(item, target_index)
+        if result is None:
+            return self
+        target_index, index, stop, post_index, post_stop = result
+        values = tuple(self[index:stop])
+        return self._do_move(target_index, index, stop, post_index, post_stop, values)
+
+    @abstract
+    def _do_delete(self, index, stop, old_values):
+        # type: (ULS, int, int, tuple[T, ...]) -> ULS
+        """
+        Delete values at index/slice (internal).
+
+        :param index: Index.
+        :param index: Stop.
+        :param old_values: Values being deleted.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
+    def _delete(self, item):
+        # type: (ULS, slice | int) -> ULS
+        """
+        Delete values at index/slice.
+
+        :param item: Index/slice.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            if index == stop:
+                return self
+        else:
+            index = self.resolve_index(item)
+            stop = index + 1
+
+        values = tuple(self[index:stop])
+        if not values:
+            return self
+
+        return self._do_delete(index, stop, values)
+
+    @final
+    def _set(self, index, value):
+        # type: (ULS, int, T) -> ULS
+        """
+        Set value at index.
+
+        :param index: Index.
+        :param value: Value.
+        :return: Transformed (immutable) or self (mutable).
+        :raises IndexError: Invalid index.
+        """
+        index = self.resolve_index(index)
+        return self._update(index, value)
+
+    @abstract
+    def _do_update(self, index, stop, old_values, new_values):
+        # type: (ULS, int, int, tuple[T, ...], tuple[T, ...]) -> ULS
+        """
+        Update value(s) (internal).
+
+        :param index: Index.
+        :param stop: Stop.
+        :param old_values: Old values.
+        :param new_values: New values.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @overload
+    def _update(self, item, value):
+        # type: (ULS, int, T) -> ULS
+        pass
+
+    @overload
+    def _update(self, item, value):
+        # type: (ULS, slice, Iterable[T]) -> ULS
+        pass
+
+    @final
+    def _update(self, item, value):
+        """
+        Update value(s).
+
+        :param item: Index/slice.
+        :param value: Value(s).
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if isinstance(item, slice):
+            index, stop = self.resolve_continuous_slice(item)
+            if index == stop:
+                return self._insert(index, *value)
+            new_values = tuple(value)
+        else:
+            index = self.resolve_index(item)
+            stop = index + 1
+            new_values = (value,)
+
+        if not new_values:
+            return self
+        old_values = tuple(self[index:stop])
+
+        if self.relationship.will_process:
+            try:
+                if isinstance(item, slice):
+                    new_values = tuple(self.relationship.process_value(v, i) for i, v in enumerate(new_values))
+                else:
+                    new_values = tuple(self.relationship.process_value(v) for v in new_values)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+
+        return self._do_update(index, stop, old_values, new_values)
+
+
+ULS = TypeVar("ULS", bound=UserListStructure)  # user list structure self type
+
+
+# noinspection PyAbstractClass
 class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable list structure."""
 
     __slots__ = ()
 
+
+ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableListStructure(
+    ImmutableListStructure[T],
+    UserListStructure[T],
+    BaseUserImmutableCollectionStructure[T],
+):
+    """User immutable list structure."""
+
+    __slots__ = ()
+
     @final
     def append(self, value):
-        # type: (ILS, T) -> ILS
+        # type: (UILS, T) -> UILS
         """
         Append value at the end.
 
@@ -431,7 +458,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def extend(self, iterable):
-        # type: (ILS, Iterable[T]) -> ILS
+        # type: (UILS, Iterable[T]) -> UILS
         """
         Extend at the end with iterable.
 
@@ -442,7 +469,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def remove(self, value):
-        # type: (ILS, T) -> ILS
+        # type: (UILS, T) -> UILS
         """
         Remove first occurrence of value.
 
@@ -454,7 +481,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def reverse(self):
-        # type: (ILS) -> ILS
+        # type: (UILS) -> UILS
         """
         Reverse values.
 
@@ -464,7 +491,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def sort(self, key=None):
-        # type: (LS, Callable[[T], Any] | None) -> LS
+        # type: (UILS, Callable[[T], Any] | None) -> UILS
         """
         Sort values.
 
@@ -475,7 +502,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def insert(self, index, *values):
-        # type: (ILS, int, T) -> ILS
+        # type: (UILS, int, T) -> UILS
         """
         Insert value(s) at index.
 
@@ -487,7 +514,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def move(self, item, target_index):
-        # type: (ILS, slice | int, int) -> ILS
+        # type: (UILS, slice | int, int) -> UILS
         """
         Move values internally.
 
@@ -499,7 +526,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def delete(self, item):
-        # type: (ILS, slice | int) -> ILS
+        # type: (UILS, slice | int) -> UILS
         """
         Delete values at index/slice.
 
@@ -510,7 +537,7 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @final
     def set(self, index, value):
-        # type: (ILS, int, T) -> ILS
+        # type: (UILS, int, T) -> UILS
         """
         Set value at index.
 
@@ -523,12 +550,12 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
 
     @overload
     def update(self, item, value):
-        # type: (ILS, int, T) -> ILS
+        # type: (UILS, int, T) -> UILS
         """."""
 
     @overload
     def update(self, item, value):
-        # type: (ILS, slice, Iterable[T]) -> ILS
+        # type: (UILS, slice, Iterable[T]) -> UILS
         """."""
 
     @final
@@ -543,12 +570,26 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
         return self._update(item, value)
 
 
-ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure self type
+UILS = TypeVar("UILS", bound=UserImmutableListStructure)  # user immutable list structure self type
 
 
 # noinspection PyAbstractClass
 class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
     """Mutable list structure."""
+
+    __slots__ = ()
+
+
+MLS = TypeVar("MLS", bound=MutableListStructure)  # mutable list structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableListStructure(
+    MutableListStructure[T],
+    UserListStructure[T],
+    BaseUserMutableCollectionStructure[T],
+):
+    """User mutable list structure."""
 
     __slots__ = ()
 
@@ -669,7 +710,7 @@ class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], 
 
     @final
     def sort(self, key=None):
-        # type: (LS, Callable[[T], Any] | None) -> None
+        # type: (Callable[[T], Any] | None) -> None
         """
         Sort values.
 
@@ -731,3 +772,6 @@ class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], 
         :return: Transformed.
         """
         self._update(item, value)
+
+
+UMLS = TypeVar("UMLS", bound=UserMutableListStructure)  # user mutable list structure self type

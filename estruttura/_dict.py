@@ -17,8 +17,11 @@ from tippo import (
 
 from ._bases import (
     BaseCollectionStructure,
+    BaseUserCollectionStructure,
     BaseImmutableCollectionStructure,
+    BaseUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
@@ -113,9 +116,61 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         """
         raise NotImplementedError()
 
+    @classmethod
+    @abstract
+    def _do_deserialize(cls, values):
+        # type: (Type[DS], mapping_proxy.MappingProxyType[KT, VT]) -> DS
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Dictionary structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        raise NotImplementedError()
+
+    def serialize(self):
+        # type: () -> dict[KT, Any]
+        """
+        Serialize.
+
+        :return: Serialized dictionary.
+        :raises SerializationError: Error while serializing.
+        """
+        return dict(
+            (type(self).relationship.serialize_value(k), type(self).relationship.serialize_value(v))
+            for k, v in six.iteritems(self)
+        )
+
+    @classmethod
+    def deserialize(cls, serialized):
+        # type: (Type[DS], Mapping[KT, Any]) -> DS
+        """
+        Deserialize.
+
+        :param serialized: Serialized mapping.
+        :return: Dictionary structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        values = dict(
+            (cls.relationship.deserialize_value(k), cls.relationship.deserialize_value(v))
+            for k, v in six.iteritems(serialized)
+        )
+        return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
+
+
+DS = TypeVar("DS", bound=DictStructure)  # dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
+    """User dictionary structure."""
+
+    __slots__ = ()
+
     @final
     def _discard(self, key):
-        # type: (DS, KT) -> DS
+        # type: (UDS, KT) -> UDS
         """
         Discard key if it exists.
 
@@ -129,7 +184,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
 
     @final
     def _delete(self, key):
-        # type: (DS, KT) -> DS
+        # type: (UDS, KT) -> UDS
         """
         Delete existing key.
 
@@ -141,7 +196,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
 
     @final
     def _set(self, key, value):
-        # type: (DS, KT, VT) -> DS
+        # type: (UDS, KT, VT) -> UDS
         """
         Set value for key.
 
@@ -153,14 +208,14 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
 
     @abstract
     def _do_update(
-        self,  # type: DS
+        self,  # type: UDS
         inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
         deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]
         updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]
         updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]
         updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
     ):
-        # type: (...) -> DS
+        # type: (...) -> UDS
         """
         Update keys and values (internal).
 
@@ -175,17 +230,17 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (DS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> DS
+        # type: (UDS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> UDS
         pass
 
     @overload
     def _update(self, __m, **kwargs):
-        # type: (DS, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> DS
+        # type: (UDS, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> UDS
         pass
 
     @overload
     def _update(self, **kwargs):
-        # type: (DS, **VT | DeletedType) -> DS
+        # type: (UDS, **VT | DeletedType) -> UDS
         pass
 
     @final
@@ -234,50 +289,8 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
             mapping_proxy.MappingProxyType(updates_and_inserts),
         )
 
-    @classmethod
-    @abstract
-    def _do_deserialize(cls, values):
-        # type: (Type[DS], mapping_proxy.MappingProxyType[KT, VT]) -> DS
-        """
-        Deserialize (internal).
 
-        :param values: Deserialized values.
-        :return: Dictionary structure.
-        :raises SerializationError: Error while deserializing.
-        """
-        raise NotImplementedError()
-
-    def serialize(self):
-        # type: () -> dict[KT, Any]
-        """
-        Serialize.
-
-        :return: Serialized dictionary.
-        :raises SerializationError: Error while serializing.
-        """
-        return dict(
-            (type(self).relationship.serialize_value(k), type(self).relationship.serialize_value(v))
-            for k, v in six.iteritems(self)
-        )
-
-    @classmethod
-    def deserialize(cls, serialized):
-        # type: (Type[DS], Mapping[KT, Any]) -> DS
-        """
-        Deserialize.
-
-        :param serialized: Serialized mapping.
-        :return: Dictionary structure.
-        :raises SerializationError: Error while deserializing.
-        """
-        values = dict(
-            (cls.relationship.deserialize_value(k), cls.relationship.deserialize_value(v))
-            for k, v in six.iteritems(serialized)
-        )
-        return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
-
-
-DS = TypeVar("DS", bound=DictStructure)
+UDS = TypeVar("UDS", bound=UserDictStructure)  # user dictionary structure self type
 
 
 # noinspection PyAbstractClass
@@ -286,9 +299,23 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     __slots__ = ()
 
+
+IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableDictStructure(
+    ImmutableDictStructure[KT, VT],
+    UserDictStructure[KT, VT],
+    BaseUserImmutableCollectionStructure[KT],
+):
+    """User immutable dictionary structure."""
+
+    __slots__ = ()
+
     @final
     def __or__(self, mapping):
-        # type: (IDS, Mapping[KT, VT]) -> IDS
+        # type: (UIDS, Mapping[KT, VT]) -> UIDS
         """
         Update with another mapping.
 
@@ -299,7 +326,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def discard(self, key):
-        # type: (IDS, KT) -> IDS
+        # type: (UIDS, KT) -> UIDS
         """
         Discard key if it exists.
 
@@ -310,7 +337,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def delete(self, key):
-        # type: (IDS, KT) -> IDS
+        # type: (UIDS, KT) -> UIDS
         """
         Delete existing key.
 
@@ -322,7 +349,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def set(self, key, value):
-        # type: (IDS, KT, VT) -> IDS
+        # type: (UIDS, KT, VT) -> UIDS
         """
         Set value for key.
 
@@ -334,17 +361,17 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
+        # type: (UIDS, SupportsKeysAndGetItem[KT, VT], **VT) -> UIDS
         """."""
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IDS, Iterable[tuple[KT, VT]], **VT) -> IDS
+        # type: (UIDS, Iterable[tuple[KT, VT]], **VT) -> UIDS
         """."""
 
     @overload
     def update(self, **kwargs):
-        # type: (IDS, **VT) -> IDS
+        # type: (UIDS, **VT) -> UIDS
         """."""
 
     @final
@@ -358,7 +385,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
         return self._update(*args, **kwargs)
 
 
-IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dictionary structure self type
+UIDS = TypeVar("UIDS", bound=UserImmutableDictStructure)  # user immutable dictionary structure self type
 
 
 # noinspection PyAbstractClass
@@ -368,6 +395,20 @@ class MutableDictStructure(
     slotted.SlottedMutableMapping[KT, VT],
 ):
     """Mutable dictionary structure."""
+
+    __slots__ = ()
+
+
+MDS = TypeVar("MDS", bound=MutableDictStructure)  # mutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableDictStructure(
+    MutableDictStructure[KT, VT],
+    UserDictStructure[KT, VT],
+    BaseUserMutableCollectionStructure[KT],
+):
+    """User mutable dictionary structure."""
 
     __slots__ = ()
 
@@ -439,7 +480,7 @@ class MutableDictStructure(
             exc = KeyError("{!r} is empty".format(type(self).__name__))
             six.raise_from(exc, None)
             raise exc
-        return (key, self.pop(key))
+        return key, self.pop(key)
 
     @final
     def discard(self, key):
@@ -498,4 +539,4 @@ class MutableDictStructure(
         self._update(*args, **kwargs)
 
 
-MDS = TypeVar("MDS", bound=MutableDictStructure)  # mutable dictionary structure self type
+UMDS = TypeVar("UMDS", bound=UserMutableDictStructure)  # user mutable dictionary structure self type

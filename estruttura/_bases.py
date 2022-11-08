@@ -5,10 +5,10 @@ import weakref
 import basicco
 import six
 import slotted
-from basicco import recursive_repr, safe_repr, import_path
+from basicco import recursive_repr, safe_repr, get_mro, import_path
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Type, Mapping, TypeVar, Iterator, Generic
+from tippo import Any, Type, Mapping, TypeVar, Iterator, Generic, cast
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -162,19 +162,51 @@ class BaseUserStructure(BaseStructure):
 BUS = TypeVar("BUS", bound=BaseUserStructure)  # base user structure self type
 
 
+class BaseProxyStructureMeta(BaseStructureMeta):
+    """Metaclass for :class:`BaseProxyStructure`."""
+
+    @staticmethod
+    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+        base_dcts = ((name, dct),) + tuple((b.__name__, b.__dict__) for b in get_mro.preview_mro(*bases))
+        for base_name, base_dct in reversed(base_dcts):
+            if "wrap" in base_dct:
+                error = "{!r} can't override final class member 'wrap' in {!r}".format(base_name, name)
+                raise TypeError(error)
+        return super(BaseProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+
+    def wrap(cls, wrapped):  # noqa
+        # type: (Type[BPSM], BaseStructure) -> BPSM
+        """
+        Wrap a structure.
+
+        :param wrapped: Structure to wrap.
+        :return: Proxy instance.
+        """
+        return cls.__wrap__(wrapped)  # type: ignore
+
+
+BPSM = TypeVar("BPSM")  # base proxy structure meta self type
+
+
 # noinspection PyAbstractClass
-class BaseProxyStructure(BaseStructure, Generic[BS]):
+class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructure, Generic[BS])):
     """Base proxy structure."""
 
     __slots__ = ("__wrapped",)
 
-    def __init__(self, wrapped):
-        # type: (BS) -> None
+    @classmethod
+    def __wrap__(cls, wrapped):
+        # type: (Type[BPS], BS) -> BPS
         """
+        Wrap a structure.
+
         :param wrapped: Structure to wrap.
+        :return: Proxy instance.
         """
+        self = cast(BPS, cls.__new__(cls))
         wrapped.__register_proxy__(self)
-        self.__wrapped = wrapped
+        self.__wrapped = wrapped  # type: ignore
+        return self
 
     def _repr(self):
         # type: () -> str
@@ -222,13 +254,13 @@ class BaseProxyStructure(BaseStructure, Generic[BS]):
         """
         wrapped_cls, wrapped_state = serialized["__class__"], serialized["__state__"]
         wrapped = wrapped_cls.deserialize(wrapped_state)
-        return cls(wrapped)
+        return cls.wrap(wrapped)
 
     @property
     def _wrapped(self):
         # type: () -> BS
         """Wrapped structure."""
-        return self.__wrapped
+        return self.__wrapped  # type: ignore
 
 
 BPS = TypeVar("BPS", bound=BaseProxyStructure)  # base proxy structure self type
@@ -312,6 +344,7 @@ class BaseUserMutableStructure(BaseMutableStructure, BaseUserStructure):
 BUMS = TypeVar("BUMS", bound=BaseUserMutableStructure)  # base user mutable structure self type
 
 
+# noinspection PyAbstractClass
 class BaseProxyImmutableStructure(BaseProxyStructure[BIS], BaseImmutableStructure):
     """Base proxy immutable structure."""
     __slots__ = ()
@@ -329,6 +362,7 @@ class BaseProxyImmutableStructure(BaseProxyStructure[BIS], BaseImmutableStructur
 BPIS = TypeVar("BPIS", bound=BaseProxyImmutableStructure)  # base proxy immutable structure self type
 
 
+# noinspection PyAbstractClass
 class BaseUserProxyImmutableStructure(BaseProxyImmutableStructure[BUIS], BaseUserImmutableStructure):
     """Base user proxy immutable structure."""
 
@@ -340,6 +374,7 @@ BUPIS = TypeVar(
 )  # base user proxy immutable structure self type
 
 
+# noinspection PyAbstractClass
 class BaseProxyMutableStructure(BaseProxyStructure[BMS], BaseMutableStructure):
     """Base proxy mutable structure."""
     __slots__ = ()
@@ -348,6 +383,7 @@ class BaseProxyMutableStructure(BaseProxyStructure[BMS], BaseMutableStructure):
 BPMS = TypeVar("BPMS", bound=BaseProxyMutableStructure)  # base proxy mutable structure self type
 
 
+# noinspection PyAbstractClass
 class BaseUserProxyMutableStructure(BaseProxyMutableStructure[BUMS], BaseUserMutableStructure):
     """Base user proxy mutable structure."""
 
@@ -489,6 +525,7 @@ BUICS = TypeVar(
 )  # base user immutable collection structure self type
 
 
+# noinspection PyAbstractClass
 class BaseProxyImmutableCollectionStructure(
     BaseProxyCollectionStructure[BICS, T_co], BaseProxyImmutableStructure[BICS], BaseImmutableCollectionStructure[T_co]
 ):
@@ -511,7 +548,6 @@ class BaseUserProxyImmutableCollectionStructure(
 
     __slots__ = ()
 
-    @abstract
     def _do_clear(self):
         # type: (BUPICS) -> BUPICS
         """
@@ -519,7 +555,7 @@ class BaseUserProxyImmutableCollectionStructure(
 
         :return: Transformed.
         """
-        return type(self)(self._wrapped.clear())
+        return type(self).wrap(self._wrapped.clear())
 
 
 BUPICS = TypeVar(
@@ -555,6 +591,7 @@ BUMCS = TypeVar(
 )  # base user mutable collection structure self type
 
 
+# noinspection PyAbstractClass
 class BaseProxyMutableCollectionStructure(
     BaseProxyCollectionStructure[BMCS, T_co], BaseProxyMutableStructure[BMCS], BaseMutableCollectionStructure[T_co]
 ):

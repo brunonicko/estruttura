@@ -31,7 +31,7 @@ from ._bases import (
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -320,11 +320,28 @@ class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT,
         """
         return self._wrapped[key]
 
-    def _do_init(self, initial_values):
+    def _do_init(self, initial_values):  # noqa
         # type: (mapping_proxy.MappingProxyType[KT, VT]) -> None
-        """Prevent initialization."""
-        error = "can only be instantiated via {}.wrap()".format(type(self).__name__)
-        raise TypeError(error)
+        """
+        Initialize keys and values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        # type: (Type[PDS], mapping_proxy.MappingProxyType[KT, VT]) -> PDS
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Dictionary structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
 
 
 PDS = TypeVar("PDS", bound=ProxyDictStructure)  # proxy dictionary structure self type
@@ -464,11 +481,11 @@ class UserProxyImmutableDictStructure(
 
     def _do_update(
         self,  # type: UPIDS
-        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
         all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
     ):
         # type: (...) -> UPIDS
@@ -482,7 +499,7 @@ class UserProxyImmutableDictStructure(
         :param updates_and_inserts: Keys and values being updated or inserted.
         :return: Transformed (immutable) or self (mutable).
         """
-        return type(self).wrap(self._wrapped.update(all_updates))
+        return type(self)(self._wrapped.update(all_updates))
 
 
 UPIDS = TypeVar("UPIDS", bound=UserProxyImmutableDictStructure)  # user proxy immutable dictionary structure self type

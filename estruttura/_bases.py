@@ -162,51 +162,19 @@ class BaseUserStructure(BaseStructure):
 BUS = TypeVar("BUS", bound=BaseUserStructure)  # base user structure self type
 
 
-class BaseProxyStructureMeta(BaseStructureMeta):
-    """Metaclass for :class:`BaseProxyStructure`."""
-
-    @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
-        base_dcts = ((name, dct),) + tuple((b.__name__, b.__dict__) for b in get_mro.preview_mro(*bases))
-        for base_name, base_dct in reversed(base_dcts):
-            if "wrap" in base_dct:
-                error = "{!r} can't override final class member 'wrap' in {!r}".format(base_name, name)
-                raise TypeError(error)
-        return super(BaseProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-
-    def wrap(cls, wrapped):  # noqa
-        # type: (Type[BPSM], BaseStructure) -> BPSM
-        """
-        Wrap a structure.
-
-        :param wrapped: Structure to wrap.
-        :return: Proxy instance.
-        """
-        return cls.__wrap__(wrapped)  # type: ignore
-
-
-BPSM = TypeVar("BPSM")  # base proxy structure meta self type
-
-
 # noinspection PyAbstractClass
-class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructure, Generic[BS])):
+class BaseProxyStructure(BaseStructure, Generic[BS]):
     """Base proxy structure."""
 
     __slots__ = ("__wrapped",)
 
-    @classmethod
-    def __wrap__(cls, wrapped):
-        # type: (Type[BPS], BS) -> BPS
+    def __init__(self, wrapped):
+        # type: (BS) -> None
         """
-        Wrap a structure.
-
         :param wrapped: Structure to wrap.
-        :return: Proxy instance.
         """
-        self = cast(BPS, cls.__new__(cls))
+        self.__wrapped = wrapped
         wrapped.__register_proxy__(self)
-        self.__wrapped = wrapped  # type: ignore
-        return self
 
     def _repr(self):
         # type: () -> str
@@ -228,33 +196,6 @@ class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructur
         if self is other:
             return True
         return type(self) is type(other) and self._wrapped == other._wrapped  # type: ignore  # noqa
-
-    def serialize(self):
-        # type: () -> dict[str, Any]
-        """
-        Serialize.
-
-        :return: Serialized proxy.
-        :raises SerializationError: Error while serializing.
-        """
-        return {
-            "__class__": import_path.get_path(type(self._wrapped)),
-            "__state__": self._wrapped.serialize(),
-        }
-
-    @classmethod
-    def deserialize(cls, serialized):
-        # type: (Type[BPS], dict[str, Any]) -> BPS
-        """
-        Deserialize.
-
-        :param serialized: Serialized proxy.
-        :return: Proxy structure.
-        :raises SerializationError: Error while deserializing.
-        """
-        wrapped_cls, wrapped_state = serialized["__class__"], serialized["__state__"]
-        wrapped = wrapped_cls.deserialize(wrapped_state)
-        return cls.wrap(wrapped)
 
     @property
     def _wrapped(self):
@@ -555,7 +496,7 @@ class BaseUserProxyImmutableCollectionStructure(
 
         :return: Transformed.
         """
-        return type(self).wrap(self._wrapped.clear())
+        return type(self)(self._wrapped.clear())
 
 
 BUPICS = TypeVar(

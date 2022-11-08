@@ -11,7 +11,7 @@ VT = TypeVar("VT")
 
 
 # noinspection PyAbstractClass
-class BaseDict(estruttura.DictStructure[KT, VT]):
+class BaseDict(estruttura.UserDictStructure[KT, VT]):
     """Base dictionary."""
 
     __slots__ = ("_internal",)
@@ -41,13 +41,13 @@ class BaseDict(estruttura.DictStructure[KT, VT]):
         return self
 
 
-class ImmutableDict(BaseDict[KT, VT], estruttura.ImmutableDictStructure[KT, VT]):
+class ImmutableDict(BaseDict[KT, VT], estruttura.UserImmutableDictStructure[KT, VT]):
     """Immutable dictionary."""
 
     def _hash(self):
         return hash(tuple(sorted(self._internal.items(), key=lambda i: id(i[0]))))
 
-    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):
+    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts, all_updates):
         new_internal = dict((k, v) for k, v in self._internal.items() if k not in deletes)
         new_internal.update(updates_and_inserts)
         new_self = copy.copy(self)
@@ -58,7 +58,7 @@ class ImmutableDict(BaseDict[KT, VT], estruttura.ImmutableDictStructure[KT, VT])
         return type(self)()
 
 
-class MutableDict(BaseDict[KT, VT], estruttura.MutableDictStructure[KT, VT]):
+class MutableDict(BaseDict[KT, VT], estruttura.UserMutableDictStructure[KT, VT]):
     """Mutable dictionary."""
 
     def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):

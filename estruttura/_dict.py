@@ -19,15 +19,15 @@ from ._bases import (
     BaseCollectionStructure,
     BaseUserCollectionStructure,
     BaseProxyCollectionStructure,
-    BaseUserProxyCollectionStructure,
+    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseUserImmutableCollectionStructure,
     BaseProxyImmutableCollectionStructure,
-    BaseUserProxyImmutableCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
     BaseUserMutableCollectionStructure,
     BaseProxyMutableCollectionStructure,
-    BaseUserProxyMutableCollectionStructure,
+    BaseProxyUserMutableCollectionStructure,
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
@@ -348,17 +348,17 @@ PDS = TypeVar("PDS", bound=ProxyDictStructure)  # proxy dictionary structure sel
 
 
 # noinspection PyAbstractClass
-class UserProxyDictStructure(
+class ProxyUserDictStructure(
     ProxyDictStructure[UDS, KT, VT],
     UserDictStructure[KT, VT],
-    BaseUserProxyCollectionStructure[UDS, KT],
+    BaseProxyUserCollectionStructure[UDS, KT],
 ):
-    """User proxy dictionary structure."""
+    """proxy user dictionary structure."""
 
     __slots__ = ()
 
 
-UPDS = TypeVar("UPDS", bound=UserProxyDictStructure)  # user proxy dictionary structure self type
+PUDS = TypeVar("PUDS", bound=ProxyUserDictStructure)  # proxy user dictionary structure self type
 
 
 # noinspection PyAbstractClass
@@ -470,17 +470,17 @@ class ProxyImmutableDictStructure(
 PIDS = TypeVar("PIDS", bound=ProxyImmutableDictStructure)  # proxy immutable dictionary structure self type
 
 
-class UserProxyImmutableDictStructure(
+class ProxyUserImmutableDictStructure(
     ProxyImmutableDictStructure[UIDS, KT, VT],
-    BaseUserProxyImmutableCollectionStructure[UIDS, KT],
+    BaseProxyUserImmutableCollectionStructure[UIDS, KT],
     UserImmutableDictStructure[KT, VT],
 ):
-    """User proxy immutable dictionary structure."""
+    """proxy user immutable dictionary structure."""
 
     __slots__ = ()
 
     def _do_update(
-        self,  # type: UPIDS
+        self,  # type: PUIDS
         inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
         deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
         updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
@@ -488,7 +488,7 @@ class UserProxyImmutableDictStructure(
         updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
         all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
     ):
-        # type: (...) -> UPIDS
+        # type: (...) -> PUIDS
         """
         Update keys and values (internal).
 
@@ -502,7 +502,7 @@ class UserProxyImmutableDictStructure(
         return type(self)(self._wrapped.update(all_updates))
 
 
-UPIDS = TypeVar("UPIDS", bound=UserProxyImmutableDictStructure)  # user proxy immutable dictionary structure self type
+PUIDS = TypeVar("PUIDS", bound=ProxyUserImmutableDictStructure)  # proxy user immutable dictionary structure self type
 
 
 # noinspection PyAbstractClass
@@ -674,14 +674,14 @@ PMDS = TypeVar("PMDS", bound=ProxyMutableDictStructure)  # proxy mutable diction
 
 
 # noinspection PyAbstractClass
-class UserProxyMutableDictStructure(
+class ProxyUserMutableDictStructure(
     ProxyMutableDictStructure[UMDS, KT, VT],
-    BaseUserProxyMutableCollectionStructure[UMDS, KT],
+    BaseProxyUserMutableCollectionStructure[UMDS, KT],
     UserMutableDictStructure[KT, VT],
 ):
-    """User proxy mutable dictionary structure."""
+    """proxy user mutable dictionary structure."""
 
     __slots__ = ()
 
 
-UPMDS = TypeVar("UPMDS", bound=UserProxyMutableDictStructure)  # user proxy mutable dictionary structure self type
+PUMDS = TypeVar("PUMDS", bound=ProxyUserMutableDictStructure)  # proxy user mutable dictionary structure self type

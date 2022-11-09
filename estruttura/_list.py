@@ -745,7 +745,10 @@ PUILS = TypeVar("PUILS", bound=ProxyUserImmutableListStructure)  # proxy user im
 
 
 # noinspection PyAbstractClass
-class MutableListStructure(ListStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSequence[T]):
+class MutableListStructure(
+    ListStructure[T],
+    BaseMutableCollectionStructure[T],
+):
     """Mutable list structure."""
 
     __slots__ = ()
@@ -759,6 +762,7 @@ class UserMutableListStructure(
     MutableListStructure[T],
     UserListStructure[T],
     BaseUserMutableCollectionStructure[T],
+    slotted.SlottedMutableSequence[T],
 ):
     """User mutable list structure."""
 

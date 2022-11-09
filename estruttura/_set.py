@@ -696,7 +696,7 @@ PUISS = TypeVar("PUISS", bound=ProxyUserImmutableSetStructure)  # proxy user imm
 
 
 # noinspection PyAbstractClass
-class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T]):
     """Mutable set structure."""
 
     __slots__ = ()
@@ -710,6 +710,7 @@ class UserMutableSetStructure(
     MutableSetStructure[T],
     UserSetStructure[T],
     BaseUserMutableCollectionStructure[T],
+    slotted.SlottedMutableSet[T],
 ):
     """User mutable set structure."""
 

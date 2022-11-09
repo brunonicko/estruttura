@@ -507,7 +507,6 @@ PUIDS = TypeVar("PUIDS", bound=ProxyUserImmutableDictStructure)  # proxy user im
 class MutableDictStructure(
     DictStructure[KT, VT],
     BaseMutableCollectionStructure[KT],
-    slotted.SlottedMutableMapping[KT, VT],
 ):
     """Mutable dictionary structure."""
 
@@ -522,6 +521,7 @@ class UserMutableDictStructure(
     MutableDictStructure[KT, VT],
     UserDictStructure[KT, VT],
     BaseUserMutableCollectionStructure[KT],
+    slotted.SlottedMutableMapping[KT, VT],
 ):
     """User mutable dictionary structure."""
 

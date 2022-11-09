@@ -10,12 +10,18 @@ from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 from ._bases import (
     BaseCollectionStructure,
     BaseUserCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseUserImmutableCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
     BaseUserMutableCollectionStructure,
+    BaseProxyMutableCollectionStructure,
+    BaseProxyUserMutableCollectionStructure,
 )
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 
 T = TypeVar("T")
 
@@ -446,6 +452,36 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
 
 
 USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
+
+
+class ProxySetStructure(BaseProxyCollectionStructure[SS, T], SetStructure[T]):
+    """Proxy set structure."""
+
+    __slots__ = ()
+
+    def _do_init(self, initial_values):  # noqa
+        """
+        Initialize keys and values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Set structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
+
+
+PSS = TypeVar("PSS", bound=ProxySetStructure)  # proxy set structure self type
 
 
 # noinspection PyAbstractClass

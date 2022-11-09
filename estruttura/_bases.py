@@ -553,7 +553,6 @@ class BaseProxyUserMutableCollectionStructure(
 
     __slots__ = ()
 
-    @abstract
     def _do_clear(self):
         # type: (BPUMCS) -> BPUMCS
         """

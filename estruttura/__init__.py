@@ -42,7 +42,20 @@ from ._dict import (
     ProxyMutableDictStructure,
     ProxyUserMutableDictStructure,
 )
-from ._list import ImmutableListStructure, ListStructure, MutableListStructure
+from ._list import (
+    ListStructure,
+    UserListStructure,
+    ProxyListStructure,
+    ProxyUserListStructure,
+    ImmutableListStructure,
+    UserImmutableListStructure,
+    ProxyImmutableListStructure,
+    ProxyUserImmutableListStructure,
+    MutableListStructure,
+    UserMutableListStructure,
+    ProxyMutableListStructure,
+    ProxyUserMutableListStructure,
+)
 from ._relationship import Relationship, RelationshipTypesInfo
 from ._set import ImmutableSetStructure, MutableSetStructure, SetStructure
 from ._helpers import dict_cls, list_cls, set_cls, attribute, dict_attribute, list_attribute, set_attribute
@@ -103,8 +116,17 @@ __all__ = [
     "ProxyMutableDictStructure",
     "ProxyUserMutableDictStructure",
     "ListStructure",
+    "UserListStructure",
+    "ProxyListStructure",
+    "ProxyUserListStructure",
     "ImmutableListStructure",
+    "UserImmutableListStructure",
+    "ProxyImmutableListStructure",
+    "ProxyUserImmutableListStructure",
     "MutableListStructure",
+    "UserMutableListStructure",
+    "ProxyMutableListStructure",
+    "ProxyUserMutableListStructure",
     "Relationship",
     "RelationshipTypesInfo",
     "SetStructure",

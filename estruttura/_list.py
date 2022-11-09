@@ -10,12 +10,18 @@ from tippo import Any, Callable, Iterable, MutableSequence, Type, TypeVar, overl
 from ._bases import (
     BaseCollectionStructure,
     BaseUserCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseUserImmutableCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
     BaseUserMutableCollectionStructure,
+    BaseProxyMutableCollectionStructure,
+    BaseProxyUserMutableCollectionStructure,
 )
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
 
 T = TypeVar("T")
@@ -425,6 +431,92 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
 ULS = TypeVar("ULS", bound=UserListStructure)  # user list structure self type
 
 
+class ProxyListStructure(BaseProxyCollectionStructure[LS, T], ListStructure[T]):
+    """Proxy list structure."""
+
+    __slots__ = ()
+
+    @overload
+    def __getitem__(self, item):
+        # type: (int) -> T
+        pass
+
+    @overload
+    def __getitem__(self, item):
+        # type: (slice) -> MutableSequence[T]
+        pass
+
+    def __getitem__(self, item):
+        """
+        Get value/values at index/slice.
+
+        :param item: Index/slice.
+        :return: Value/values.
+        """
+        return self._wrapped[item]
+
+    def count(self, value):
+        # type: (object) -> int
+        """
+        Count number of occurrences of a value.
+
+        :param value: Value.
+        :return: Number of occurrences.
+        """
+        return self._wrapped.count(value)
+
+    def index(self, value, start=None, stop=None):
+        # type: (Any, int | None, int | None) -> int
+        """
+        Get index of a value.
+
+        :param value: Value.
+        :param start: Start index.
+        :param stop: Stop index.
+        :return: Index of value.
+        :raises ValueError: Provided stop but did not provide start.
+        """
+        return self._wrapped.index(value, start, stop)
+
+    def _do_init(self, initial_values):  # noqa
+        """
+        Initialize keys and values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: List structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
+
+
+PLS = TypeVar("PLS", bound=ProxyListStructure)  # proxy list structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyUserListStructure(
+    ProxyListStructure[ULS, T],
+    UserListStructure[T],
+    BaseProxyUserCollectionStructure[ULS, T],
+):
+    """Proxy user list structure."""
+
+    __slots__ = ()
+
+
+PULS = TypeVar("PULS", bound=ProxyUserListStructure)  # proxy user list structure self type
+
+
 # noinspection PyAbstractClass
 class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable list structure."""
@@ -571,6 +663,84 @@ class UserImmutableListStructure(
 
 
 UILS = TypeVar("UILS", bound=UserImmutableListStructure)  # user immutable list structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyImmutableListStructure(
+    ProxyListStructure[ILS, T],
+    BaseProxyImmutableCollectionStructure[ILS, T],
+    ImmutableListStructure[T],
+):
+    """Proxy immutable list structure."""
+
+    __slots__ = ()
+
+
+PILS = TypeVar("PILS", bound=ProxyImmutableListStructure)  # proxy immutable list structure self type
+
+
+class ProxyUserImmutableListStructure(
+    ProxyImmutableListStructure[UILS, T],
+    BaseProxyUserImmutableCollectionStructure[UILS, T],
+    UserImmutableListStructure[T],
+):
+    """Proxy user immutable list structure."""
+
+    __slots__ = ()
+
+    def _do_insert(self, index, new_values):
+        # type: (PUILS, int, tuple[T, ...]) -> PUILS
+        """
+        Insert value(s) at index (internal).
+
+        :param index: Index.
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        return self._wrapped.insert(index, *new_values)
+
+    def _do_move(self, target_index, index, stop, post_index, post_stop, values):  # noqa
+        # type: (PUILS, int, int, int, int, int, tuple[T, ...]) -> PUILS
+        """
+        Move values internally (internal).
+
+        :param target_index: Target index.
+        :param index: Index (pre-move).
+        :param index: Stop (pre-move).
+        :param post_index: Post index (post-move).
+        :param post_index: Post stop (post-move).
+        :param values: Values being moved.
+        :return: Transformed.
+        """
+        return self._wrapped.move(slice(index, stop), target_index)
+
+    def _do_delete(self, index, stop, old_values):  # noqa
+        # type: (PUILS, int, int, tuple[T, ...]) -> PUILS
+        """
+        Delete values at index/slice (internal).
+
+        :param index: Index.
+        :param index: Stop.
+        :param old_values: Values being deleted.
+        :return: Transformed.
+        """
+        return self.delete(slice(index, stop))
+
+    def _do_update(self, index, stop, old_values, new_values):  # noqa
+        # type: (PUILS, int, int, tuple[T, ...], tuple[T, ...]) -> PUILS
+        """
+        Update value(s) (internal).
+
+        :param index: Index.
+        :param stop: Stop.
+        :param old_values: Old values.
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        return self.update(slice(index, stop), new_values)
+
+
+PUILS = TypeVar("PUILS", bound=ProxyUserImmutableListStructure)  # proxy user immutable list structure self type
 
 
 # noinspection PyAbstractClass
@@ -775,3 +945,85 @@ class UserMutableListStructure(
 
 
 UMLS = TypeVar("UMLS", bound=UserMutableListStructure)  # user mutable list structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyMutableListStructure(
+    ProxyListStructure[MLS, T],
+    BaseProxyMutableCollectionStructure[MLS, T],
+    MutableListStructure[T],
+):
+    """Proxy mutable list structure."""
+
+    __slots__ = ()
+
+
+PMLS = TypeVar("PMLS", bound=ProxyMutableListStructure)  # proxy mutable list structure self type
+
+
+class ProxyUserMutableListStructure(
+    ProxyMutableListStructure[UMLS, T],
+    BaseProxyUserMutableCollectionStructure[UMLS, T],
+    UserMutableListStructure[T],
+):
+    """Proxy user mutable list structure."""
+
+    __slots__ = ()
+
+    def _do_insert(self, index, new_values):
+        # type: (PUMLS, int, tuple[T, ...]) -> PUMLS
+        """
+        Insert value(s) at index (internal).
+
+        :param index: Index.
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        self._wrapped.insert(index, *new_values)
+        return self
+
+    def _do_move(self, target_index, index, stop, post_index, post_stop, values):  # noqa
+        # type: (PUMLS, int, int, int, int, int, tuple[T, ...]) -> PUMLS
+        """
+        Move values internally (internal).
+
+        :param target_index: Target index.
+        :param index: Index (pre-move).
+        :param index: Stop (pre-move).
+        :param post_index: Post index (post-move).
+        :param post_index: Post stop (post-move).
+        :param values: Values being moved.
+        :return: Transformed.
+        """
+        self._wrapped.move(slice(index, stop), target_index)
+        return self
+
+    def _do_delete(self, index, stop, old_values):  # noqa
+        # type: (PUMLS, int, int, tuple[T, ...]) -> PUMLS
+        """
+        Delete values at index/slice (internal).
+
+        :param index: Index.
+        :param index: Stop.
+        :param old_values: Values being deleted.
+        :return: Transformed.
+        """
+        self.delete(slice(index, stop))
+        return self
+
+    def _do_update(self, index, stop, old_values, new_values):  # noqa
+        # type: (PUMLS, int, int, tuple[T, ...], tuple[T, ...]) -> PUMLS
+        """
+        Update value(s) (internal).
+
+        :param index: Index.
+        :param stop: Stop.
+        :param old_values: Old values.
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        self.update(slice(index, stop), new_values)
+        return self
+
+
+PUMLS = TypeVar("PUMLS", bound=ProxyUserMutableListStructure)  # proxy user mutable list structure self type

@@ -321,7 +321,6 @@ class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT,
         return self._wrapped[key]
 
     def _do_init(self, initial_values):  # noqa
-        # type: (mapping_proxy.MappingProxyType[KT, VT]) -> None
         """
         Initialize keys and values (internal).
 
@@ -332,7 +331,6 @@ class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT,
 
     @classmethod
     def _do_deserialize(cls, values):  # noqa
-        # type: (Type[PDS], mapping_proxy.MappingProxyType[KT, VT]) -> PDS
         """
         Deserialize (internal).
 
@@ -353,7 +351,7 @@ class ProxyUserDictStructure(
     UserDictStructure[KT, VT],
     BaseProxyUserCollectionStructure[UDS, KT],
 ):
-    """proxy user dictionary structure."""
+    """Proxy user dictionary structure."""
 
     __slots__ = ()
 
@@ -475,7 +473,7 @@ class ProxyUserImmutableDictStructure(
     BaseProxyUserImmutableCollectionStructure[UIDS, KT],
     UserImmutableDictStructure[KT, VT],
 ):
-    """proxy user immutable dictionary structure."""
+    """Proxy user immutable dictionary structure."""
 
     __slots__ = ()
 
@@ -497,7 +495,7 @@ class ProxyUserImmutableDictStructure(
         :param updates_old: Keys and values being updated (old values).
         :param updates_new: Keys and values being updated (new values).
         :param updates_and_inserts: Keys and values being updated or inserted.
-        :return: Transformed (immutable) or self (mutable).
+        :return: Transformed.
         """
         return type(self)(self._wrapped.update(all_updates))
 
@@ -673,15 +671,37 @@ class ProxyMutableDictStructure(
 PMDS = TypeVar("PMDS", bound=ProxyMutableDictStructure)  # proxy mutable dictionary structure self type
 
 
-# noinspection PyAbstractClass
 class ProxyUserMutableDictStructure(
     ProxyMutableDictStructure[UMDS, KT, VT],
     BaseProxyUserMutableCollectionStructure[UMDS, KT],
     UserMutableDictStructure[KT, VT],
 ):
-    """proxy user mutable dictionary structure."""
+    """Proxy user mutable dictionary structure."""
 
     __slots__ = ()
+
+    def _do_update(
+        self,  # type: PUMDS
+        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
+    ):
+        # type: (...) -> PUMDS
+        """
+        Update keys and values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Self.
+        """
+        self._wrapped.update(all_updates)
+        return self
 
 
 PUMDS = TypeVar("PUMDS", bound=ProxyUserMutableDictStructure)  # proxy user mutable dictionary structure self type

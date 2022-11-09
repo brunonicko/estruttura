@@ -24,6 +24,7 @@ from ._bases import (
 from .exceptions import ProcessingError, SerializationError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
 
+
 T = TypeVar("T")
 
 
@@ -697,7 +698,7 @@ class ProxyUserImmutableListStructure(
         :param new_values: New values.
         :return: Transformed.
         """
-        return self._wrapped.insert(index, *new_values)
+        return type(self)(self._wrapped.insert(index, *new_values))
 
     def _do_move(self, target_index, index, stop, post_index, post_stop, values):  # noqa
         # type: (PUILS, int, int, int, int, int, tuple[T, ...]) -> PUILS
@@ -712,7 +713,7 @@ class ProxyUserImmutableListStructure(
         :param values: Values being moved.
         :return: Transformed.
         """
-        return self._wrapped.move(slice(index, stop), target_index)
+        return type(self)(self._wrapped.move(slice(index, stop), target_index))
 
     def _do_delete(self, index, stop, old_values):  # noqa
         # type: (PUILS, int, int, tuple[T, ...]) -> PUILS
@@ -724,7 +725,7 @@ class ProxyUserImmutableListStructure(
         :param old_values: Values being deleted.
         :return: Transformed.
         """
-        return self.delete(slice(index, stop))
+        return type(self)(self.delete(slice(index, stop)))
 
     def _do_update(self, index, stop, old_values, new_values):  # noqa
         # type: (PUILS, int, int, tuple[T, ...], tuple[T, ...]) -> PUILS
@@ -737,7 +738,7 @@ class ProxyUserImmutableListStructure(
         :param new_values: New values.
         :return: Transformed.
         """
-        return self.update(slice(index, stop), new_values)
+        return type(self)(self._wrapped.update(slice(index, stop), new_values))
 
 
 PUILS = TypeVar("PUILS", bound=ProxyUserImmutableListStructure)  # proxy user immutable list structure self type
@@ -1008,7 +1009,7 @@ class ProxyUserMutableListStructure(
         :param old_values: Values being deleted.
         :return: Transformed.
         """
-        self.delete(slice(index, stop))
+        self._wrapped.delete(slice(index, stop))
         return self
 
     def _do_update(self, index, stop, old_values, new_values):  # noqa
@@ -1022,7 +1023,7 @@ class ProxyUserMutableListStructure(
         :param new_values: New values.
         :return: Transformed.
         """
-        self.update(slice(index, stop), new_values)
+        self._wrapped.update(slice(index, stop), new_values)
         return self
 
 

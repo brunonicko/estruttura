@@ -61,7 +61,7 @@ class ImmutableDict(BaseDict[KT, VT], estruttura.UserImmutableDictStructure[KT, 
 class MutableDict(BaseDict[KT, VT], estruttura.UserMutableDictStructure[KT, VT]):
     """Mutable dictionary."""
 
-    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):
+    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts, all_updates):
         for key in deletes:
             del self._internal[key]
         self._internal.update(updates_and_inserts)

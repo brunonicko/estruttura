@@ -6,7 +6,7 @@ import estruttura
 
 
 # noinspection PyAbstractClass
-class BaseClass(estruttura.Structure):
+class BaseClass(estruttura.UserStructure):
     """Base attribute class."""
 
     __slots__ = ("_internal",)
@@ -27,7 +27,7 @@ class BaseClass(estruttura.Structure):
         return self
 
 
-class ImmutableClass(BaseClass, estruttura.ImmutableStructure):
+class ImmutableClass(BaseClass, estruttura.UserImmutableStructure):
     """Immutable attribute class."""
 
     def _hash(self):
@@ -44,7 +44,7 @@ class ImmutableClass(BaseClass, estruttura.ImmutableStructure):
         return type(self)()
 
 
-class MutableClass(BaseClass, estruttura.MutableStructure):
+class MutableClass(BaseClass, estruttura.UserMutableStructure):
     """Mutable attribute class."""
 
     def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):

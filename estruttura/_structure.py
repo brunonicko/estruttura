@@ -33,6 +33,9 @@ from tippo import (
 
 from ._attribute import Attribute, MutableAttribute
 from ._bases import (
+    BaseUserStructure,
+    BaseUserImmutableStructure,
+    BaseUserMutableStructure,
     BaseImmutableStructure,
     BaseMutableStructure,
     BaseStructure,
@@ -522,7 +525,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         :return: True if equal.
         """
 
-        # Same object
+        # Same object.
         if self is other:
             return True
 
@@ -586,121 +589,6 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         """
         raise NotImplementedError()
 
-    @final
-    def _discard(self, name):
-        # type: (S, str) -> S
-        """
-        Discard attribute value if it's set.
-
-        :param name: Attribute name.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        if name in self:
-            return self._update({name: DELETED})
-        else:
-            return self
-
-    @final
-    def _delete(self, name):
-        # type: (S, str) -> S
-        """
-        Delete existing attribute value.
-
-        :param name: Attribute name.
-        :return: Transformed (immutable) or self (mutable).
-        :raises KeyError: Key is not present.
-        """
-        return self._update({name: DELETED})
-
-    @final
-    def _set(self, name, value):
-        # type: (S, str, Any) -> S
-        """
-        Set value for attribute.
-
-        :param name: Attribute name.
-        :param value: Value.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._update({name: value})
-
-    @abstract
-    def _do_update(
-        self,  # type: S
-        inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
-        deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
-        updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
-        updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
-        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
-    ):
-        # type: (...) -> S
-        """
-        Update attribute values (internal).
-
-        :param inserts: Keys and values being inserted.
-        :param deletes: Keys and values being deleted.
-        :param updates_old: Keys and values being updated (old values).
-        :param updates_new: Keys and values being updated (new values).
-        :param updates_and_inserts: Keys and values being updated or inserted.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (S, SupportsKeysAndGetItem[str, Any], **Any) -> S
-        pass
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (S, Iterable[tuple[str, Any]], **Any) -> S
-        pass
-
-    @overload
-    def _update(self, **kwargs):
-        # type: (S, **Any) -> S
-        pass
-
-    @final
-    def _update(self, *args, **kwargs):
-        """
-        Update attribute values.
-
-        Same parameters as :meth:`dict.update`.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        try:
-            new_values, old_values = type(self).__attributes__.get_update_values(dict(*args, **kwargs), self)
-        except (ProcessingError, TypeError, ValueError) as e:
-            exc = type(e)(e)
-            six.raise_from(exc, None)
-            raise exc
-
-        # Compile inserts, deletes, updates.
-        inserts = {}
-        deletes = {}
-        updates_old = {}
-        updates_new = {}
-        updates_and_inserts = {}
-        for name, value in six.iteritems(new_values):
-            if name in old_values:
-                updates_new[name] = value
-                updates_old[name] = old_values[name]
-            else:
-                inserts[name] = value
-            updates_and_inserts[name] = value
-        for name, value in six.iteritems(old_values):
-            if name not in new_values:
-                deletes[name] = value
-
-        return self._do_update(
-            mapping_proxy.MappingProxyType(inserts),
-            mapping_proxy.MappingProxyType(deletes),
-            mapping_proxy.MappingProxyType(updates_old),
-            mapping_proxy.MappingProxyType(updates_new),
-            mapping_proxy.MappingProxyType(updates_and_inserts),
-        )
-
     @classmethod
     @abstract
     def _do_deserialize(cls, values):
@@ -762,6 +650,130 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 S = TypeVar("S", bound=Structure)  # structure self type
 
 
+class UserStructure(Structure, BaseUserStructure):
+    """User attribute class structure."""
+
+    __slots__ = ()
+
+    @final
+    def _discard(self, name):
+        # type: (US, str) -> US
+        """
+        Discard attribute value if it's set.
+
+        :param name: Attribute name.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if name in self:
+            return self._update({name: DELETED})
+        else:
+            return self
+
+    @final
+    def _delete(self, name):
+        # type: (US, str) -> US
+        """
+        Delete existing attribute value.
+
+        :param name: Attribute name.
+        :return: Transformed (immutable) or self (mutable).
+        :raises KeyError: Key is not present.
+        """
+        return self._update({name: DELETED})
+
+    @final
+    def _set(self, name, value):
+        # type: (US, str, Any) -> US
+        """
+        Set value for attribute.
+
+        :param name: Attribute name.
+        :param value: Value.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update({name: value})
+
+    @abstract
+    def _do_update(
+        self,  # type: US
+        inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+    ):
+        # type: (...) -> US
+        """
+        Update attribute values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (US, SupportsKeysAndGetItem[str, Any], **Any) -> US
+        pass
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (US, Iterable[tuple[str, Any]], **Any) -> US
+        pass
+
+    @overload
+    def _update(self, **kwargs):
+        # type: (US, **Any) -> US
+        pass
+
+    @final
+    def _update(self, *args, **kwargs):
+        """
+        Update attribute values.
+
+        Same parameters as :meth:`dict.update`.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        try:
+            new_values, old_values = type(self).__attributes__.get_update_values(dict(*args, **kwargs), self)
+        except (ProcessingError, TypeError, ValueError) as e:
+            exc = type(e)(e)
+            six.raise_from(exc, None)
+            raise exc
+
+        # Compile inserts, deletes, updates.
+        inserts = {}
+        deletes = {}
+        updates_old = {}
+        updates_new = {}
+        updates_and_inserts = {}
+        for name, value in six.iteritems(new_values):
+            if name in old_values:
+                updates_new[name] = value
+                updates_old[name] = old_values[name]
+            else:
+                inserts[name] = value
+            updates_and_inserts[name] = value
+        for name, value in six.iteritems(old_values):
+            if name not in new_values:
+                deletes[name] = value
+
+        return self._do_update(
+            mapping_proxy.MappingProxyType(inserts),
+            mapping_proxy.MappingProxyType(deletes),
+            mapping_proxy.MappingProxyType(updates_old),
+            mapping_proxy.MappingProxyType(updates_new),
+            mapping_proxy.MappingProxyType(updates_and_inserts),
+        )
+
+
+US = TypeVar("US", bound=UserStructure)  # user structure self type
+
+
 # noinspection PyAbstractClass
 class ImmutableStructure(Structure, BaseImmutableStructure):
     """Immutable attribute class structure."""
@@ -784,9 +796,19 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
         hash_values = (type(self),) + tuple((n, self[n]) for n in attributes if n in self)
         return hash(hash_values)
 
+
+IS = TypeVar("IS", bound=ImmutableStructure)  # immutable structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableStructure(ImmutableStructure, UserStructure, BaseUserImmutableStructure):
+    """User immutable attribute class structure."""
+
+    __slots__ = ()
+
     @final
     def discard(self, name):
-        # type: (IS, str) -> IS
+        # type: (UIS, str) -> UIS
         """
         Discard attribute value if it's set.
 
@@ -797,7 +819,7 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
 
     @final
     def delete(self, name):
-        # type: (IS, str) -> IS
+        # type: (UIS, str) -> UIS
         """
         Delete existing attribute value.
 
@@ -809,7 +831,7 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
 
     @final
     def set(self, name, value):
-        # type: (IS, str, Any) -> IS
+        # type: (UIS, str, Any) -> UIS
         """
         Set value for attribute.
 
@@ -821,17 +843,17 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IS, SupportsKeysAndGetItem[str, Any], **Any) -> IS
+        # type: (UIS, SupportsKeysAndGetItem[str, Any], **Any) -> UIS
         """."""
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IS, Iterable[tuple[str, Any]], **Any) -> IS
+        # type: (UIS, Iterable[tuple[str, Any]], **Any) -> UIS
         """."""
 
     @overload
     def update(self, **kwargs):
-        # type: (IS, **Any) -> IS
+        # type: (UIS, **Any) -> UIS
         """."""
 
     @final
@@ -845,12 +867,22 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
         return self._update(*args, **kwargs)
 
 
-IS = TypeVar("IS", bound=ImmutableStructure)  # immutable structure self type
+UIS = TypeVar("UIS", bound=UserImmutableStructure)  # user immutable structure self type
 
 
 # noinspection PyAbstractClass
 class MutableStructure(Structure, BaseMutableStructure):
     """Mutable attribute class structure."""
+
+    __slots__ = ()
+
+
+MS = TypeVar("MS", bound=MutableStructure)  # mutable structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableStructure(MutableStructure, UserStructure, BaseUserMutableStructure):
+    """User mutable attribute class structure."""
 
     __slots__ = ()
     __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
@@ -936,6 +968,9 @@ class MutableStructure(Structure, BaseMutableStructure):
         :return: Transformed.
         """
         self._update(*args, **kwargs)
+
+
+UMS = TypeVar("UMS", bound=UserMutableStructure)  # user mutable structure self type
 
 
 @final

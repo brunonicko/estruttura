@@ -872,7 +872,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._default is not MISSING or self._factory is not MISSING
 
 
-A = TypeVar("A", bound=Attribute)  # base attribute self type
+A = TypeVar("A", bound=Attribute)  # attribute self type
 
 
 class MutableAttribute(Attribute[T]):
@@ -905,6 +905,9 @@ class MutableAttribute(Attribute[T]):
             raise AttributeError(error)
 
         del cast(SupportsGetSetDeleteItem, instance)[self.name]
+
+
+MA = TypeVar("MA", bound=MutableAttribute)  # mutable attribute self type
 
 
 def _traverse(attribute, direction):

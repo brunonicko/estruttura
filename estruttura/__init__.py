@@ -1,5 +1,3 @@
-"""Estruttura package."""
-
 from ._attribute import Attribute, MutableAttribute, deleter, getter, setter
 from ._bases import (
     BaseStructureMeta,
@@ -74,10 +72,13 @@ from ._set import (
 from ._helpers import dict_cls, list_cls, set_cls, attribute, dict_attribute, list_attribute, set_attribute
 from ._structure import (
     AttributeMap,
-    ImmutableStructure,
-    MutableStructure,
-    Structure,
     StructureMeta,
+    Structure,
+    UserStructure,
+    ImmutableStructure,
+    UserImmutableStructure,
+    MutableStructure,
+    UserMutableStructure,
 )
 
 __all__ = [
@@ -112,10 +113,13 @@ __all__ = [
     "BaseProxyMutableCollectionStructure",
     "BaseProxyUserMutableCollectionStructure",
     "AttributeMap",
-    "Structure",
     "StructureMeta",
+    "Structure",
+    "UserStructure",
     "ImmutableStructure",
+    "UserImmutableStructure",
     "MutableStructure",
+    "UserMutableStructure",
     "DictStructure",
     "UserDictStructure",
     "ProxyDictStructure",

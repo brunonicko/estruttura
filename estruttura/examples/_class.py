@@ -33,7 +33,7 @@ class ImmutableClass(BaseClass, estruttura.UserImmutableStructure):
     def _hash(self):
         return hash(tuple(sorted(self._internal.items(), key=lambda i: id(i[0]))))
 
-    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):
+    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts, all_updates):
         new_internal = dict((k, v) for k, v in self._internal.items() if k not in deletes)
         new_internal.update(updates_and_inserts)
         new_self = copy.copy(self)
@@ -47,7 +47,7 @@ class ImmutableClass(BaseClass, estruttura.UserImmutableStructure):
 class MutableClass(BaseClass, estruttura.UserMutableStructure):
     """Mutable attribute class."""
 
-    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts):
+    def _do_update(self, inserts, deletes, updates_old, updates_new, updates_and_inserts, all_updates):
         for key in deletes:
             del self._internal[key]
         self._internal.update(updates_and_inserts)

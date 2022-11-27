@@ -495,6 +495,7 @@ class ProxyUserImmutableDictStructure(
         :param updates_old: Keys and values being updated (old values).
         :param updates_new: Keys and values being updated (new values).
         :param updates_and_inserts: Keys and values being updated or inserted.
+        :param all_updates: All updates.
         :return: Transformed.
         """
         return type(self)(self._wrapped.update(all_updates))

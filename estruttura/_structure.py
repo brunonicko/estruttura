@@ -34,15 +34,21 @@ from tippo import (
 from ._attribute import Attribute, MutableAttribute
 from ._bases import (
     BaseUserStructure,
+    BaseProxyUserStructure,
+    BaseProxyStructure,
+    BaseProxyImmutableStructure,
     BaseUserImmutableStructure,
+    BaseProxyUserImmutableStructure,
     BaseUserMutableStructure,
     BaseImmutableStructure,
     BaseMutableStructure,
+    BaseProxyMutableStructure,
+    BaseProxyUserMutableStructure,
     BaseStructure,
     BaseStructureMeta,
 )
 from .constants import DEFAULT, DELETED, MISSING
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 
 
 KT_str = TypeVar("KT_str", bound=str)
@@ -701,6 +707,7 @@ class UserStructure(Structure, BaseUserStructure):
         updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
         updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
         updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        all_updates,  # type: mapping_proxy.MappingProxyType[str, Any]
     ):
         # type: (...) -> US
         """
@@ -711,6 +718,7 @@ class UserStructure(Structure, BaseUserStructure):
         :param updates_old: Keys and values being updated (old values).
         :param updates_new: Keys and values being updated (new values).
         :param updates_and_inserts: Keys and values being updated or inserted.
+        :param all_updates: All updates.
         :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
@@ -751,6 +759,7 @@ class UserStructure(Structure, BaseUserStructure):
         updates_old = {}
         updates_new = {}
         updates_and_inserts = {}
+        all_updates = new_values
         for name, value in six.iteritems(new_values):
             if name in old_values:
                 updates_new[name] = value
@@ -768,10 +777,81 @@ class UserStructure(Structure, BaseUserStructure):
             mapping_proxy.MappingProxyType(updates_old),
             mapping_proxy.MappingProxyType(updates_new),
             mapping_proxy.MappingProxyType(updates_and_inserts),
+            mapping_proxy.MappingProxyType(all_updates),
         )
 
 
 US = TypeVar("US", bound=UserStructure)  # user structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyStructure(Structure, BaseProxyStructure[S]):
+    """Proxy attribute class structure."""
+
+    __slots__ = ()
+
+    def __init__(self, wrapped):
+        # type: (S) -> None
+        """
+        :param wrapped: Structure to wrap.
+        """
+        super(Structure, self).__init__(wrapped)
+
+    def __getitem__(self, name):
+        # type: (str) -> Any
+        """
+        Get value for attribute.
+
+        :param name: Attribute name.
+        :return: Attribute value.
+        :raises KeyError: Attribute does not exist or has no value.
+        """
+        return self._wrapped[name]
+
+    def __contains__(self, name):
+        # type: (object) -> bool
+        """
+        Get whether there's a value for attribute.
+
+        :param name: Attribute name.
+        :return: True if has value.
+        """
+        return name in self._wrapped
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Set structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
+
+    def _do_init(self, initial_values):
+        # type: (mapping_proxy.MappingProxyType[str, Any]) -> None
+        """
+        Initialize attribute values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+
+PS = TypeVar("PS", bound=ProxyStructure)  # proxy structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyUserStructure(ProxyStructure[US], UserStructure, BaseProxyUserStructure[US]):
+    """Proxy user structure."""
+
+    __slots__ = ()
+
+
+PUS = TypeVar("PUS", bound=ProxyUserStructure)  # proxy user structure self type
 
 
 # noinspection PyAbstractClass
@@ -868,6 +948,56 @@ class UserImmutableStructure(ImmutableStructure, UserStructure, BaseUserImmutabl
 
 
 UIS = TypeVar("UIS", bound=UserImmutableStructure)  # user immutable structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyImmutableStructure(
+    ProxyStructure[IS],
+    BaseProxyImmutableStructure[IS],
+    ImmutableStructure,
+):
+    """Proxy immutable class structure."""
+
+    __slots__ = ()
+
+
+PIS = TypeVar("PIS", bound=ProxyImmutableStructure)  # proxy immutable class structure self type
+
+
+class ProxyUserImmutableStructure(
+    ProxyImmutableStructure[UIS],
+    BaseProxyUserImmutableStructure[UIS],
+    UserImmutableStructure,
+):
+    """Proxy user immutable class structure."""
+
+    __slots__ = ()
+
+    def _do_update(
+        self,  # type: PUIS
+        inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        all_updates,  # type: mapping_proxy.MappingProxyType[str, Any]
+    ):
+        # type: (...) -> PUIS
+        """
+        Update attribute values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :param all_updates: All updates.
+        :return: Transformed.
+        """
+        return type(self)(self._wrapped.update(all_updates))
+
+
+PUIS = TypeVar("PUIS", bound=ProxyUserImmutableStructure)  # proxy user immutable class structure self type
 
 
 # noinspection PyAbstractClass
@@ -971,6 +1101,57 @@ class UserMutableStructure(MutableStructure, UserStructure, BaseUserMutableStruc
 
 
 UMS = TypeVar("UMS", bound=UserMutableStructure)  # user mutable structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyMutableStructure(
+    ProxyStructure[MS],
+    BaseProxyMutableStructure[MS],
+    MutableStructure,
+):
+    """Proxy mutable class structure."""
+
+    __slots__ = ()
+
+
+PMS = TypeVar("PMS", bound=ProxyMutableStructure)  # proxy mutable class structure self type
+
+
+class ProxyUserMutableStructure(
+    ProxyMutableStructure[UMS],
+    BaseProxyUserMutableStructure[UMS],
+    UserMutableStructure,
+):
+    """Proxy user mutable class structure."""
+
+    __slots__ = ()
+
+    def _do_update(
+        self,  # type: PUMS
+        inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_new,  # type: mapping_proxy.MappingProxyType[str, Any]
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
+        all_updates,  # type: mapping_proxy.MappingProxyType[str, Any]
+    ):
+        # type: (...) -> PUMS
+        """
+        Update attribute values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :param all_updates: All updates.
+        :return: Self.
+        """
+        self._wrapped.update(all_updates)
+        return self
+
+
+PUMS = TypeVar("PUMS", bound=ProxyUserMutableStructure)  # proxy user mutable class structure self type
 
 
 @final

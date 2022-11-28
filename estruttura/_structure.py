@@ -784,8 +784,23 @@ class UserStructure(Structure, BaseUserStructure):
 US = TypeVar("US", bound=UserStructure)  # user structure self type
 
 
+class ProxyStructureMeta(StructureMeta):
+    """Metaclass for :class:`ProxyStructure`."""
+
+    @staticmethod
+    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+        cls = super(ProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+        delegated_attribute_names = [n for n, a in six.iteritems(cls.__attributes__) if a.delegated]
+        if delegated_attribute_names:
+            error = "proxy class {!r} can't have delegated attributes {}".format(
+                name, ", ".join(repr(n) for n in delegated_attribute_names)
+            )
+            raise TypeError(error)
+        return cls
+
+
 # noinspection PyAbstractClass
-class ProxyStructure(Structure, BaseProxyStructure[S]):
+class ProxyStructure(six.with_metaclass(ProxyStructureMeta, Structure, BaseProxyStructure[S])):
     """Proxy attribute class structure."""
 
     __slots__ = ()
@@ -795,6 +810,21 @@ class ProxyStructure(Structure, BaseProxyStructure[S]):
         """
         :param wrapped: Structure to wrap.
         """
+
+        # Check for attribute inconsistencies.
+        for attribute_name, attribute in six.iteritems(type(wrapped).__attributes__):
+            try:
+                proxy_attribute = type(self).__attributes__[attribute_name]
+            except KeyError:
+                continue
+
+            # Required.
+            if proxy_attribute.required and not attribute.required:
+                error = "'{}.{}' attribute is required but '{}.{}' is not".format(
+                    type(self).__name__, attribute_name, type(wrapped).__name__, attribute_name
+                )
+                raise TypeError(error)
+
         super(Structure, self).__init__(wrapped)
 
     def __getitem__(self, name):

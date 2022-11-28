@@ -75,6 +75,7 @@ from ._structure import (
     StructureMeta,
     Structure,
     UserStructure,
+    ProxyStructureMeta,
     ProxyStructure,
     ProxyUserStructure,
     ImmutableStructure,
@@ -83,8 +84,8 @@ from ._structure import (
     ProxyUserImmutableStructure,
     MutableStructure,
     UserMutableStructure,
+    ProxyMutableStructure,
     ProxyUserMutableStructure,
-    BaseProxyUserMutableStructure,
 )
 
 __all__ = [
@@ -122,6 +123,7 @@ __all__ = [
     "StructureMeta",
     "Structure",
     "UserStructure",
+    "ProxyStructureMeta",
     "ProxyStructure",
     "ProxyUserStructure",
     "ImmutableStructure",
@@ -130,8 +132,8 @@ __all__ = [
     "ProxyUserImmutableStructure",
     "MutableStructure",
     "UserMutableStructure",
+    "ProxyMutableStructure",
     "ProxyUserMutableStructure",
-    "BaseProxyUserMutableStructure",
     "DictStructure",
     "UserDictStructure",
     "ProxyDictStructure",

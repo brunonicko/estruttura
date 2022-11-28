@@ -348,8 +348,8 @@ PDS = TypeVar("PDS", bound=ProxyDictStructure)  # proxy dictionary structure sel
 # noinspection PyAbstractClass
 class ProxyUserDictStructure(
     ProxyDictStructure[UDS, KT, VT],
-    UserDictStructure[KT, VT],
     BaseProxyUserCollectionStructure[UDS, KT],
+    UserDictStructure[KT, VT],
 ):
     """Proxy user dictionary structure."""
 

@@ -800,7 +800,7 @@ class ProxyStructureMeta(StructureMeta):
 
 
 # noinspection PyAbstractClass
-class ProxyStructure(six.with_metaclass(ProxyStructureMeta, Structure, BaseProxyStructure[S])):
+class ProxyStructure(six.with_metaclass(ProxyStructureMeta, BaseProxyStructure[S], Structure)):
     """Proxy attribute class structure."""
 
     __slots__ = ()
@@ -825,7 +825,7 @@ class ProxyStructure(six.with_metaclass(ProxyStructureMeta, Structure, BaseProxy
                 )
                 raise TypeError(error)
 
-        super(Structure, self).__init__(wrapped)
+        super(ProxyStructure, self).__init__(wrapped)
 
     def __getitem__(self, name):
         # type: (str) -> Any
@@ -875,7 +875,7 @@ PS = TypeVar("PS", bound=ProxyStructure)  # proxy structure self type
 
 
 # noinspection PyAbstractClass
-class ProxyUserStructure(ProxyStructure[US], UserStructure, BaseProxyUserStructure[US]):
+class ProxyUserStructure(ProxyStructure[US], BaseProxyUserStructure[US], UserStructure):
     """Proxy user structure."""
 
     __slots__ = ()

@@ -507,8 +507,8 @@ PLS = TypeVar("PLS", bound=ProxyListStructure)  # proxy list structure self type
 # noinspection PyAbstractClass
 class ProxyUserListStructure(
     ProxyListStructure[ULS, T],
-    UserListStructure[T],
     BaseProxyUserCollectionStructure[ULS, T],
+    UserListStructure[T],
 ):
     """Proxy user list structure."""
 

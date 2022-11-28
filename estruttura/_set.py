@@ -568,8 +568,8 @@ PSS = TypeVar("PSS", bound=ProxySetStructure)  # proxy set structure self type
 # noinspection PyAbstractClass
 class ProxyUserSetStructure(
     ProxySetStructure[USS, T],
-    UserSetStructure[T],
     BaseProxyUserCollectionStructure[USS, T],
+    UserSetStructure[T],
 ):
     """Proxy user set structure."""
 

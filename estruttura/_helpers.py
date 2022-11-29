@@ -1,18 +1,17 @@
 """Helper functions."""
 
 import six
-from basicco import dynamic_class, caller_module, fabricate_value, custom_repr
+from basicco import caller_module, custom_repr, dynamic_class, fabricate_value
 from basicco.namespace import Namespace
-from tippo import Any, Iterable, Callable, TypeVar, Type, Mapping, cast
+from tippo import Any, Callable, Iterable, Mapping, Type, TypeVar, cast
 
-from .constants import MissingType, MISSING
-from .serializers import Serializer, TypedSerializer
 from ._attribute import Attribute
-from ._relationship import Relationship
 from ._dict import DictStructure
 from ._list import ListStructure
+from ._relationship import Relationship
 from ._set import SetStructure
-
+from .constants import MISSING, MissingType
+from .serializers import Serializer, TypedSerializer
 
 T = TypeVar("T")
 KT = TypeVar("KT")
@@ -109,7 +108,7 @@ def dict_cls(
             bases=(dict_type,),
             dct=cls_dct,
             module=cls_module,
-        )
+        ),
     )
 
 
@@ -178,7 +177,7 @@ def list_cls(
             bases=(list_type,),
             dct=cls_dct,
             module=cls_module,
-        )
+        ),
     )
 
 
@@ -247,7 +246,7 @@ def set_cls(
             bases=(set_type,),
             dct=cls_dct,
             module=cls_module,
-        )
+        ),
     )
 
 
@@ -280,7 +279,7 @@ def attribute(
     attribute_type=Attribute,  # type: Type[Attribute[T]]
     attribute_kwargs=None,  # type: Mapping[str, Any] | None
     relationship_type=Relationship,  # type: Type[Relationship[T]]
-    relationship_kwargs=None  # type: Mapping[str, Any] | None
+    relationship_kwargs=None,  # type: Mapping[str, Any] | None
 ):
     # type: (...) -> T
     """
@@ -336,7 +335,7 @@ def attribute(
                 serializer=serializer,
                 extra_paths=extra_paths,
                 builtin_paths=builtin_paths,
-                **(relationship_kwargs or {})  # noqa
+                **(relationship_kwargs or {}),  # noqa
             ),
             required=required,
             init=init,
@@ -356,8 +355,8 @@ def attribute(
             callback=callback,
             extra_paths=extra_paths,
             builtin_paths=builtin_paths,
-            **(attribute_kwargs or {})  # noqa
-        )
+            **(attribute_kwargs or {}),  # noqa
+        ),
     )
 
 
@@ -481,7 +480,7 @@ def dict_attribute(
             relationship_type=relationship_type,
             attribute_kwargs=attribute_kwargs,
             relationship_kwargs=relationship_kwargs,
-        )
+        ),
     )
 
 
@@ -588,7 +587,7 @@ def list_attribute(
             relationship_type=relationship_type,
             attribute_kwargs=attribute_kwargs,
             relationship_kwargs=relationship_kwargs,
-        )
+        ),
     )
 
 
@@ -695,5 +694,5 @@ def set_attribute(
             relationship_type=relationship_type,
             attribute_kwargs=attribute_kwargs,
             relationship_kwargs=relationship_kwargs,
-        )
+        ),
     )

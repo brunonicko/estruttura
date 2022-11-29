@@ -17,17 +17,17 @@ from tippo import (
 
 from ._bases import (
     BaseCollectionStructure,
-    BaseUserCollectionStructure,
-    BaseProxyCollectionStructure,
-    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
-    BaseUserImmutableCollectionStructure,
-    BaseProxyImmutableCollectionStructure,
-    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
-    BaseUserMutableCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
     BaseProxyMutableCollectionStructure,
+    BaseProxyUserCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseProxyUserMutableCollectionStructure,
+    BaseUserCollectionStructure,
+    BaseUserImmutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
@@ -530,7 +530,7 @@ class UserMutableDictStructure(
 
     @final
     def __ior__(self, mapping):
-        # type: (MDS, Mapping[KT, VT]) -> MDS
+        # type: (UMDS, Mapping[KT, VT]) -> UMDS
         """
         Update in place with another mapping.
 

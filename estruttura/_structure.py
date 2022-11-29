@@ -16,8 +16,8 @@ from basicco import (
     safe_repr,
 )
 from basicco.abstract_class import abstract
-from basicco.runtime_final import final
 from basicco.namespace import Namespace
+from basicco.runtime_final import final
 from tippo import (
     Any,
     Callable,
@@ -33,23 +33,22 @@ from tippo import (
 
 from ._attribute import Attribute, MutableAttribute
 from ._bases import (
-    BaseUserStructure,
-    BaseProxyUserStructure,
-    BaseProxyStructure,
-    BaseProxyImmutableStructure,
-    BaseUserImmutableStructure,
-    BaseProxyUserImmutableStructure,
-    BaseUserMutableStructure,
     BaseImmutableStructure,
     BaseMutableStructure,
+    BaseProxyImmutableStructure,
     BaseProxyMutableStructure,
+    BaseProxyStructure,
+    BaseProxyUserImmutableStructure,
     BaseProxyUserMutableStructure,
+    BaseProxyUserStructure,
     BaseStructure,
     BaseStructureMeta,
+    BaseUserImmutableStructure,
+    BaseUserMutableStructure,
+    BaseUserStructure,
 )
 from .constants import DEFAULT, DELETED, MISSING
 from .exceptions import ProcessingError, SerializationError
-
 
 KT_str = TypeVar("KT_str", bound=str)
 AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)
@@ -63,7 +62,7 @@ class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[
 
     @overload
     def __init__(self, ordered_attributes):
-        # type: (collections.OrderedDict[str, Attribute]) -> None
+        # type: (collections.OrderedDict[str, AT_co]) -> None
         pass
 
     @overload
@@ -72,6 +71,7 @@ class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[
         pass
 
     def __init__(self, ordered_attributes=()):
+        # type: (collections.OrderedDict[str, AT_co] | Iterable[tuple[str, AT_co]]) -> None
         """
         :param ordered_attributes: Ordered attributes (ordered dict or items).
         """
@@ -248,6 +248,7 @@ class StructureMeta(BaseStructureMeta):
 
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+        # type: (...) -> StructureMeta
 
         # Get/set attribute type for this class.
         dct = dict(dct)
@@ -313,10 +314,10 @@ class StructureMeta(BaseStructureMeta):
 
         # Build ordered attribute map.
         attribute_items = sorted(six.iteritems(base_attributes), key=lambda i: counter[i[0]])
-        attribute_map = AttributeMap(attribute_items)
+        attribute_map = AttributeMap(attribute_items)  # type: AttributeMap[str, Attribute]
 
         this_attribute_items = [(n, a) for n, a in attribute_items if n in this_attributes]
-        this_attribute_map = AttributeMap(this_attribute_items)
+        this_attribute_map = AttributeMap(this_attribute_items)  # type: AttributeMap[str, Attribute]
 
         # Hook to edit dct.
         dct_copy = dict(dct)

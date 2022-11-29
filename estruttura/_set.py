@@ -9,20 +9,19 @@ from tippo import AbstractSet, Any, Iterable, Type, TypeVar
 
 from ._bases import (
     BaseCollectionStructure,
-    BaseUserCollectionStructure,
-    BaseProxyCollectionStructure,
-    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
-    BaseUserImmutableCollectionStructure,
-    BaseProxyImmutableCollectionStructure,
-    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
-    BaseUserMutableCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
     BaseProxyMutableCollectionStructure,
+    BaseProxyUserCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseProxyUserMutableCollectionStructure,
+    BaseUserCollectionStructure,
+    BaseUserImmutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from .exceptions import ProcessingError, SerializationError
-
 
 T = TypeVar("T")
 

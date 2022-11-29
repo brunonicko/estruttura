@@ -8,7 +8,7 @@ import slotted
 from basicco import recursive_repr, safe_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Type, Mapping, TypeVar, Iterator, Generic
+from tippo import Any, Generic, Iterator, Mapping, Type, TypeVar
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -288,6 +288,7 @@ BUMS = TypeVar("BUMS", bound=BaseUserMutableStructure)  # base user mutable stru
 # noinspection PyAbstractClass
 class BaseProxyImmutableStructure(BaseProxyStructure[BIS], BaseImmutableStructure):
     """Base proxy immutable structure."""
+
     __slots__ = ()
 
     def _hash(self):
@@ -310,14 +311,13 @@ class BaseProxyUserImmutableStructure(BaseProxyImmutableStructure[BUIS], BaseUse
     __slots__ = ()
 
 
-BPUIS = TypeVar(
-    "BPUIS", bound=BaseProxyUserImmutableStructure
-)  # base proxy user immutable structure self type
+BPUIS = TypeVar("BPUIS", bound=BaseProxyUserImmutableStructure)  # base proxy user immutable structure self type
 
 
 # noinspection PyAbstractClass
 class BaseProxyMutableStructure(BaseProxyStructure[BMS], BaseMutableStructure):
     """Base proxy mutable structure."""
+
     __slots__ = ()
 
 
@@ -482,8 +482,7 @@ BPICS = TypeVar(
 
 # noinspection PyAbstractClass
 class BaseProxyUserImmutableCollectionStructure(
-    BaseProxyImmutableCollectionStructure[BUICS, T_co],
-    BaseProxyUserCollectionStructure[BUICS, T_co]
+    BaseProxyImmutableCollectionStructure[BUICS, T_co], BaseProxyUserCollectionStructure[BUICS, T_co]
 ):
     """Base proxy user immutable collection structure."""
 
@@ -527,9 +526,7 @@ class BaseUserMutableCollectionStructure(BaseMutableCollectionStructure[T_co], B
         self._clear()
 
 
-BUMCS = TypeVar(
-    "BUMCS", bound=BaseUserMutableCollectionStructure
-)  # base user mutable collection structure self type
+BUMCS = TypeVar("BUMCS", bound=BaseUserMutableCollectionStructure)  # base user mutable collection structure self type
 
 
 # noinspection PyAbstractClass
@@ -546,8 +543,7 @@ BPMCS = TypeVar("BPMCS", bound=BaseProxyMutableCollectionStructure)  # base prox
 
 # noinspection PyAbstractClass
 class BaseProxyUserMutableCollectionStructure(
-    BaseProxyMutableCollectionStructure[BUMCS, T_co],
-    BaseProxyUserCollectionStructure[BUMCS, T_co]
+    BaseProxyMutableCollectionStructure[BUMCS, T_co], BaseProxyUserCollectionStructure[BUMCS, T_co]
 ):
     """Base proxy user mutable collection structure."""
 

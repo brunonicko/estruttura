@@ -23,7 +23,6 @@ from tippo import (
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
 
-
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
 
@@ -239,7 +238,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._serialize_default = bool(serialize_default)
         self._constant = bool(constant)
         self._dependencies = ()  # type: tuple[Attribute, ...]
-        self._repr = repr if callable(repr) else bool(repr)
+        self._repr = repr if callable(repr) else bool(repr)  # type: bool | Callable[[T_co], str]
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)

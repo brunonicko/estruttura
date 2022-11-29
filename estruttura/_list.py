@@ -9,21 +9,20 @@ from tippo import Any, Callable, Iterable, MutableSequence, Type, TypeVar, overl
 
 from ._bases import (
     BaseCollectionStructure,
-    BaseUserCollectionStructure,
-    BaseProxyCollectionStructure,
-    BaseProxyUserCollectionStructure,
     BaseImmutableCollectionStructure,
-    BaseUserImmutableCollectionStructure,
-    BaseProxyImmutableCollectionStructure,
-    BaseProxyUserImmutableCollectionStructure,
     BaseMutableCollectionStructure,
-    BaseUserMutableCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
     BaseProxyMutableCollectionStructure,
+    BaseProxyUserCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
     BaseProxyUserMutableCollectionStructure,
+    BaseUserCollectionStructure,
+    BaseUserImmutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from .exceptions import ProcessingError, SerializationError
 from .utils import pre_move, resolve_continuous_slice, resolve_index
-
 
 T = TypeVar("T")
 

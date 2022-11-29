@@ -10,7 +10,7 @@ T = TypeVar("T")
 
 
 # noinspection PyAbstractClass
-class BaseList(estruttura.ListStructure[T]):
+class BaseList(estruttura.UserListStructure[T]):
     """Base list."""
 
     __slots__ = ("_internal",)
@@ -58,7 +58,7 @@ class BaseList(estruttura.ListStructure[T]):
         return self._internal.index(value, start, stop)
 
 
-class ImmutableList(BaseList[T], estruttura.ImmutableListStructure[T]):
+class ImmutableList(BaseList[T], estruttura.UserImmutableListStructure[T]):
     """Immutable list."""
 
     def _hash(self):
@@ -97,7 +97,7 @@ class ImmutableList(BaseList[T], estruttura.ImmutableListStructure[T]):
         return new_self
 
 
-class MutableList(BaseList[T], estruttura.MutableListStructure[T]):
+class MutableList(BaseList[T], estruttura.UserMutableListStructure[T]):
     """Mutable list."""
 
     def _do_clear(self):

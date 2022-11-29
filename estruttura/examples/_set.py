@@ -10,7 +10,7 @@ T = TypeVar("T")
 
 
 # noinspection PyAbstractClass
-class BaseSet(estruttura.SetStructure[T]):
+class BaseSet(estruttura.UserSetStructure[T]):
     """Base set."""
 
     __slots__ = ("_internal",)
@@ -127,7 +127,7 @@ class BaseSet(estruttura.SetStructure[T]):
         return new_self
 
 
-class ImmutableSet(BaseSet[T], estruttura.ImmutableSetStructure[T]):
+class ImmutableSet(BaseSet[T], estruttura.UserImmutableSetStructure[T]):
     """Immutable set."""
 
     def _hash(self):
@@ -149,7 +149,7 @@ class ImmutableSet(BaseSet[T], estruttura.ImmutableSetStructure[T]):
         return new_self
 
 
-class MutableSet(BaseSet[T], estruttura.MutableSetStructure[T]):
+class MutableSet(BaseSet[T], estruttura.UserMutableSetStructure[T]):
     """Mutable set."""
 
     def _do_clear(self):

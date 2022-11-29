@@ -19,10 +19,19 @@ from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseMutableCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
+    BaseProxyMutableCollectionStructure,
+    BaseProxyUserCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
+    BaseProxyUserMutableCollectionStructure,
+    BaseUserCollectionStructure,
+    BaseUserImmutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -113,127 +122,6 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         """
         raise NotImplementedError()
 
-    @final
-    def _discard(self, key):
-        # type: (DS, KT) -> DS
-        """
-        Discard key if it exists.
-
-        :param key: Key.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        if key in self:
-            return self._update({key: DELETED})
-        else:
-            return self
-
-    @final
-    def _delete(self, key):
-        # type: (DS, KT) -> DS
-        """
-        Delete existing key.
-
-        :param key: Key.
-        :return: Transformed (immutable) or self (mutable).
-        :raises KeyError: Key is not present.
-        """
-        return self._update({key: DELETED})
-
-    @final
-    def _set(self, key, value):
-        # type: (DS, KT, VT) -> DS
-        """
-        Set value for key.
-
-        :param key: Key.
-        :param value: Value.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        return self._update({key: value})
-
-    @abstract
-    def _do_update(
-        self,  # type: DS
-        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]
-        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
-    ):
-        # type: (...) -> DS
-        """
-        Update keys and values (internal).
-
-        :param inserts: Keys and values being inserted.
-        :param deletes: Keys and values being deleted.
-        :param updates_old: Keys and values being updated (old values).
-        :param updates_new: Keys and values being updated (new values).
-        :param updates_and_inserts: Keys and values being updated or inserted.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        raise NotImplementedError()
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (DS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> DS
-        pass
-
-    @overload
-    def _update(self, __m, **kwargs):
-        # type: (DS, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> DS
-        pass
-
-    @overload
-    def _update(self, **kwargs):
-        # type: (DS, **VT | DeletedType) -> DS
-        pass
-
-    @final
-    def _update(self, *args, **kwargs):
-        """
-        Update keys and values.
-
-        Same parameters as :meth:`dict.update`.
-        :return: Transformed (immutable) or self (mutable).
-        """
-        changes = dict(*args, **kwargs)
-        inserts = {}
-        deletes = {}
-        updates_old = {}
-        updates_new = {}
-        updates_and_inserts = {}
-        for key, value in six.iteritems(changes):
-            key = self.key_relationship.process_value(key, "{!r} (key)".format(key))
-
-            if value is DELETED:
-                if key not in self:
-                    raise KeyError(key)
-                deletes[key] = self[key]
-                continue
-
-            if self.relationship.will_process:
-                try:
-                    value = self.relationship.process_value(value, key)
-                except ProcessingError as e:
-                    exc = type(e)(e)
-                    six.raise_from(exc, None)
-                    raise exc
-
-            updates_and_inserts[key] = value
-            if key in self:
-                updates_old[key] = self[key]
-                updates_new[key] = value
-            else:
-                inserts[key] = value
-
-        return self._do_update(
-            mapping_proxy.MappingProxyType(inserts),
-            mapping_proxy.MappingProxyType(deletes),
-            mapping_proxy.MappingProxyType(updates_old),
-            mapping_proxy.MappingProxyType(updates_new),
-            mapping_proxy.MappingProxyType(updates_and_inserts),
-        )
-
     @classmethod
     @abstract
     def _do_deserialize(cls, values):
@@ -255,7 +143,10 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :return: Serialized dictionary.
         :raises SerializationError: Error while serializing.
         """
-        return dict((n, type(self).relationship.serialize_value(v)) for n, v in six.iteritems(self))
+        return dict(
+            (type(self).relationship.serialize_value(k), type(self).relationship.serialize_value(v))
+            for k, v in six.iteritems(self)
+        )
 
     @classmethod
     def deserialize(cls, serialized):
@@ -267,11 +158,205 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :return: Dictionary structure.
         :raises SerializationError: Error while deserializing.
         """
-        values = dict((n, cls.relationship.deserialize_value(s)) for n, s in six.iteritems(serialized))
+        values = dict(
+            (cls.relationship.deserialize_value(k), cls.relationship.deserialize_value(v))
+            for k, v in six.iteritems(serialized)
+        )
         return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
 
 
-DS = TypeVar("DS", bound=DictStructure)
+DS = TypeVar("DS", bound=DictStructure)  # dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
+    """User dictionary structure."""
+
+    __slots__ = ()
+
+    @final
+    def _discard(self, key):
+        # type: (UDS, KT) -> UDS
+        """
+        Discard key if it exists.
+
+        :param key: Key.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        if key in self:
+            return self._update({key: DELETED})
+        else:
+            return self
+
+    @final
+    def _delete(self, key):
+        # type: (UDS, KT) -> UDS
+        """
+        Delete existing key.
+
+        :param key: Key.
+        :return: Transformed (immutable) or self (mutable).
+        :raises KeyError: Key is not present.
+        """
+        return self._update({key: DELETED})
+
+    @final
+    def _set(self, key, value):
+        # type: (UDS, KT, VT) -> UDS
+        """
+        Set value for key.
+
+        :param key: Key.
+        :param value: Value.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        return self._update({key: value})
+
+    @abstract
+    def _do_update(
+        self,  # type: UDS
+        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
+        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
+    ):
+        # type: (...) -> UDS
+        """
+        Update keys and values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (UDS, SupportsKeysAndGetItem[KT, VT | DeletedType], **VT) -> UDS
+        pass
+
+    @overload
+    def _update(self, __m, **kwargs):
+        # type: (UDS, Iterable[tuple[KT, VT | DeletedType]], **VT | DeletedType) -> UDS
+        pass
+
+    @overload
+    def _update(self, **kwargs):
+        # type: (UDS, **VT | DeletedType) -> UDS
+        pass
+
+    @final
+    def _update(self, *args, **kwargs):
+        """
+        Update keys and values.
+
+        Same parameters as :meth:`dict.update`.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        changes = dict(*args, **kwargs)
+        inserts = {}
+        deletes = {}
+        updates_old = {}
+        updates_new = {}
+        updates_and_inserts = {}
+        all_updates = {}
+        for key, value in six.iteritems(changes):
+            key = self.key_relationship.process_value(key, "{!r} (key)".format(key))
+
+            if value is DELETED:
+                if key not in self:
+                    raise KeyError(key)
+                deletes[key] = self[key]
+                all_updates[key] = DELETED
+                continue
+
+            if self.relationship.will_process:
+                try:
+                    value = self.relationship.process_value(value, key)
+                except ProcessingError as e:
+                    exc = type(e)(e)
+                    six.raise_from(exc, None)
+                    raise exc
+
+            updates_and_inserts[key] = value
+            all_updates[key] = value
+            if key in self:
+                updates_old[key] = self[key]
+                updates_new[key] = value
+            else:
+                inserts[key] = value
+
+        return self._do_update(
+            mapping_proxy.MappingProxyType(inserts),
+            mapping_proxy.MappingProxyType(deletes),
+            mapping_proxy.MappingProxyType(updates_old),
+            mapping_proxy.MappingProxyType(updates_new),
+            mapping_proxy.MappingProxyType(updates_and_inserts),
+            mapping_proxy.MappingProxyType(all_updates),
+        )
+
+
+UDS = TypeVar("UDS", bound=UserDictStructure)  # user dictionary structure self type
+
+
+class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT, VT]):
+    """Proxy dictionary structure."""
+
+    __slots__ = ()
+
+    def __getitem__(self, key):
+        # type: (KT) -> VT
+        """
+        Get value for key.
+
+        :param key: Key.
+        :return: Value.
+        :raises KeyError: Key is not present.
+        """
+        return self._wrapped[key]
+
+    def _do_init(self, initial_values):  # noqa
+        """
+        Initialize keys and values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Dictionary structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
+
+
+PDS = TypeVar("PDS", bound=ProxyDictStructure)  # proxy dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyUserDictStructure(
+    ProxyDictStructure[UDS, KT, VT],
+    BaseProxyUserCollectionStructure[UDS, KT],
+    UserDictStructure[KT, VT],
+):
+    """Proxy user dictionary structure."""
+
+    __slots__ = ()
+
+
+PUDS = TypeVar("PUDS", bound=ProxyUserDictStructure)  # proxy user dictionary structure self type
 
 
 # noinspection PyAbstractClass
@@ -280,9 +365,23 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     __slots__ = ()
 
+
+IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableDictStructure(
+    ImmutableDictStructure[KT, VT],
+    UserDictStructure[KT, VT],
+    BaseUserImmutableCollectionStructure[KT],
+):
+    """User immutable dictionary structure."""
+
+    __slots__ = ()
+
     @final
     def __or__(self, mapping):
-        # type: (IDS, Mapping[KT, VT]) -> IDS
+        # type: (UIDS, Mapping[KT, VT]) -> UIDS
         """
         Update with another mapping.
 
@@ -293,7 +392,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def discard(self, key):
-        # type: (IDS, KT) -> IDS
+        # type: (UIDS, KT) -> UIDS
         """
         Discard key if it exists.
 
@@ -304,7 +403,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def delete(self, key):
-        # type: (IDS, KT) -> IDS
+        # type: (UIDS, KT) -> UIDS
         """
         Delete existing key.
 
@@ -316,7 +415,7 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @final
     def set(self, key, value):
-        # type: (IDS, KT, VT) -> IDS
+        # type: (UIDS, KT, VT) -> UIDS
         """
         Set value for key.
 
@@ -328,17 +427,17 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
+        # type: (UIDS, SupportsKeysAndGetItem[KT, VT], **VT) -> UIDS
         """."""
 
     @overload
     def update(self, __m, **kwargs):
-        # type: (IDS, Iterable[tuple[KT, VT]], **VT) -> IDS
+        # type: (UIDS, Iterable[tuple[KT, VT]], **VT) -> UIDS
         """."""
 
     @overload
     def update(self, **kwargs):
-        # type: (IDS, **VT) -> IDS
+        # type: (UIDS, **VT) -> UIDS
         """."""
 
     @final
@@ -352,22 +451,86 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
         return self._update(*args, **kwargs)
 
 
-IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dictionary structure self type
+UIDS = TypeVar("UIDS", bound=UserImmutableDictStructure)  # user immutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyImmutableDictStructure(
+    ProxyDictStructure[IDS, KT, VT],
+    BaseProxyImmutableCollectionStructure[IDS, KT],
+    ImmutableDictStructure[KT, VT],
+):
+    """Proxy immutable dictionary structure."""
+
+    __slots__ = ()
+
+
+PIDS = TypeVar("PIDS", bound=ProxyImmutableDictStructure)  # proxy immutable dictionary structure self type
+
+
+class ProxyUserImmutableDictStructure(
+    ProxyImmutableDictStructure[UIDS, KT, VT],
+    BaseProxyUserImmutableCollectionStructure[UIDS, KT],
+    UserImmutableDictStructure[KT, VT],
+):
+    """Proxy user immutable dictionary structure."""
+
+    __slots__ = ()
+
+    def _do_update(
+        self,  # type: PUIDS
+        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
+    ):
+        # type: (...) -> PUIDS
+        """
+        Update keys and values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :param all_updates: All updates.
+        :return: Transformed.
+        """
+        return type(self)(self._wrapped.update(all_updates))
+
+
+PUIDS = TypeVar("PUIDS", bound=ProxyUserImmutableDictStructure)  # proxy user immutable dictionary structure self type
 
 
 # noinspection PyAbstractClass
 class MutableDictStructure(
     DictStructure[KT, VT],
     BaseMutableCollectionStructure[KT],
-    slotted.SlottedMutableMapping[KT, VT],
 ):
     """Mutable dictionary structure."""
 
     __slots__ = ()
 
+
+MDS = TypeVar("MDS", bound=MutableDictStructure)  # mutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableDictStructure(
+    MutableDictStructure[KT, VT],
+    UserDictStructure[KT, VT],
+    BaseUserMutableCollectionStructure[KT],
+    slotted.SlottedMutableMapping[KT, VT],
+):
+    """User mutable dictionary structure."""
+
+    __slots__ = ()
+
     @final
     def __ior__(self, mapping):
-        # type: (MDS, Mapping[KT, VT]) -> MDS
+        # type: (UMDS, Mapping[KT, VT]) -> UMDS
         """
         Update in place with another mapping.
 
@@ -433,7 +596,7 @@ class MutableDictStructure(
             exc = KeyError("{!r} is empty".format(type(self).__name__))
             six.raise_from(exc, None)
             raise exc
-        return (key, self.pop(key))
+        return key, self.pop(key)
 
     @final
     def discard(self, key):
@@ -492,4 +655,54 @@ class MutableDictStructure(
         self._update(*args, **kwargs)
 
 
-MDS = TypeVar("MDS", bound=MutableDictStructure)  # mutable dictionary structure self type
+UMDS = TypeVar("UMDS", bound=UserMutableDictStructure)  # user mutable dictionary structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyMutableDictStructure(
+    ProxyDictStructure[MDS, KT, VT],
+    BaseProxyMutableCollectionStructure[MDS, KT],
+    MutableDictStructure[KT, VT],
+):
+    """Proxy mutable dictionary structure."""
+
+    __slots__ = ()
+
+
+PMDS = TypeVar("PMDS", bound=ProxyMutableDictStructure)  # proxy mutable dictionary structure self type
+
+
+class ProxyUserMutableDictStructure(
+    ProxyMutableDictStructure[UMDS, KT, VT],
+    BaseProxyUserMutableCollectionStructure[UMDS, KT],
+    UserMutableDictStructure[KT, VT],
+):
+    """Proxy user mutable dictionary structure."""
+
+    __slots__ = ()
+
+    def _do_update(
+        self,  # type: PUMDS
+        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
+        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
+    ):
+        # type: (...) -> PUMDS
+        """
+        Update keys and values (internal).
+
+        :param inserts: Keys and values being inserted.
+        :param deletes: Keys and values being deleted.
+        :param updates_old: Keys and values being updated (old values).
+        :param updates_new: Keys and values being updated (new values).
+        :param updates_and_inserts: Keys and values being updated or inserted.
+        :return: Self.
+        """
+        self._wrapped.update(all_updates)
+        return self
+
+
+PUMDS = TypeVar("PUMDS", bound=ProxyUserMutableDictStructure)  # proxy user mutable dictionary structure self type

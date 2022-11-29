@@ -11,8 +11,17 @@ from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseMutableCollectionStructure,
+    BaseProxyCollectionStructure,
+    BaseProxyImmutableCollectionStructure,
+    BaseProxyMutableCollectionStructure,
+    BaseProxyUserCollectionStructure,
+    BaseProxyUserImmutableCollectionStructure,
+    BaseProxyUserMutableCollectionStructure,
+    BaseUserCollectionStructure,
+    BaseUserImmutableCollectionStructure,
+    BaseUserMutableCollectionStructure,
 )
-from .exceptions import ProcessingError
+from .exceptions import ProcessingError, SerializationError
 
 T = TypeVar("T")
 
@@ -216,104 +225,6 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
         """
         raise NotImplementedError()
 
-    @final
-    def _add(self, value):
-        # type: (SS, T) -> SS
-        """
-        Add value.
-
-        :param value: Value.
-        :return: Transformed.
-        """
-        return self._update((value,))
-
-    @abstract
-    def _do_remove(self, old_values):
-        # type: (SS, frozenset[T]) -> SS
-        """
-        Remove values (internal).
-
-        :param old_values: Old values.
-        :return: Transformed.
-        """
-        raise NotImplementedError()
-
-    @final
-    def _remove(self, *values):
-        # type: (SS, T) -> SS
-        """
-        Remove existing value(s).
-
-        :param values: Value(s).
-        :return: Transformed.
-        :raises KeyError: Value is not present.
-        """
-        old_values = frozenset(values)
-        if not old_values:
-            return self
-
-        missing = old_values.difference(old_values.intersection(self))
-        if len(missing) == 1:
-            raise KeyError(next(iter(missing)))
-        elif missing:
-            raise KeyError(tuple(missing))
-
-        return self._do_remove(old_values)
-
-    @final
-    def _discard(self, *values):
-        # type: (SS, T) -> SS
-        """
-        Discard value(s).
-
-        :param values: Value(s).
-        :return: Transformed.
-        """
-        if not values:
-            return self
-
-        old_values = frozenset(values).intersection(self)
-        if not old_values:
-            return self
-
-        return self._do_remove(old_values)
-
-    @abstract
-    def _do_update(self, new_values):
-        # type: (SS, frozenset[T]) -> SS
-        """
-        Add values (internal).
-
-        :param new_values: New values.
-        :return: Transformed.
-        """
-        raise NotImplementedError()
-
-    @final
-    def _update(self, iterable):
-        # type: (SS, Iterable[T]) -> SS
-        """
-        Update with iterable.
-
-        :param iterable: Iterable.
-        :return: Transformed.
-        """
-        if self.relationship.will_process:
-            try:
-                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
-            except ProcessingError as e:
-                exc = type(e)(e)
-                six.raise_from(exc, None)
-                raise exc
-        else:
-            new_values = frozenset(iterable)
-
-        new_values = frozenset(self.difference(new_values))
-        if not new_values:
-            return self
-
-        return self._do_update(new_values)
-
     @classmethod
     @abstract
     def _do_deserialize(cls, values):
@@ -436,14 +347,260 @@ SS = TypeVar("SS", bound=SetStructure)  # set structure self type
 
 
 # noinspection PyAbstractClass
+class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
+    """User set structure."""
+
+    __slots__ = ()
+
+    @final
+    def _add(self, value):
+        # type: (USS, T) -> USS
+        """
+        Add value.
+
+        :param value: Value.
+        :return: Transformed.
+        """
+        return self._update((value,))
+
+    @abstract
+    def _do_remove(self, old_values):
+        # type: (USS, frozenset[T]) -> USS
+        """
+        Remove values (internal).
+
+        :param old_values: Old values.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
+    def _remove(self, *values):
+        # type: (USS, T) -> USS
+        """
+        Remove existing value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        :raises KeyError: Value is not present.
+        """
+        old_values = frozenset(values)
+        if not old_values:
+            return self
+
+        missing = old_values.difference(old_values.intersection(self))
+        if len(missing) == 1:
+            raise KeyError(next(iter(missing)))
+        elif missing:
+            raise KeyError(tuple(missing))
+
+        return self._do_remove(old_values)
+
+    @final
+    def _discard(self, *values):
+        # type: (USS, T) -> USS
+        """
+        Discard value(s).
+
+        :param values: Value(s).
+        :return: Transformed.
+        """
+        if not values:
+            return self
+
+        old_values = frozenset(values).intersection(self)
+        if not old_values:
+            return self
+
+        return self._do_remove(old_values)
+
+    @abstract
+    def _do_update(self, new_values):
+        # type: (USS, frozenset[T]) -> USS
+        """
+        Add values (internal).
+
+        :param new_values: New values.
+        :return: Transformed (immutable) or self (mutable).
+        """
+        raise NotImplementedError()
+
+    @final
+    def _update(self, iterable):
+        # type: (USS, Iterable[T]) -> USS
+        """
+        Update with iterable.
+
+        :param iterable: Iterable.
+        :return: Transformed.
+        """
+        if self.relationship.will_process:
+            try:
+                new_values = frozenset(self.relationship.process_value(v, v) for v in iterable)
+            except ProcessingError as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        else:
+            new_values = frozenset(iterable)
+
+        new_values = frozenset(self.difference(new_values))
+        if not new_values:
+            return self
+
+        return self._do_update(new_values)
+
+
+USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
+
+
+class ProxySetStructure(BaseProxyCollectionStructure[SS, T], SetStructure[T]):
+    """Proxy set structure."""
+
+    __slots__ = ()
+
+    def _do_init(self, initial_values):  # noqa
+        """
+        Initialize keys and values (internal).
+
+        :param initial_values: Initial values.
+        """
+        error = "{!r} object already initialized".format(type(self).__name__)
+        raise RuntimeError(error)
+
+    @classmethod
+    def _do_deserialize(cls, values):  # noqa
+        """
+        Deserialize (internal).
+
+        :param values: Deserialized values.
+        :return: Set structure.
+        :raises SerializationError: Error while deserializing.
+        """
+        error = "can't deserialize proxy object {!r}".format(cls.__name__)
+        raise SerializationError(error)
+
+    def isdisjoint(self, iterable):
+        # type: (Iterable) -> bool
+        """
+        Get whether is a disjoint set of an iterable.
+
+        :param iterable: Iterable.
+        :return: True if is disjoint.
+        """
+        return self._wrapped.isdisjoint(iterable)
+
+    def issubset(self, iterable):
+        # type: (Iterable) -> bool
+        """
+        Get whether is a subset of an iterable.
+
+        :param iterable: Iterable.
+        :return: True if is subset.
+        """
+        return self._wrapped.issubset(iterable)
+
+    def issuperset(self, iterable):
+        # type: (Iterable) -> bool
+        """
+        Get whether is a superset of an iterable.
+
+        :param iterable: Iterable.
+        :return: True if is superset.
+        """
+        return self._wrapped.issuperset(iterable)
+
+    def intersection(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get intersection.
+
+        :param iterable: Iterable.
+        :return: Intersection.
+        """
+        return self._wrapped.intersection(iterable)
+
+    def symmetric_difference(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get symmetric difference.
+
+        :param iterable: Iterable.
+        :return: Symmetric difference.
+        """
+        return self._wrapped.symmetric_difference(iterable)
+
+    def union(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get union.
+
+        :param iterable: Iterable.
+        :return: Union.
+        """
+        return self._wrapped.union(iterable)
+
+    def difference(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get difference.
+
+        :param iterable: Iterable.
+        :return: Difference.
+        """
+        return self._wrapped.difference(iterable)
+
+    def inverse_difference(self, iterable):
+        # type: (Iterable) -> AbstractSet
+        """
+        Get an iterable's difference to this.
+
+        :param iterable: Iterable.
+        :return: Inverse Difference.
+        """
+        return self._wrapped.inverse_difference(iterable)
+
+
+PSS = TypeVar("PSS", bound=ProxySetStructure)  # proxy set structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyUserSetStructure(
+    ProxySetStructure[USS, T],
+    BaseProxyUserCollectionStructure[USS, T],
+    UserSetStructure[T],
+):
+    """Proxy user set structure."""
+
+    __slots__ = ()
+
+
+PUSS = TypeVar("PUSS", bound=ProxyUserSetStructure)  # proxy user set structure self type
+
+
+# noinspection PyAbstractClass
 class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable set structure."""
 
     __slots__ = ()
 
+
+ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
+
+
+# noinspection PyAbstractClass
+class UserImmutableSetStructure(
+    ImmutableSetStructure[T],
+    UserSetStructure[T],
+    BaseUserImmutableCollectionStructure[T],
+):
+    """User immutable set structure."""
+
+    __slots__ = ()
+
     @final
     def add(self, value):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Add value.
 
@@ -454,7 +611,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def discard(self, *values):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Discard value(s).
 
@@ -465,7 +622,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def remove(self, *values):
-        # type: (ISS, T) -> ISS
+        # type: (UISS, T) -> UISS
         """
         Remove existing value(s).
 
@@ -477,7 +634,7 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
 
     @final
     def update(self, iterable):
-        # type: (ISS, Iterable[T]) -> ISS
+        # type: (UISS, Iterable[T]) -> UISS
         """
         Update with iterable.
 
@@ -487,12 +644,74 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
         return self._update(iterable)
 
 
-ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type
+UISS = TypeVar("UISS", bound=UserImmutableSetStructure)  # user immutable set structure self type
 
 
 # noinspection PyAbstractClass
-class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], slotted.SlottedMutableSet[T]):
+class ProxyImmutableSetStructure(
+    ProxySetStructure[ISS, T],
+    BaseProxyImmutableCollectionStructure[ISS, T],
+    ImmutableSetStructure[T],
+):
+    """Proxy immutable set structure."""
+
+    __slots__ = ()
+
+
+PISS = TypeVar("PISS", bound=ProxyImmutableSetStructure)  # proxy immutable set structure self type
+
+
+class ProxyUserImmutableSetStructure(
+    ProxyImmutableSetStructure[UISS, T],
+    BaseProxyUserImmutableCollectionStructure[UISS, T],
+    UserImmutableSetStructure[T],
+):
+    """Proxy user immutable set structure."""
+
+    __slots__ = ()
+
+    def _do_remove(self, old_values):
+        # type: (PUISS, frozenset[T]) -> PUISS
+        """
+        Remove values (internal).
+
+        :param old_values: Old values.
+        :return: Transformed.
+        """
+        return self._wrapped.remove(old_values)
+
+    def _do_update(self, new_values):
+        # type: (PUISS, frozenset[T]) -> PUISS
+        """
+        Add values (internal).
+
+        :param new_values: New values.
+        :return: Transformed.
+        """
+        return self._wrapped.update(new_values)
+
+
+PUISS = TypeVar("PUISS", bound=ProxyUserImmutableSetStructure)  # proxy user immutable set structure self type
+
+
+# noinspection PyAbstractClass
+class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T]):
     """Mutable set structure."""
+
+    __slots__ = ()
+
+
+MSS = TypeVar("MSS", bound=MutableSetStructure)  # mutable set structure self type
+
+
+# noinspection PyAbstractClass
+class UserMutableSetStructure(
+    MutableSetStructure[T],
+    UserSetStructure[T],
+    BaseUserMutableCollectionStructure[T],
+    slotted.SlottedMutableSet[T],
+):
+    """User mutable set structure."""
 
     __slots__ = ()
 
@@ -635,3 +854,55 @@ class MutableSetStructure(SetStructure[T], BaseMutableCollectionStructure[T], sl
         :param iterable: Iterable.
         """
         self._update(iterable)
+
+
+UMSS = TypeVar("UMSS", bound=UserMutableSetStructure)  # user mutable set structure self type
+
+
+# noinspection PyAbstractClass
+class ProxyMutableSetStructure(
+    ProxySetStructure[MSS, T],
+    BaseProxyMutableCollectionStructure[MSS, T],
+    MutableSetStructure[T],
+):
+    """Proxy mutable set structure."""
+
+    __slots__ = ()
+
+
+PMSS = TypeVar("PMSS", bound=ProxyMutableSetStructure)  # proxy mutable set structure self type
+
+
+class ProxyUserMutableSetStructure(
+    ProxyMutableSetStructure[UMSS, T],
+    BaseProxyUserMutableCollectionStructure[UMSS, T],
+    UserMutableSetStructure[T],
+):
+    """Proxy user mutable set structure."""
+
+    __slots__ = ()
+
+    def _do_remove(self, old_values):
+        # type: (PUMSS, frozenset[T]) -> PUMSS
+        """
+        Remove values (internal).
+
+        :param old_values: Old values.
+        :return: Self.
+        """
+        self._wrapped.remove(old_values)
+        return self
+
+    def _do_update(self, new_values):
+        # type: (PUMSS, frozenset[T]) -> PUMSS
+        """
+        Add values (internal).
+
+        :param new_values: New values.
+        :return: Self.
+        """
+        self._wrapped.update(new_values)
+        return self
+
+
+PUMSS = TypeVar("PUMSS", bound=ProxyUserMutableSetStructure)  # proxy user mutable set structure self type

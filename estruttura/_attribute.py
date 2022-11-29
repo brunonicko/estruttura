@@ -2,6 +2,7 @@
 
 import six
 from basicco import basic_data, fabricate_value, unique_iterator
+from basicco.namespace import Namespace
 from basicco.runtime_final import final
 from tippo import (
     Any,
@@ -9,6 +10,7 @@ from tippo import (
     Generic,
     Iterable,
     Literal,
+    Mapping,
     SupportsGetItem,
     SupportsGetSetDeleteItem,
     SupportsKeysAndGetItem,
@@ -51,6 +53,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_hash",
         "_doc",
         "_metadata",
+        "_namespace",
+        "_callback",
         "_extra_paths",
         "_builtin_paths",
         "_processed_default",
@@ -77,12 +81,14 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         serialize_as=None,  # type: str | None
         serialize_default=True,  # type: bool
         constant=False,  # type: bool
-        repr=None,  # type: bool | None
+        repr=None,  # type: bool | Callable[[T_co], str] | None
         eq=None,  # type: bool | None
         order=None,  # type: bool | None
         hash=None,  # type: bool | None
         doc="",  # type: str
         metadata=None,  # type: Any
+        namespace=None,  # type: Namespace | Mapping[str, Any] | None
+        callback=None,  # type: Callable[[Attribute[T_co]], None] | None
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -99,12 +105,14 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :param serialize_as: Name to use when serializing.
         :param serialize_default: Whether to serialize default value.
         :param constant: Whether attribute is a class constant.
-        :param repr: Whether to include in the `__repr__` method.
+        :param repr: Whether to include in the `__repr__` method (or a custom repr function).
         :param eq: Whether to include in the `__eq__` method.
         :param order: Whether to include in the `__lt__`, `__le__`, `__gt__`, `__ge__` methods.
         :param hash: Whether to include in the `__hash__` method.
         :param doc: Documentation.
         :param metadata: User metadata.
+        :param namespace: Namespace.
+        :param callback: Callback that runs after attribute has been named/owned by class.
         :param extra_paths: Extra module paths in fallback order.
         :param builtin_paths: Builtin module paths in fallback order.
         """
@@ -230,12 +238,14 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._serialize_default = bool(serialize_default)
         self._constant = bool(constant)
         self._dependencies = ()  # type: tuple[Attribute, ...]
-        self._repr = bool(repr)
+        self._repr = repr if callable(repr) else bool(repr)  # type: bool | Callable[[T_co], str]
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
         self._doc = doc
         self._metadata = metadata
+        self._namespace = Namespace(namespace if namespace is not None else {})  # type: Namespace
+        self._callback = callback
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
 
@@ -358,6 +368,13 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._owner = owner
         self._name = name
 
+    def __run_callback__(self):
+        # type: () -> None
+        assert self.owned
+        assert self.named
+        if self._callback is not None:
+            self._callback(self)
+
     def to_items(self, usecase=None):
         # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
         """
@@ -383,6 +400,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("hash", self.hash),
             ("doc", self.doc),
             ("metadata", self.metadata),
+            ("namespace", self.namespace),
             ("extra_paths", self.extra_paths),
             ("builtin_paths", self.builtin_paths),
         ]
@@ -398,6 +416,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             if usecase is not basic_data.ItemUsecase.REPR:
                 items.extend(
                     [
+                        ("callback", self._callback),
                         ("dependencies", self.dependencies),
                         ("dependents", self.dependents),
                         ("fget", self.fget),
@@ -707,8 +726,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def repr(self):
-        # type: () -> bool
-        """Whether to include in the `__repr__` method."""
+        # type: () -> bool | Callable[[T_co], str]
+        """Whether to include in the `__repr__` method (or a custom repr function)."""
         return self._repr
 
     @property
@@ -740,6 +759,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         # type: () -> Any
         """User metadata."""
         return self._metadata
+
+    @property
+    def namespace(self):
+        # type: () -> Namespace
+        """Namespace."""
+        return self._namespace
 
     @property
     def extra_paths(self):
@@ -846,7 +871,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._default is not MISSING or self._factory is not MISSING
 
 
-A = TypeVar("A", bound=Attribute)  # base attribute self type
+A = TypeVar("A", bound=Attribute)  # attribute self type
 
 
 class MutableAttribute(Attribute[T]):
@@ -881,6 +906,9 @@ class MutableAttribute(Attribute[T]):
         del cast(SupportsGetSetDeleteItem, instance)[self.name]
 
 
+MA = TypeVar("MA", bound=MutableAttribute)  # mutable attribute self type
+
+
 def _traverse(attribute, direction):
     # type: (Attribute, Literal["dependencies", "dependents"]) -> tuple[Attribute, ...]
     unvisited = set(getattr(attribute, direction))  # type: set[Attribute]
@@ -895,13 +923,13 @@ def _traverse(attribute, direction):
     return tuple(sorted(visited, key=lambda d: d.count))
 
 
-def getter(delegated_attribute, dependencies=()):
+def getter(attribute, dependencies=()):
     # type: (T, Iterable) -> Callable[[Callable[[Any], T]], None]
     """
     Decorator that sets a getter delegate for an attribute.
     The decorated function should be named as a single underscore: `_`.
 
-    :param delegated_attribute: Attribute.
+    :param attribute: Attribute.
     :param dependencies: Dependencies.
     :return: Delegate function decorator.
     """
@@ -912,18 +940,18 @@ def getter(delegated_attribute, dependencies=()):
         if func.__name__ != "_":
             error = "getter function needs to be named '_' instead of {!r}".format(func.__name__)
             raise NameError(error)
-        cast(Attribute[T], delegated_attribute).getter(*dependencies)(func)
+        cast(Attribute[T], attribute).getter(*dependencies)(func)
 
     return decorator
 
 
-def setter(delegated_attribute):
+def setter(attribute):
     # type: (T) -> Callable[[Callable[[Any, T], None]], None]
     """
     Decorator that sets a setter delegate for an attribute.
     The decorated function should be named as a single underscore: `_`.
 
-    :param delegated_attribute: Attribute.
+    :param attribute: Attribute.
     :return: Delegate function decorator.
     """
 
@@ -933,18 +961,18 @@ def setter(delegated_attribute):
         if func.__name__ != "_":
             error = "setter function needs to be named '_' instead of {!r}".format(func.__name__)
             raise NameError(error)
-        cast(Attribute[T], delegated_attribute).setter(func)
+        cast(Attribute[T], attribute).setter(func)
 
     return decorator
 
 
-def deleter(delegated_attribute):
+def deleter(attribute):
     # type: (T) -> Callable[[Callable[[Any], None]], None]
     """
     Decorator that sets a deleter delegate for an attribute.
     The decorated function should be named as a single underscore: `_`.
 
-    :param delegated_attribute: Attribute.
+    :param attribute: Attribute.
     :return: Delegate function decorator.
     """
 
@@ -954,6 +982,6 @@ def deleter(delegated_attribute):
         if func.__name__ != "_":
             error = "deleter function needs to be named '_' instead of {!r}".format(func.__name__)
             raise NameError(error)
-        cast(Attribute[T], delegated_attribute).deleter(func)
+        cast(Attribute[T], attribute).deleter(func)
 
     return decorator

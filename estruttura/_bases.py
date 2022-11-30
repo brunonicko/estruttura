@@ -25,7 +25,7 @@ class BaseStructureMeta(basicco.SlottedBaseMeta):
 class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
     """Base structure."""
 
-    __slots__ = ("__internal",)
+    __slots__ = ("__internals",)
 
     @abstract
     def __hash__(self):

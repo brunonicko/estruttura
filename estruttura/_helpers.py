@@ -13,7 +13,6 @@ from ._set import SetStructure
 from .constants import MISSING, MissingType
 from .serializers import Serializer, TypedSerializer
 
-
 T = TypeVar("T")
 KT = TypeVar("KT")
 VT = TypeVar("VT")

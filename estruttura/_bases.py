@@ -5,7 +5,7 @@ import weakref
 import basicco
 import six
 import slotted
-from basicco import recursive_repr, safe_repr
+from basicco import namespace, recursive_repr, safe_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, Generic, Iterator, Mapping, Type, TypeVar
@@ -25,7 +25,7 @@ class BaseStructureMeta(basicco.SlottedBaseMeta):
 class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
     """Base structure."""
 
-    __slots__ = ("__proxies",)
+    __slots__ = ("__internal",)
 
     @abstract
     def __hash__(self):
@@ -81,9 +81,9 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         :param proxy: Proxy.
         """
         try:
-            proxies = self.__proxies  # type: ignore
+            proxies = self.__internals__.__proxies  # type: ignore
         except AttributeError:
-            proxies = self.__proxies = weakref.WeakValueDictionary()  # type: ignore
+            proxies = self.__internals__.__proxies = weakref.WeakValueDictionary()  # type: ignore
         proxies[id(proxy)] = proxy
 
     @abstract
@@ -141,11 +141,25 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         raise NotImplementedError()
 
     @property
+    def __internals__(self):
+        # type: () -> namespace.MutableNamespace
+        """
+        Internal instance namespace.
+
+        :return: Internal instance namespace.
+        """
+        try:
+            return self.__internals  # type: ignore
+        except AttributeError:
+            self.__internals = namespace.MutableNamespace()  # type: ignore
+            return self.__internals
+
+    @property
     @final
     def _proxies(self):
         # type: (BS) -> list[BaseProxyStructure[BS]]
         """Proxy structures."""
-        proxies_dict = self.__proxies  # type: Mapping[int, BaseProxyStructure]
+        proxies_dict = self.__internals__.__proxies  # type: Mapping[int, BaseProxyStructure]
         return [i[1] for i in sorted(six.iteritems(proxies_dict), key=lambda p: p[0])]
 
 
@@ -166,14 +180,14 @@ BUS = TypeVar("BUS", bound=BaseUserStructure)  # base user structure self type
 class BaseProxyStructure(BaseStructure, Generic[BS]):
     """Base proxy structure."""
 
-    __slots__ = ("__wrapped",)
+    __slots__ = ()
 
     def __init__(self, wrapped):
         # type: (BS) -> None
         """
         :param wrapped: Structure to wrap.
         """
-        self.__wrapped = wrapped
+        self.__internals__.__wrapped = wrapped
         wrapped.__register_proxy__(self)
 
     def _repr(self):
@@ -201,7 +215,7 @@ class BaseProxyStructure(BaseStructure, Generic[BS]):
     def _wrapped(self):
         # type: () -> BS
         """Wrapped structure."""
-        return self.__wrapped  # type: ignore
+        return self.__internals__.__wrapped  # type: ignore
 
 
 BPS = TypeVar("BPS", bound=BaseProxyStructure)  # base proxy structure self type

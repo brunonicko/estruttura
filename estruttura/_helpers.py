@@ -13,6 +13,7 @@ from ._set import SetStructure
 from .constants import MISSING, MissingType
 from .serializers import Serializer, TypedSerializer
 
+
 T = TypeVar("T")
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -260,10 +261,11 @@ def attribute(
     serializer=TypedSerializer(),  # type: Serializer[T] | None
     required=None,  # type: bool | None
     init=None,  # type: bool | None
+    init_as=None,  # type: T | str | None
     settable=None,  # type: bool | None
     deletable=None,  # type: bool | None
     serializable=None,  # type: bool | None
-    serialize_as=None,  # type: str | None
+    serialize_as=None,  # type: T | str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
     repr=None,  # type: bool | Callable[[T], str] | None
@@ -294,10 +296,11 @@ def attribute(
     :param serializer: Serializer.
     :param required: Whether it is required to have a value.
     :param init: Whether to include in the `__init__` method.
+    :param init_as: Alternative attribute or name to use when initializing.
     :param settable: Whether the value can be changed after being set.
     :param deletable: Whether the value can be deleted.
     :param serializable: Whether it's serializable.
-    :param serialize_as: Name to use when serializing.
+    :param serialize_as: Alternative attribute or name to use when serializing.
     :param serialize_default: Whether to serialize default value.
     :param constant: Whether attribute is a class constant.
     :param repr: Whether to include in the `__repr__` method.
@@ -339,10 +342,11 @@ def attribute(
             ),
             required=required,
             init=init,
+            init_as=init_as,  # type: ignore
             settable=settable,
             deletable=deletable,
             serializable=serializable,
-            serialize_as=serialize_as,
+            serialize_as=serialize_as,  # type: ignore
             serialize_default=serialize_default,
             constant=constant,
             repr=repr,
@@ -375,10 +379,11 @@ def dict_attribute(
     key_serializer=TypedSerializer(),  # type: Serializer[KT] | None
     required=None,  # type: bool | None
     init=None,  # type: bool | None
+    init_as=None,  # type: Mapping[KT, VT] | str | None
     settable=None,  # type: bool | None
     deletable=None,  # type: bool | None
     serializable=None,  # type: bool | None
-    serialize_as=None,  # type: str | None
+    serialize_as=None,  # type: Mapping[KT, VT] | str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
     repr=None,  # type: bool | Callable[[DictStructure[KT, VT]], str] | None
@@ -460,10 +465,11 @@ def dict_attribute(
             serializer=serializer,
             required=required,
             init=init,
+            init_as=init_as,  # type: ignore
             settable=settable,
             deletable=deletable,
             serializable=serializable,
-            serialize_as=serialize_as,
+            serialize_as=serialize_as,  # type: ignore
             serialize_default=serialize_default,
             constant=constant,
             repr=repr,
@@ -494,10 +500,11 @@ def list_attribute(
     serializer=TypedSerializer(),  # type: Serializer[T] | None
     required=None,  # type: bool | None
     init=None,  # type: bool | None
+    init_as=None,  # type: Iterable[T] | str | None
     settable=None,  # type: bool | None
     deletable=None,  # type: bool | None
     serializable=None,  # type: bool | None
-    serialize_as=None,  # type: str | None
+    serialize_as=None,  # type: Iterable[T] | str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
     repr=None,  # type: bool | Callable[[ListStructure[T]], str] | None
@@ -567,10 +574,11 @@ def list_attribute(
             serializer=serializer,
             required=required,
             init=init,
+            init_as=init_as,  # type: ignore
             settable=settable,
             deletable=deletable,
             serializable=serializable,
-            serialize_as=serialize_as,
+            serialize_as=serialize_as,  # type: ignore
             serialize_default=serialize_default,
             constant=constant,
             repr=repr,
@@ -601,10 +609,11 @@ def set_attribute(
     serializer=TypedSerializer(),  # type: Serializer[T] | None
     required=None,  # type: bool | None
     init=None,  # type: bool | None
+    init_as=None,  # type: Iterable[T] | str | None
     settable=None,  # type: bool | None
     deletable=None,  # type: bool | None
     serializable=None,  # type: bool | None
-    serialize_as=None,  # type: str | None
+    serialize_as=None,  # type: Iterable[T] | str | None
     serialize_default=True,  # type: bool
     constant=False,  # type: bool
     repr=None,  # type: bool | Callable[[SetStructure[T]], str] | None
@@ -674,10 +683,11 @@ def set_attribute(
             serializer=serializer,
             required=required,
             init=init,
+            init_as=init_as,  # type: ignore
             settable=settable,
             deletable=deletable,
             serializable=serializable,
-            serialize_as=serialize_as,
+            serialize_as=serialize_as,  # type: ignore
             serialize_default=serialize_default,
             constant=constant,
             repr=repr,

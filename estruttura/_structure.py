@@ -334,6 +334,7 @@ class StructureMeta(BaseStructureMeta):
 
         # Final checks.
         seen_default = None
+        initialization_map = {}  # type: dict[str, str]
         deserialization_map = {}  # type: dict[str, str]
         for attribute_name, attribute in six.iteritems(attribute_map):
 
@@ -360,9 +361,43 @@ class StructureMeta(BaseStructureMeta):
                 )
                 raise TypeError(error)
 
+            # Check for initialization conflicts.
+            if attribute.init:
+
+                if isinstance(attribute.init_as, cls.__attribute_type__):
+                    init_name = attribute.init_as.name
+                elif isinstance(attribute.init_as, six.string_types):
+                    init_name = attribute.init_as
+                elif attribute.init_as is not None:
+                    error = "invalid 'init_as' type {!r} for attribute {!r}".format(
+                        type(attribute.init_as).__name__, attribute_name
+                    )
+                    raise TypeError(error)
+                else:
+                    init_name = attribute_name
+
+                if init_name in initialization_map:
+                    error = "attribute {!r} initializes as {!r}, which is also used by attribute {!r}".format(
+                        attribute_name, init_name, initialization_map[init_name]
+                    )
+                    raise TypeError(error)
+                initialization_map[init_name] = attribute_name
+
             # Check for serialization conflicts.
             if attribute.serializable:
-                serialized_name = attribute.serialize_as or attribute_name
+
+                if isinstance(attribute.serialize_as, cls.__attribute_type__):
+                    serialized_name = attribute.serialize_as.name
+                elif isinstance(attribute.serialize_as, six.string_types):
+                    serialized_name = attribute.serialize_as
+                elif attribute.serialize_as is not None:
+                    error = "invalid 'serialize_as' type {!r} for attribute {!r}".format(
+                        type(attribute.serialize_as).__name__, attribute_name
+                    )
+                    raise TypeError(error)
+                else:
+                    serialized_name = attribute_name
+
                 if serialized_name in deserialization_map:
                     error = "attribute {!r} serializes as {!r}, which is also used by attribute {!r}".format(
                         attribute_name, serialized_name, deserialization_map[serialized_name]
@@ -373,6 +408,7 @@ class StructureMeta(BaseStructureMeta):
         # Store attribute map, attribute namespace, and deserialization map.
         type.__setattr__(cls, "__attributes__", attribute_map)
         type.__setattr__(cls, "__attrs__", Namespace(attribute_map))
+        type.__setattr__(cls, "__initialization_map__", mapping_proxy.MappingProxyType(initialization_map))
         type.__setattr__(cls, "__deserialization_map__", mapping_proxy.MappingProxyType(deserialization_map))
 
         # Run callbacks.
@@ -407,6 +443,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
     __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
     __attrs__ = Namespace()  # type: Namespace[Attribute[Any]]
+    __initialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
     __deserialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
 
     __attribute_type__ = Attribute  # type: Type[Attribute[Any]]
@@ -437,9 +474,16 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
     def __init__(self, *args, **kwargs):
         cls = type(self)
+
+        # Force keyword arguments only.
         if cls.__kw_only__ and args:
             error = "'{}.__init__' accepts keyword arguments only".format(cls.__qualname__)
             raise TypeError(error)
+
+        # Translate kwargs using initialization map.
+        kwargs = dict((cls.__initialization_map__[n], v) for n, v in six.iteritems(kwargs))
+
+        # Initialize attribute values.
         try:
             initial_values = cls.__attributes__.get_initial_values(
                 args,
@@ -566,10 +610,17 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         for name, attribute in six.iteritems(cls.__attributes__):
             if not attribute.repr:
                 continue
+
+            if isinstance(attribute.init_as, cls.__attribute_type__):
+                assert attribute.init_as.name is not None
+                name = attribute.init_as.name
+            elif isinstance(attribute.init_as, six.string_types):
+                name = attribute.init_as
+
             reprs[name] = repr if not callable(attribute.repr) else attribute.repr
             if attribute.has_default:
                 kwargs.append(name)
-            elif attribute.delegated:
+            elif attribute.delegated and attribute.init_as is None:
                 delegated.append(name)
             elif cls.__kw_only__:
                 kwargs.append(name)
@@ -624,9 +675,17 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
             if attribute.serializable:
                 if not attribute.serialize_default and value == attribute.default:
                     continue
-                serialized_name = attribute.serialize_as or name
+
+                if isinstance(attribute.serialize_as, cls.__attribute_type__):
+                    serialized_name = attribute.serialize_as.name
+                elif isinstance(attribute.serialize_as, six.string_types):
+                    serialized_name = attribute.serialize_as
+                else:
+                    serialized_name = name
+
                 serialized_value = attribute.relationship.serialize_value(value)
                 if serialized_value is not MISSING:
+                    assert serialized_name is not None
                     serialized[serialized_name] = serialized_value
         return serialized
 

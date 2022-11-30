@@ -41,6 +41,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_relationship",
         "_required",
         "_init",
+        "_init_as",
         "_settable",
         "_deletable",
         "_serializable",
@@ -69,16 +70,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     )
 
     def __init__(
-        self,
+        self,  # type: A
         default=MISSING,  # type: T_co | MissingType
         factory=MISSING,  # type: Callable[..., T_co] | str | MissingType
         relationship=Relationship(),  # type: Relationship[T_co]
         required=None,  # type: bool | None
         init=None,  # type: bool | None
+        init_as=None,  # type: A | str | None
         settable=None,  # type: bool | None
         deletable=None,  # type: bool | None
         serializable=None,  # type: bool | None
-        serialize_as=None,  # type: str | None
+        serialize_as=None,  # type: A | str | None
         serialize_default=True,  # type: bool
         constant=False,  # type: bool
         repr=None,  # type: bool | Callable[[T_co], str] | None
@@ -88,7 +90,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         doc="",  # type: str
         metadata=None,  # type: Any
         namespace=None,  # type: Namespace | Mapping[str, Any] | None
-        callback=None,  # type: Callable[[Attribute[T_co]], None] | None
+        callback=None,  # type: Callable[[A], None] | None
         extra_paths=(),  # type: Iterable[str]
         builtin_paths=None,  # type: Iterable[str] | None
     ):
@@ -99,10 +101,11 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :param relationship: Relationship.
         :param required: Whether it is required to have a value.
         :param init: Whether to include in the `__init__` method.
+        :param init_as: Alternative attribute or name to use when initializing.
         :param settable: Whether the value can be changed after being set.
         :param deletable: Whether the value can be deleted.
         :param serializable: Whether it's serializable.
-        :param serialize_as: Name to use when serializing.
+        :param serialize_as: Alternative attribute or name to use when serializing.
         :param serialize_default: Whether to serialize default value.
         :param constant: Whether attribute is a class constant.
         :param repr: Whether to include in the `__repr__` method (or a custom repr function).
@@ -231,6 +234,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._relationship = relationship
         self._required = bool(required)
         self._init = bool(init) if init is not None else None
+        self._init_as = init_as
         self._settable = bool(settable) if settable is not None else None
         self._deletable = bool(deletable) if deletable is not None else None
         self._serializable = bool(serializable) if serializable is not None else None
@@ -322,7 +326,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             if self.deletable is None:
                 self._deletable = self.fdel is not None
             if self.init is None:
-                self._init = self.settable and all((d.has_default or d.delegated) for d in self.recursive_dependencies)
+                self._init = self.settable
         else:
             if self.settable is None:
                 self._settable = True
@@ -359,9 +363,15 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             if self.fdel is None and self.deletable:
                 error = "delegated attribute {!r} is deletable but has no deleter delegate was defined".format(name)
                 raise TypeError(error)
-        elif not self.serializable:
+
+        if not self.serializable:
             if self.serialize_as is not None:
                 error = "attribute {!r} can't set 'serialize_as' when 'serializable' is False".format(name)
+                raise TypeError(error)
+
+        if not self.init:
+            if self.init_as is not None:
+                error = "attribute {!r} can't set 'init_as' when 'init' is False".format(name)
                 raise TypeError(error)
 
         # Set owner and name.
@@ -369,7 +379,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._name = name
 
     def __run_callback__(self):
-        # type: () -> None
+        # type: (A) -> None
         assert self.owned
         assert self.named
         if self._callback is not None:
@@ -388,6 +398,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             ("factory", self.factory),
             ("required", self.required),
             ("init", self.init),
+            ("init_as", self.init_as),
             ("settable", self.settable),
             ("deletable", self.deletable),
             ("serializable", self.serializable),
@@ -689,6 +700,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         return self._init
 
     @property
+    def init_as(self):
+        # type: (A) -> A | str | None
+        """Alternative attribute or name to use when initializing."""
+        return self._init_as
+
+    @property
     def settable(self):
         # type: () -> bool | None
         """Whether the value can be changed after being set."""
@@ -708,8 +725,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def serialize_as(self):
-        # type: () -> str | None
-        """Name to use when serializing."""
+        # type: (A) -> A | str | None
+        """Alternative attribute or name to use when serializing."""
         return self._serialize_as
 
     @property

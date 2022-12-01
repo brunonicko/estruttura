@@ -1,5 +1,5 @@
 tippo>=3.9,<4
 basicco>=8.7,<9
 slotted>=4.3,<5
-six>=1,<2
-pyrsistent>=0,<1
+six
+pyrsistent

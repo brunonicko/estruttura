@@ -82,7 +82,7 @@ def dict_cls(
         serializer=serializer,
         extra_paths=extra_paths,
         builtin_paths=builtin_paths,
-        **(relationship_kwargs or {}),  # noqa
+        **(relationship_kwargs or {})  # noqa
     )
     key_relationship = key_relationship_type(
         converter=key_converter,
@@ -92,7 +92,7 @@ def dict_cls(
         serializer=key_serializer,
         extra_paths=extra_paths,
         builtin_paths=builtin_paths,
-        **(key_relationship_kwargs or {}),  # noqa
+        **(key_relationship_kwargs or {})  # noqa
     )
 
     # Class body.
@@ -162,7 +162,7 @@ def list_cls(
         serializer=serializer,
         extra_paths=extra_paths,
         builtin_paths=builtin_paths,
-        **(relationship_kwargs or {}),  # noqa
+        **(relationship_kwargs or {})  # noqa
     )
 
     # Class body.
@@ -231,7 +231,7 @@ def set_cls(
         serializer=serializer,
         extra_paths=extra_paths,
         builtin_paths=builtin_paths,
-        **(relationship_kwargs or {}),  # noqa
+        **(relationship_kwargs or {})  # noqa
     )
 
     # Class body.
@@ -337,7 +337,7 @@ def attribute(
                 serializer=serializer,
                 extra_paths=extra_paths,
                 builtin_paths=builtin_paths,
-                **(relationship_kwargs or {}),  # noqa
+                **(relationship_kwargs or {})  # noqa
             ),
             required=required,
             init=init,
@@ -358,7 +358,7 @@ def attribute(
             callback=callback,
             extra_paths=extra_paths,
             builtin_paths=builtin_paths,
-            **(attribute_kwargs or {}),  # noqa
+            **(attribute_kwargs or {})  # noqa
         ),
     )
 

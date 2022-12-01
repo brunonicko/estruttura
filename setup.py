@@ -24,7 +24,7 @@ with open("requirements.txt", "r") as fh:
 
 setuptools.setup(
     name="estruttura",
-    version="0.5.2",
+    version="0.6.0",
     author="Bruno Nicko",
     author_email="brunonicko@gmail.com",
     description="Abstract structures.",

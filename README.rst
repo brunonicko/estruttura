@@ -42,3 +42,11 @@ This package is not yet ready for production use.
 Motivation
 ----------
 `estruttura` was born out of needing a common interface for building the `datta` and `objetto` packages.
+
+
+Example
+-------
+
+.. code:: python
+
+    >>> from estruttura import Structure

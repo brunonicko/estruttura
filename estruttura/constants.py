@@ -18,7 +18,7 @@ __all__ = [
 
 @final
 class MissingType(Enum):
-    """Enum type for `MISSING`_ sentinel."""
+    """Enum type for `MISSING` sentinel."""
 
     MISSING = "MISSING"
 
@@ -29,7 +29,7 @@ MISSING = MissingType.MISSING
 
 @final
 class DeletedType(Enum):
-    """Enum type for `DELETED`_ sentinel."""
+    """Enum type for `DELETED` sentinel."""
 
     DELETED = "DELETED"
 
@@ -40,7 +40,7 @@ DELETED = DeletedType.DELETED
 
 @final
 class DefaultType(Enum):
-    """Enum type for `DEFAULT`_ sentinel."""
+    """Enum type for `DEFAULT` sentinel."""
 
     DEFAULT = "DEFAULT"
 

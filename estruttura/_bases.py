@@ -5,7 +5,7 @@ import weakref
 import basicco
 import six
 import slotted
-from basicco import namespace, recursive_repr, safe_repr
+from basicco import recursive_repr, safe_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
 from tippo import Any, Generic, Iterator, Mapping, Type, TypeVar
@@ -25,7 +25,7 @@ class BaseStructureMeta(basicco.SlottedBaseMeta):
 class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
     """Base structure."""
 
-    __slots__ = ("__vars",)
+    __slots__ = ("__wrapped__", "__proxies")
 
     @abstract
     def __hash__(self):
@@ -81,9 +81,9 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         :param proxy: Proxy.
         """
         try:
-            proxies = self._vars.__proxies  # type: ignore
+            proxies = self.__proxies  # type: ignore
         except AttributeError:
-            proxies = self._vars.__proxies = weakref.WeakValueDictionary()  # type: ignore
+            proxies = self.__proxies = weakref.WeakValueDictionary()  # type: ignore
         proxies[id(proxy)] = proxy
 
     @abstract
@@ -141,26 +141,12 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         raise NotImplementedError()
 
     @property
-    def _vars(self):
-        # type: () -> namespace.MutableNamespace
-        """
-        Internal instance namespace.
-
-        :return: Internal instance namespace.
-        """
-        try:
-            return self.__vars  # type: ignore
-        except AttributeError:
-            self.__vars = namespace.MutableNamespace()  # type: ignore
-            return self.__vars
-
-    @property
     @final
     def _proxies(self):
         # type: (BS) -> list[BaseProxyStructure[BS]]
         """Proxy structures."""
         try:
-            proxies_dict = self._vars.__proxies  # type: Mapping[int, BaseProxyStructure]
+            proxies_dict = self.__proxies  # type: Mapping[int, BaseProxyStructure]
         except AttributeError:
             return []
         else:
@@ -180,8 +166,29 @@ class BaseUserStructure(BaseStructure):
 BUS = TypeVar("BUS", bound=BaseUserStructure)  # base user structure self type
 
 
+class BaseProxyStructureMeta(BaseStructureMeta):
+    """Metaclass for :class:`BaseProxyStructure`."""
+
+    @staticmethod
+    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
+
+        non_proxy_structure = None
+        for base in bases:
+            is_proxy = isinstance(base, BaseProxyStructureMeta)
+            if is_proxy and non_proxy_structure:
+                error = "wrong inheritance order, can't use non-proxy base {!r} before proxy class {!r}".format(
+                    non_proxy_structure.__name__, base.__name__
+                )
+                raise TypeError(error)
+
+            if not is_proxy and isinstance(base, BaseStructureMeta):
+                non_proxy_structure = base
+
+        return super(BaseProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
+
+
 # noinspection PyAbstractClass
-class BaseProxyStructure(BaseStructure, Generic[BS]):
+class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructure, Generic[BS])):
     """Base proxy structure."""
 
     __slots__ = ()
@@ -191,7 +198,7 @@ class BaseProxyStructure(BaseStructure, Generic[BS]):
         """
         :param wrapped: Structure to wrap.
         """
-        self._vars.__wrapped = wrapped
+        self.__wrapped__ = wrapped
         wrapped.__register_proxy__(self)
 
     def _repr(self):
@@ -216,10 +223,11 @@ class BaseProxyStructure(BaseStructure, Generic[BS]):
         return type(self) is type(other) and self._wrapped == other._wrapped  # type: ignore  # noqa
 
     @property
+    @abstract
     def _wrapped(self):
         # type: () -> BS
         """Wrapped structure."""
-        return self._vars.__wrapped  # type: ignore
+        return self.__wrapped__
 
 
 BPS = TypeVar("BPS", bound=BaseProxyStructure)  # base proxy structure self type

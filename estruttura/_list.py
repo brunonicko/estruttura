@@ -431,6 +431,7 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
 ULS = TypeVar("ULS", bound=UserListStructure)  # user list structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyListStructure(BaseProxyCollectionStructure[LS, T], ListStructure[T]):
     """Proxy list structure."""
 
@@ -679,6 +680,7 @@ class ProxyImmutableListStructure(
 PILS = TypeVar("PILS", bound=ProxyImmutableListStructure)  # proxy immutable list structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserImmutableListStructure(
     ProxyImmutableListStructure[UILS, T],
     BaseProxyUserImmutableCollectionStructure[UILS, T],
@@ -965,6 +967,7 @@ class ProxyMutableListStructure(
 PMLS = TypeVar("PMLS", bound=ProxyMutableListStructure)  # proxy mutable list structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserMutableListStructure(
     ProxyMutableListStructure[UMLS, T],
     BaseProxyUserMutableCollectionStructure[UMLS, T],

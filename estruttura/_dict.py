@@ -304,6 +304,7 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
 UDS = TypeVar("UDS", bound=UserDictStructure)  # user dictionary structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT, VT]):
     """Proxy dictionary structure."""
 
@@ -468,6 +469,7 @@ class ProxyImmutableDictStructure(
 PIDS = TypeVar("PIDS", bound=ProxyImmutableDictStructure)  # proxy immutable dictionary structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserImmutableDictStructure(
     ProxyImmutableDictStructure[UIDS, KT, VT],
     BaseProxyUserImmutableCollectionStructure[UIDS, KT],
@@ -672,6 +674,7 @@ class ProxyMutableDictStructure(
 PMDS = TypeVar("PMDS", bound=ProxyMutableDictStructure)  # proxy mutable dictionary structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserMutableDictStructure(
     ProxyMutableDictStructure[UMDS, KT, VT],
     BaseProxyUserMutableCollectionStructure[UMDS, KT],

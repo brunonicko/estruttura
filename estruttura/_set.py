@@ -454,6 +454,7 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
 USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
 
 
+# noinspection PyAbstractClass
 class ProxySetStructure(BaseProxyCollectionStructure[SS, T], SetStructure[T]):
     """Proxy set structure."""
 
@@ -661,6 +662,7 @@ class ProxyImmutableSetStructure(
 PISS = TypeVar("PISS", bound=ProxyImmutableSetStructure)  # proxy immutable set structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserImmutableSetStructure(
     ProxyImmutableSetStructure[UISS, T],
     BaseProxyUserImmutableCollectionStructure[UISS, T],
@@ -873,6 +875,7 @@ class ProxyMutableSetStructure(
 PMSS = TypeVar("PMSS", bound=ProxyMutableSetStructure)  # proxy mutable set structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserMutableSetStructure(
     ProxyMutableSetStructure[UMSS, T],
     BaseProxyUserMutableCollectionStructure[UMSS, T],

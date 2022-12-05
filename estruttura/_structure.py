@@ -35,6 +35,7 @@ from ._attribute import Attribute, MutableAttribute
 from ._bases import (
     BaseImmutableStructure,
     BaseMutableStructure,
+    BaseProxyStructureMeta,
     BaseProxyImmutableStructure,
     BaseProxyMutableStructure,
     BaseProxyStructure,
@@ -844,7 +845,8 @@ class UserStructure(Structure, BaseUserStructure):
 US = TypeVar("US", bound=UserStructure)  # user structure self type
 
 
-class ProxyStructureMeta(StructureMeta):
+# noinspection PyAbstractClass
+class ProxyStructureMeta(StructureMeta, BaseProxyStructureMeta):
     """Metaclass for :class:`ProxyStructure`."""
 
     @staticmethod
@@ -1054,6 +1056,7 @@ class ProxyImmutableStructure(
 PIS = TypeVar("PIS", bound=ProxyImmutableStructure)  # proxy immutable class structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserImmutableStructure(
     ProxyImmutableStructure[UIS],
     BaseProxyUserImmutableStructure[UIS],
@@ -1207,6 +1210,7 @@ class ProxyMutableStructure(
 PMS = TypeVar("PMS", bound=ProxyMutableStructure)  # proxy mutable class structure self type
 
 
+# noinspection PyAbstractClass
 class ProxyUserMutableStructure(
     ProxyMutableStructure[UMS],
     BaseProxyUserMutableStructure[UMS],

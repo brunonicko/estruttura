@@ -35,10 +35,10 @@ from ._attribute import Attribute, MutableAttribute
 from ._bases import (
     BaseImmutableStructure,
     BaseMutableStructure,
-    BaseProxyStructureMeta,
     BaseProxyImmutableStructure,
     BaseProxyMutableStructure,
     BaseProxyStructure,
+    BaseProxyStructureMeta,
     BaseProxyUserImmutableStructure,
     BaseProxyUserMutableStructure,
     BaseProxyUserStructure,

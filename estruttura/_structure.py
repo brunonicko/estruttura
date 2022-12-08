@@ -324,6 +324,15 @@ class StructureMeta(BaseStructureMeta):
                 if member_name not in counter:
                     counter[member_name] = member.count
 
+            elif member_name in base_attributes:
+                error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
+                    name,
+                    member_name,
+                    type(member).__name__,
+                    attribute_type.__name__,
+                )
+                raise TypeError(error)
+
         # Build ordered attribute map.
         attribute_items = sorted(six.iteritems(base_attributes), key=lambda i: counter[i[0]])
         attribute_map = AttributeMap(attribute_items)  # type: AttributeMap[str, Attribute]

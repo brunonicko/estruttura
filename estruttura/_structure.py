@@ -264,22 +264,26 @@ class StructureMeta(BaseStructureMeta):
             if base is object:
                 continue
 
-            # Prevent overriding attributes with non-attributes.
+            # Prevent overriding existing attributes with invalid ones.
             for attribute_name in base_attributes:
-                if (isinstance(base, StructureMeta) and attribute_name not in base.__attributes__) or (
-                    hasattr(base, attribute_name) and not isinstance(getattr(base, attribute_name), attribute_type)
-                ):
-                    error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
-                        base.__name__,
-                        attribute_name,
-                        type(getattr(base, attribute_name)).__name__,
-                        attribute_type.__name__,
-                    )
+                if isinstance(base, StructureMeta):
+                    if attribute_name not in base.__attribute_map__ or not isinstance(
+                        base.__attribute_map__[attribute_name], attribute_type
+                    ):
+                        error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
+                            base.__name__,
+                            attribute_name,
+                            type(getattr(base, attribute_name)).__name__,
+                            attribute_type.__name__,
+                        )
+                        raise TypeError(error)
+                else:
+                    error = "invalid base {!r} overrides {!r} attribute".format(base.__name__, attribute_name)
                     raise TypeError(error)
 
             # Collect base's attributes.
             if isinstance(base, StructureMeta):
-                for attribute_name, attribute in six.iteritems(base.__attributes__):
+                for attribute_name, attribute in six.iteritems(base.__attribute_map__):
 
                     # Attribute type changed and it's not compatible anymore.
                     if not isinstance(attribute, attribute_type):
@@ -297,6 +301,12 @@ class StructureMeta(BaseStructureMeta):
                     base_attributes[attribute_name] = attribute
                     if attribute_name not in counter:
                         counter[attribute_name] = attribute.count
+
+            else:
+                for member_name, member in six.iteritems(base.__dict__):
+                    if isinstance(member, attribute_type):
+                        error = "invalid base {!r} defines {!r} attribute".format(base.__name__, member_name)
+                        raise TypeError(error)
 
         # Collect attributes for this class.
         this_attributes = {}  # type: dict[str, Attribute]
@@ -406,9 +416,9 @@ class StructureMeta(BaseStructureMeta):
                     raise TypeError(error)
                 deserialization_map[serialized_name] = attribute_name
 
-        # Store attribute map, attribute namespace, and deserialization map.
-        type.__setattr__(cls, "__attributes__", attribute_map)
-        type.__setattr__(cls, "__attrs__", Namespace(attribute_map))
+        # Store attributes namespace, attributes map, and initialization/deserialization map.
+        type.__setattr__(cls, "attributes", Namespace(attribute_map))
+        type.__setattr__(cls, "__attribute_map__", attribute_map)
         type.__setattr__(cls, "__initialization_map__", mapping_proxy.MappingProxyType(initialization_map))
         type.__setattr__(cls, "__deserialization_map__", mapping_proxy.MappingProxyType(deserialization_map))
 
@@ -442,8 +452,9 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
     __slots__ = ()
 
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
-    __attrs__ = Namespace()  # type: Namespace[Attribute[Any]]
+    attributes = Namespace()  # type: Namespace[Attribute[Any]]
+
+    __attribute_map__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
     __initialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
     __deserialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
 
@@ -486,7 +497,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
         # Initialize attribute values.
         try:
-            initial_values = cls.__attributes__.get_initial_values(
+            initial_values = cls.__attribute_map__.get_initial_values(
                 args,
                 kwargs,
                 init_property="init",
@@ -508,7 +519,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         assert isinstance(other, type(self))
 
         # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.order]
+        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.order]
         if not attributes:
             return NotImplemented
 
@@ -564,7 +575,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
 
         :return: Attribute item iterator.
         """
-        for name in type(self).__attributes__:
+        for name in type(self).__attribute_map__:
             if name in self:
                 yield name, self[name]
 
@@ -588,7 +599,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         assert isinstance(other, type(self))
 
         # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.eq]
+        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.eq]
 
         # Compare values.
         eq_values = dict((n, self[n]) for n in attributes if n in self)
@@ -608,7 +619,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         kwargs = []
         delegated = []
         reprs = {}  # type: dict[str, Callable[[Any], str]]
-        for name, attribute in six.iteritems(cls.__attributes__):
+        for name, attribute in six.iteritems(cls.__attribute_map__):
             if not attribute.repr:
                 continue
 
@@ -672,7 +683,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         cls = type(self)
         serialized = {}  # type: dict[str, Any]
         for name, value in self:
-            attribute = cls.__attributes__[name]
+            attribute = cls.__attribute_map__[name]
             if attribute.serializable:
                 if not attribute.serialize_default and value == attribute.default:
                     continue
@@ -703,9 +714,9 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         values = {}  # type: dict[str, Any]
         for serialized_name, serialized in six.iteritems(serialized):
             name = cls.__deserialization_map__[serialized_name]
-            attribute = cls.__attributes__[name]
+            attribute = cls.__attribute_map__[name]
             values[name] = attribute.relationship.deserialize_value(serialized)
-        values = cls.__attributes__.get_initial_values(
+        values = cls.__attribute_map__.get_initial_values(
             (),
             values,
             init_property="serializable",
@@ -808,7 +819,7 @@ class UserStructure(Structure, BaseUserStructure):
         :return: Transformed (immutable) or self (mutable).
         """
         try:
-            new_values, old_values = type(self).__attributes__.get_update_values(dict(*args, **kwargs), self)
+            new_values, old_values = type(self).__attribute_map__.get_update_values(dict(*args, **kwargs), self)
         except (ProcessingError, TypeError, ValueError) as e:
             exc = type(e)(e)
             six.raise_from(exc, None)
@@ -852,7 +863,7 @@ class ProxyStructureMeta(StructureMeta, BaseProxyStructureMeta):
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
         cls = super(ProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-        delegated_attribute_names = [n for n, a in six.iteritems(cls.__attributes__) if a.delegated]
+        delegated_attribute_names = [n for n, a in six.iteritems(cls.__attribute_map__) if a.delegated]
         if delegated_attribute_names:
             error = "proxy class {!r} can't have delegated attributes {}".format(
                 name, ", ".join(repr(n) for n in delegated_attribute_names)
@@ -874,9 +885,9 @@ class ProxyStructure(six.with_metaclass(ProxyStructureMeta, BaseProxyStructure[S
         """
 
         # Check for attribute inconsistencies.
-        for attribute_name, attribute in six.iteritems(type(wrapped).__attributes__):
+        for attribute_name, attribute in six.iteritems(type(wrapped).__attribute_map__):
             try:
-                proxy_attribute = type(self).__attributes__[attribute_name]
+                proxy_attribute = type(self).__attribute_map__[attribute_name]
             except KeyError:
                 continue
 
@@ -962,7 +973,7 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
         cls = type(self)
 
         # Get hashable attributes.
-        attributes = [n for n, a in six.iteritems(cls.__attributes__) if a.hash]
+        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.hash]
 
         # Hash out a tuple containing the class + names and values.
         hash_values = (type(self),) + tuple((n, self[n]) for n in attributes if n in self)
@@ -1109,7 +1120,7 @@ class UserMutableStructure(MutableStructure, UserStructure, BaseUserMutableStruc
 
     __slots__ = ()
     __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
-    __attributes__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
+    __attribute_map__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
 
     @final
     def __setitem__(self, name, value):

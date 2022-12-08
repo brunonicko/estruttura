@@ -266,20 +266,21 @@ class StructureMeta(BaseStructureMeta):
 
             # Prevent overriding existing attributes with invalid ones.
             for attribute_name in base_attributes:
-                if isinstance(base, StructureMeta):
-                    if attribute_name not in base.__attribute_map__ or not isinstance(
-                        base.__attribute_map__[attribute_name], attribute_type
-                    ):
-                        error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
-                            base.__name__,
-                            attribute_name,
-                            type(getattr(base, attribute_name)).__name__,
-                            attribute_type.__name__,
-                        )
+                if attribute_name in base.__dict__:
+                    if isinstance(base, StructureMeta):
+                        if attribute_name not in base.__this_attribute_map__ or not isinstance(
+                            base.__this_attribute_map__[attribute_name], attribute_type
+                        ):
+                            error = "{!r} overrides {!r} attribute with {!r} object, expected {!r}".format(
+                                base.__name__,
+                                attribute_name,
+                                type(base.__dict__[attribute_name]).__name__,
+                                attribute_type.__name__,
+                            )
+                            raise TypeError(error)
+                    else:
+                        error = "invalid base {!r} overrides {!r} attribute".format(base.__name__, attribute_name)
                         raise TypeError(error)
-                else:
-                    error = "invalid base {!r} overrides {!r} attribute".format(base.__name__, attribute_name)
-                    raise TypeError(error)
 
             # Collect base's attributes.
             if isinstance(base, StructureMeta):
@@ -419,6 +420,7 @@ class StructureMeta(BaseStructureMeta):
         # Store attributes namespace, attributes map, and initialization/deserialization map.
         type.__setattr__(cls, "attributes", Namespace(attribute_map))
         type.__setattr__(cls, "__attribute_map__", attribute_map)
+        type.__setattr__(cls, "__this_attribute_map__", this_attribute_map)
         type.__setattr__(cls, "__initialization_map__", mapping_proxy.MappingProxyType(initialization_map))
         type.__setattr__(cls, "__deserialization_map__", mapping_proxy.MappingProxyType(deserialization_map))
 
@@ -455,6 +457,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
     attributes = Namespace()  # type: Namespace[Attribute[Any]]
 
     __attribute_map__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
+    __this_attribute_map__ = AttributeMap()  # type: AttributeMap[str, Attribute[Any]]
     __initialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
     __deserialization_map__ = mapping_proxy.MappingProxyType({})  # type: mapping_proxy.MappingProxyType[str, str]
 

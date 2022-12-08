@@ -440,7 +440,7 @@ def dict_attribute(
 
     def _callback(attr, _ns=_namespace, _cls=cls, _cb=callback):  # noqa
         _ns[_cls.__name__] = _cls
-        _cls.__qualname__ = "{}.__attrs__.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
+        _cls.__qualname__ = "{}.attributes.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
         if _cb is not None:
             _cb(attr)
 
@@ -552,7 +552,7 @@ def list_attribute(
 
     def _callback(attr, _ns=_namespace, _cls=cls, _cb=callback):  # noqa
         _ns[_cls.__name__] = _cls
-        _cls.__qualname__ = "{}.__attrs__.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
+        _cls.__qualname__ = "{}.attributes.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
         if _cb is not None:
             _cb(attr)
 
@@ -661,7 +661,7 @@ def set_attribute(
 
     def _callback(attr, _ns=_namespace, _cls=cls, _cb=callback):  # noqa
         _ns[_cls.__name__] = _cls
-        _cls.__qualname__ = "{}.__attrs__.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
+        _cls.__qualname__ = "{}.attributes.{}.namespace.{}".format(attr.owner.__qualname__, attr.name, _cls.__name__)
         if _cb is not None:
             _cb(attr)
 

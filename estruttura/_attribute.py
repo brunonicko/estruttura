@@ -1,5 +1,3 @@
-"""Attribute descriptors."""
-
 import six
 from basicco import basic_data, fabricate_value, unique_iterator
 from basicco.namespace import Namespace

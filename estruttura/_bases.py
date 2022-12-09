@@ -1,5 +1,3 @@
-"""Base abstract classes."""
-
 import weakref
 
 import basicco

@@ -114,6 +114,11 @@ class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[
         for name in self.__attribute_dict:
             yield cast(KT_str, name)
 
+    def ordered_items(self):
+        # type: () -> Iterator[tuple[KT_str, AT_co]]
+        for name in self.__attribute_dict:
+            yield cast(KT_str, name), self.__attribute_dict[name]
+
     def get_initial_values(self, args, kwargs, init_property="init", init_method="__init__"):
         # type: (tuple, dict[str, Any], str, str) -> dict[str, Any]
         """
@@ -132,7 +137,7 @@ class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[
         required_names = set()
         constant_names = set()
         initial_values = {}  # type: dict[str, Any]
-        for name, attribute in six.iteritems(self):
+        for name, attribute in self.ordered_items():
 
             # Keep track of required attribute names.
             if attribute.required:
@@ -284,7 +289,7 @@ class StructureMeta(BaseStructureMeta):
 
             # Collect base's attributes.
             if isinstance(base, StructureMeta):
-                for attribute_name, attribute in six.iteritems(base.__attribute_map__):
+                for attribute_name, attribute in base.__attribute_map__.ordered_items():
 
                     # Attribute type changed and it's not compatible anymore.
                     if not isinstance(attribute, attribute_type):
@@ -357,7 +362,7 @@ class StructureMeta(BaseStructureMeta):
         seen_default = None
         initialization_map = {}  # type: dict[str, str]
         deserialization_map = {}  # type: dict[str, str]
-        for attribute_name, attribute in six.iteritems(attribute_map):
+        for attribute_name, attribute in attribute_map.ordered_items():
 
             # Check for non-default attributes declared after default ones.
             if not cls.__kw_only__ and attribute.init:
@@ -531,7 +536,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         assert isinstance(other, type(self))
 
         # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.order]
+        attributes = [n for n, a in cls.__attribute_map__.ordered_items() if a.order]
         if not attributes:
             return NotImplemented
 
@@ -611,7 +616,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         assert isinstance(other, type(self))
 
         # Get attributes to compare.
-        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.eq]
+        attributes = [n for n, a in cls.__attribute_map__.ordered_items() if a.eq]
 
         # Compare values.
         eq_values = dict((n, self[n]) for n in attributes if n in self)
@@ -631,7 +636,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         kwargs = []
         delegated = []
         reprs = {}  # type: dict[str, Callable[[Any], str]]
-        for name, attribute in six.iteritems(cls.__attribute_map__):
+        for name, attribute in cls.__attribute_map__.ordered_items():
             if not attribute.repr:
                 continue
 
@@ -652,11 +657,11 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
                 args.append(name)
 
         parts = []
-        for name, value in six.iteritems(dict((n, self[n]) for n in args if n in self)):
+        for name, value in ((n, self[n]) for n in args if n in self):
             parts.append(reprs[name](value))
-        for name, value in six.iteritems(dict((n, self[n]) for n in kwargs if n in self)):
+        for name, value in ((n, self[n]) for n in kwargs if n in self):
             parts.append("{}={}".format(name, reprs[name](value)))
-        for name, value in six.iteritems(dict((n, self[n]) for n in delegated if n in self)):
+        for name, value in ((n, self[n]) for n in delegated if n in self):
             parts.append("<{}={}>".format(name, reprs[name](value)))
 
         return "{}({})".format(cls.__qualname__, ", ".join(parts))
@@ -875,7 +880,7 @@ class ProxyStructureMeta(StructureMeta, BaseProxyStructureMeta):
     @staticmethod
     def __new__(mcs, name, bases, dct, **kwargs):  # noqa
         cls = super(ProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-        delegated_attribute_names = [n for n, a in six.iteritems(cls.__attribute_map__) if a.delegated]
+        delegated_attribute_names = [n for n, a in cls.__attribute_map__.ordered_items() if a.delegated]
         if delegated_attribute_names:
             error = "proxy class {!r} can't have delegated attributes {}".format(
                 name, ", ".join(repr(n) for n in delegated_attribute_names)
@@ -897,7 +902,7 @@ class ProxyStructure(six.with_metaclass(ProxyStructureMeta, BaseProxyStructure[S
         """
 
         # Check for attribute inconsistencies.
-        for attribute_name, attribute in six.iteritems(type(wrapped).__attribute_map__):
+        for attribute_name, attribute in type(wrapped).__attribute_map__.ordered_items():
             try:
                 proxy_attribute = type(self).__attribute_map__[attribute_name]
             except KeyError:
@@ -985,7 +990,7 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
         cls = type(self)
 
         # Get hashable attributes.
-        attributes = [n for n, a in six.iteritems(cls.__attribute_map__) if a.hash]
+        attributes = [n for n, a in cls.__attribute_map__.ordered_items() if a.hash]
 
         # Hash out a tuple containing the class + names and values.
         hash_values = (type(self),) + tuple((n, self[n]) for n in attributes if n in self)
@@ -1303,7 +1308,7 @@ class _DelegateSelf(SlottedBase):
         """
         if self.__.in_getter is not None:
             attribute = self.__.in_getter
-            return sorted(n for n, a in six.iteritems(self.__.attribute_map) if a is attribute or a in a.dependencies)
+            return sorted(n for n, a in self.__.attribute_map.ordered_items() if a is attribute or a in a.dependencies)
         return sorted(self.__.attribute_map)
 
     def __getattr__(self, name):

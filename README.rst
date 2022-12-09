@@ -37,16 +37,26 @@
 Overview
 --------
 `estruttura` is a Python package that provides abstract data structure classes and utilities.
-This package is not yet ready for production use.
 
 Motivation
 ----------
 `estruttura` was born out of needing a common interface for building the `datta` and `objetto` packages.
-
 
 Example
 -------
 
 .. code:: python
 
-    >>> from estruttura import Structure
+    >>> import math
+    >>> from estruttura import Attribute, Relationship, getter
+    >>> from estruttura.examples import ImmutableClass
+    >>> class Point(ImmutableClass):
+    ...     x = Attribute()
+    ...     y = Attribute()
+    ...     d = Attribute(serializable=True)
+    ...     @getter(d, dependencies=(x, y))
+    ...     def _(self):
+    ...         return math.sqrt(self.x**2 + self.y**2)
+    ...
+    >>> Point(3, 4)
+    Point(3, 4, <d=5.0>)

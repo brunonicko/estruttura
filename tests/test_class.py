@@ -63,6 +63,16 @@ def test_class():
     deserialized_mark = Employee.deserialize(serialized_mark)
     assert deserialized_mark == mark
 
+    assert list(zip(*Employee.__attribute_map__.ordered_items()))[0] == (
+        "light",
+        "position",
+        "company",
+        "name",
+        "boss",
+        "salary",
+    )
+    assert repr(john) == "Employee(<LightSwitch.OFF: 0>, <Position.RIGHT: 'right'>, 'John', boss=None, salary=100)"
+
 
 if __name__ == "__main__":
     pytest.main()

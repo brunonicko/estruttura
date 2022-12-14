@@ -732,6 +732,8 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         for serialized_name, serialized in six.iteritems(serialized):
             name = cls.__deserialization_map__[serialized_name]
             attribute = cls.__attribute_map__[name]
+            if attribute.delegated and attribute.serializable and attribute.fset is None:
+                continue
             values[name] = attribute.relationship.deserialize_value(serialized)
         values = cls.__attribute_map__.get_initial_values(
             (),

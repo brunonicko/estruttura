@@ -1,5 +1,3 @@
-"""Base abstract classes."""
-
 import weakref
 
 import basicco
@@ -223,7 +221,6 @@ class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructur
         return type(self) is type(other) and self._wrapped == other._wrapped  # type: ignore  # noqa
 
     @property
-    @abstract
     def _wrapped(self):
         # type: () -> BS
         """Wrapped structure."""

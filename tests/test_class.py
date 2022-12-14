@@ -1,8 +1,9 @@
 import enum
+import math
 
 import pytest
 
-from estruttura import Attribute, Relationship
+from estruttura import Attribute, Relationship, getter
 from estruttura.examples import ImmutableClass
 from estruttura.serializers import EnumSerializer
 
@@ -44,6 +45,16 @@ class Employee(ImmutableClass):
     salary = Attribute(100, serializable=False)  # type: Attribute[int]
 
 
+class Point(ImmutableClass):
+    x = Attribute()
+    y = Attribute()
+    d = Attribute(serializable=True)
+
+    @getter(d, dependencies=(x, y))
+    def _(self):
+        return math.sqrt(self.x**2 + self.y**2)
+
+
 def test_class():
     john = Employee(LightSwitch.OFF, Position.RIGHT, "John")
     mark = Employee(LightSwitch.ON, Position.LEFT, "Mark", boss=john)
@@ -62,6 +73,21 @@ def test_class():
 
     deserialized_mark = Employee.deserialize(serialized_mark)
     assert deserialized_mark == mark
+
+    assert list(zip(*Employee.__attribute_map__.ordered_items()))[0] == (
+        "light",
+        "position",
+        "company",
+        "name",
+        "boss",
+        "salary",
+    )
+    assert repr(john) == "Employee(<LightSwitch.OFF: 0>, <Position.RIGHT: 'right'>, 'John', boss=None, salary=100)"
+
+
+def test_point():
+    p = Point(3, 4)
+    Point.deserialize(p.serialize())
 
 
 if __name__ == "__main__":

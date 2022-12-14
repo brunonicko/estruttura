@@ -24,10 +24,10 @@ with open("requirements.txt", "r") as fh:
 
 setuptools.setup(
     name="estruttura",
-    version="0.9.2",
+    version="1.0.0",
     author="Bruno Nicko",
     author_email="brunonicko@gmail.com",
-    description="Abstract structures.",
+    description="Abstract data structures.",
     long_description=long_description,
     long_description_content_type="text/x-rst",
     url="https://github.com/brunonicko/estruttura",
@@ -43,6 +43,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: Implementation :: PyPy",
     ],
     python_requires=">= 2.7, != 3.0.*, != 3.1.*, != 3.2.*, != 3.3.*, != 3.4.*, != 3.5.*, != 3.6.*",

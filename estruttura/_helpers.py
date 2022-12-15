@@ -445,11 +445,6 @@ def dict_attribute(
     key_relationship_kwargs=None,  # type: Mapping[str, Any] | None
 ):
     # type: (...) -> DictStructure[KT, VT]
-    caller_mod = caller_module.caller_module()
-    extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
-    if cls_module is None:
-        cls_module = caller_mod
-
     if not constant and repr is None:
         repr = custom_repr.mapping_repr
 
@@ -485,12 +480,15 @@ def dict_attribute(
             _cb(attr)
 
     def _converter(value, _cls=cls, _conv=converter, _kconv=key_converter):
-        if _conv is not None or _kconv is not None:
-            value = dict(
-                (fabricate_value.fabricate_value(_kconv, k), fabricate_value.fabricate_value(_conv, v))
-                for k, v in six.iteritems(value)
-            )
-        return _cls(value)
+        if isinstance(value, _cls):
+            return value
+        else:
+            if _conv is not None or _kconv is not None:
+                value = dict(
+                    (fabricate_value.fabricate_value(_kconv, k), fabricate_value.fabricate_value(_conv, v))
+                    for k, v in six.iteritems(value)
+                )
+            return _cls(value)
 
     return cast(
         DictStructure[KT, VT],
@@ -565,14 +563,6 @@ def list_attribute(
     relationship_kwargs=None,  # type: Mapping[str, Any] | None
 ):
     # type: (...) -> ListStructure[T]
-    caller_mod = caller_module.caller_module()
-    extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
-    if cls_module is None:
-        cls_module = caller_mod
-
-    if not constant and repr is None:
-        repr = custom_repr.iterable_repr
-
     cls = list_cls(
         qualified_name=list_type.__name__,
         cls_module=cls_module,
@@ -598,9 +588,12 @@ def list_attribute(
             _cb(attr)
 
     def _converter(value, _cls=cls, _conv=converter):
-        if _conv is not None:
-            value = [fabricate_value.fabricate_value(_conv, v) for v in value]
-        return _cls(value)
+        if isinstance(value, _cls):
+            return value
+        else:
+            if _conv is not None:
+                value = [fabricate_value.fabricate_value(_conv, v) for v in value]
+            return _cls(value)
 
     return cast(
         ListStructure[T],
@@ -675,11 +668,6 @@ def set_attribute(
     relationship_kwargs=None,  # type: Mapping[str, Any] | None
 ):
     # type: (...) -> SetStructure[T]
-    caller_mod = caller_module.caller_module()
-    extra_paths = tuple(tuple(extra_paths) or (m for m in (caller_mod,) if m))
-    if cls_module is None:
-        cls_module = caller_mod
-
     if not constant and repr is None:
         repr = lambda s: custom_repr.iterable_repr(s, prefix="{", suffix="}")
 
@@ -708,9 +696,12 @@ def set_attribute(
             _cb(attr)
 
     def _converter(value, _cls=cls, _conv=converter):
-        if _conv is not None:
-            value = [fabricate_value.fabricate_value(_conv, v) for v in value]
-        return _cls(value)
+        if isinstance(value, _cls):
+            return value
+        else:
+            if _conv is not None:
+                value = [fabricate_value.fabricate_value(_conv, v) for v in value]
+            return _cls(value)
 
     return cast(
         SetStructure[T],

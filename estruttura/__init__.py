@@ -42,8 +42,8 @@ from ._dict import (
     UserMutableDictStructure,
 )
 from ._helpers import (
-    auto_caller_module,
     attribute,
+    auto_caller_module,
     dict_attribute,
     dict_cls,
     list_attribute,

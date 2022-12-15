@@ -1,6 +1,7 @@
 """Helper functions."""
 
 import functools
+
 import six
 from basicco import caller_module, custom_repr, dynamic_class, fabricate_value
 from basicco.namespace import Namespace

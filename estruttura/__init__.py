@@ -42,6 +42,7 @@ from ._dict import (
     UserMutableDictStructure,
 )
 from ._helpers import (
+    auto_caller_module,
     attribute,
     dict_attribute,
     dict_cls,
@@ -185,6 +186,7 @@ __all__ = [
     "dict_cls",
     "list_cls",
     "set_cls",
+    "auto_caller_module",
     "attribute",
     "dict_attribute",
     "list_attribute",

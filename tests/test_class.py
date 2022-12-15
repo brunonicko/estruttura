@@ -46,9 +46,9 @@ class Employee(ImmutableClass):
 
 
 class Point(ImmutableClass):
-    x = Attribute()
-    y = Attribute()
-    d = Attribute(serializable=True)
+    x = Attribute()  # type: Attribute[int | float]
+    y = Attribute()  # type: Attribute[int | float]
+    d = Attribute(serializable=True)  # type: Attribute[int | float]
 
     @getter(d, dependencies=(x, y))
     def _(self):

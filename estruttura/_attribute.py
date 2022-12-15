@@ -905,6 +905,9 @@ class MutableAttribute(Attribute[T]):
             error = "can't change constant class attribute {!r}".format(self.name)
             raise AttributeError(error)
 
+        if not hasattr(instance, "__setitem__"):
+            error = "{!r} attribute {!r} is not settable".format(type(self).__name__, self.name)
+            raise AttributeError(error)
         cast(SupportsGetSetDeleteItem, instance)[self.name] = value
 
     def __delete__(self, instance):
@@ -918,6 +921,9 @@ class MutableAttribute(Attribute[T]):
             error = "can't delete constant class attribute {!r}".format(self.name)
             raise AttributeError(error)
 
+        if not hasattr(instance, "__delitem__"):
+            error = "{!r} attribute {!r} is not deletable".format(type(self).__name__, self.name)
+            raise AttributeError(error)
         del cast(SupportsGetSetDeleteItem, instance)[self.name]
 
 

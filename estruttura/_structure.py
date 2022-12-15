@@ -1128,6 +1128,8 @@ class MutableStructure(Structure, BaseMutableStructure):
     """Mutable attribute class structure."""
 
     __slots__ = ()
+    __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
+    __attribute_map__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
 
 
 MS = TypeVar("MS", bound=MutableStructure)  # mutable structure self type
@@ -1138,8 +1140,6 @@ class UserMutableStructure(MutableStructure, UserStructure, BaseUserMutableStruc
     """User mutable attribute class structure."""
 
     __slots__ = ()
-    __attribute_type__ = MutableAttribute  # type: Type[MutableAttribute[Any]]
-    __attribute_map__ = AttributeMap()  # type: AttributeMap[str, MutableAttribute[Any]]
 
     @final
     def __setitem__(self, name, value):

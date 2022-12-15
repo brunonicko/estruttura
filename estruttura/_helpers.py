@@ -563,6 +563,9 @@ def list_attribute(
     relationship_kwargs=None,  # type: Mapping[str, Any] | None
 ):
     # type: (...) -> ListStructure[T]
+    if not constant and repr is None:
+        repr = custom_repr.iterable_repr
+
     cls = list_cls(
         qualified_name=list_type.__name__,
         cls_module=cls_module,

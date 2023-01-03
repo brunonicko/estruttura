@@ -399,12 +399,16 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
         :param item: Index/slice.
         :param value: Value(s).
         :return: Transformed (immutable) or self (mutable).
+        :raises IndexError: Range length mismatch.
         """
         if isinstance(item, slice):
             index, stop = self.resolve_continuous_slice(item)
             if index == stop:
                 return self._insert(index, *value)
             new_values = tuple(value)
+            if stop - index != len(new_values):
+                error = "range length ({}) and values length ({}) do not match".format(stop - index, len(new_values))
+                raise IndexError(error)
         else:
             index = self.resolve_index(item)
             stop = index + 1

@@ -32,8 +32,8 @@ class JSONList(ImmutableList):
 class JSONDict(ImmutableDict):
     """JSON dictionary."""
 
-    key_relationship = Relationship(types=(str,), extra_paths=(__name__,))
-    relationship = json_relationship
+    relationship = Relationship(types=(str,), extra_paths=(__name__,))
+    value_relationship = json_relationship
 
 
 def test_json():

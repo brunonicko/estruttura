@@ -130,8 +130,8 @@ Dictionary-like data structure class.
     >>> from estruttura import Relationship
     >>> from estruttura.examples import MutableDict
     >>> class StrIntDict(MutableDict):
-    ...     key_relationship = Relationship(converter=str)
-    ...     relationship = Relationship(converter=int)
+    ...     relationship = Relationship(converter=str)
+    ...     value_relationship = Relationship(converter=int)
     ...
     >>> StrIntDict({1: "1"})
     StrIntDict({'1': 1})

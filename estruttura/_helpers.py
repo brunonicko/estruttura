@@ -126,17 +126,7 @@ def dict_cls(
     """
 
     # Relationships.
-    relationship = relationship_type(
-        converter=converter,
-        validator=validator,
-        types=types,
-        subtypes=subtypes,
-        serializer=serializer,
-        extra_paths=extra_paths,
-        builtin_paths=builtin_paths,
-        **(relationship_kwargs or {})  # noqa
-    )
-    key_relationship = key_relationship_type(
+    relationship = key_relationship_type(
         converter=key_converter,
         validator=key_validator,
         types=key_types,
@@ -146,11 +136,21 @@ def dict_cls(
         builtin_paths=builtin_paths,
         **(key_relationship_kwargs or {})  # noqa
     )
+    value_relationship = relationship_type(
+        converter=converter,
+        validator=validator,
+        types=types,
+        subtypes=subtypes,
+        serializer=serializer,
+        extra_paths=extra_paths,
+        builtin_paths=builtin_paths,
+        **(relationship_kwargs or {})  # noqa
+    )
 
     # Class body.
     cls_dct = dict(cls_dct or {})
     cls_dct["relationship"] = relationship
-    cls_dct["key_relationship"] = key_relationship
+    cls_dct["value_relationship"] = value_relationship
 
     # Build class and return it.
     return cast(

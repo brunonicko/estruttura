@@ -42,18 +42,18 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
 
     __slots__ = ()
 
-    key_relationship = Relationship()  # type: Relationship[KT]
-    """Key relationship."""
+    value_relationship = Relationship()  # type: Relationship[VT]
+    """Value relationship."""
 
-    def __init_subclass__(cls, key_relationship=MISSING, **kwargs):
+    def __init_subclass__(cls, value_relationship=MISSING, **kwargs):
         # type: (Relationship[KT] | MissingType, **Any) -> None
         """
         Initialize subclass with parameters.
 
-        :param key_relationship: Key relationship.
+        :param value_relationship: Value relationship.
         """
-        if key_relationship is not MISSING:
-            cls.key_relationship = key_relationship
+        if value_relationship is not MISSING:
+            cls.value_relationship = value_relationship
         super(DictStructure, cls).__init_subclass__(**kwargs)
 
     @overload
@@ -76,12 +76,12 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         Same parameters as :class:`dict`.
         """
         initial_values = dict(*args, **kwargs)
-        if self.relationship.will_process:
+        if self.relationship.will_process or self.value_relationship.will_process:
             try:
                 initial_values = dict(
                     (
-                        self.key_relationship.process_value(k, "{!r} (key)".format(k)),
-                        self.relationship.process_value(v, k),
+                        self.relationship.process_value(k, "{!r} (key)".format(k)),
+                        self.value_relationship.process_value(v, k),
                     )
                     for k, v in six.iteritems(initial_values)
                 )
@@ -144,7 +144,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :raises SerializationError: Error while serializing.
         """
         return dict(
-            (type(self).relationship.serialize_value(k), type(self).relationship.serialize_value(v))
+            (type(self).relationship.serialize_value(k), type(self).value_relationship.serialize_value(v))
             for k, v in six.iteritems(self)
         )
 
@@ -159,7 +159,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :raises SerializationError: Error while deserializing.
         """
         values = dict(
-            (cls.relationship.deserialize_value(k), cls.relationship.deserialize_value(v))
+            (cls.relationship.deserialize_value(k), cls.value_relationship.deserialize_value(v))
             for k, v in six.iteritems(serialized)
         )
         return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
@@ -266,7 +266,8 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
         updates_and_inserts = {}
         all_updates = {}
         for key, value in six.iteritems(changes):
-            key = self.key_relationship.process_value(key, "{!r} (key)".format(key))
+            if self.relationship.will_process:
+                key = self.relationship.process_value(key, "{!r} (key)".format(key))
 
             if value is DELETED:
                 if key not in self:
@@ -275,9 +276,9 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
                 all_updates[key] = DELETED
                 continue
 
-            if self.relationship.will_process:
+            if self.value_relationship.will_process:
                 try:
-                    value = self.relationship.process_value(value, key)
+                    value = self.value_relationship.process_value(value, key)
                 except ProcessingError as e:
                     exc = type(e)(e)
                     six.raise_from(exc, None)

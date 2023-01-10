@@ -23,4 +23,3 @@ Submodules
    estruttura.constants
    estruttura.exceptions
    estruttura.serializers
-   estruttura.utils

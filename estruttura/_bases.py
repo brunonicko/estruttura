@@ -1,12 +1,10 @@
-import weakref
-
 import basicco
 import six
 import slotted
 from basicco import recursive_repr, safe_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Generic, Iterator, Mapping, Type, TypeVar
+from tippo import Any, Type, TypeVar
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -23,7 +21,7 @@ class BaseStructureMeta(basicco.SlottedBaseMeta):
 class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
     """Base structure."""
 
-    __slots__ = ("__wrapped__", "__proxies")
+    __slots__ = ()
 
     @abstract
     def __hash__(self):
@@ -69,20 +67,6 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         :return: String representation.
         """
         return self._str()
-
-    @final
-    def __register_proxy__(self, proxy):
-        # type: (BaseProxyStructure) -> None
-        """
-        Register a new proxy.
-
-        :param proxy: Proxy.
-        """
-        try:
-            proxies = self.__proxies  # type: ignore
-        except AttributeError:
-            proxies = self.__proxies = weakref.WeakValueDictionary()  # type: ignore
-        proxies[id(proxy)] = proxy
 
     @abstract
     def _eq(self, other):
@@ -138,18 +122,6 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         """
         raise NotImplementedError()
 
-    @property
-    @final
-    def _proxies(self):
-        # type: (BS) -> list[BaseProxyStructure[BS]]
-        """Proxy structures."""
-        try:
-            proxies_dict = self.__proxies  # type: Mapping[int, BaseProxyStructure]
-        except AttributeError:
-            return []
-        else:
-            return [i[1] for i in sorted(six.iteritems(proxies_dict), key=lambda p: p[0])]
-
 
 BS = TypeVar("BS", bound=BaseStructure)  # base structure self type
 
@@ -162,82 +134,6 @@ class BaseUserStructure(BaseStructure):
 
 
 BUS = TypeVar("BUS", bound=BaseUserStructure)  # base user structure self type
-
-
-class BaseProxyStructureMeta(BaseStructureMeta):
-    """Metaclass for :class:`BaseProxyStructure`."""
-
-    @staticmethod
-    def __new__(mcs, name, bases, dct, **kwargs):  # noqa
-
-        non_proxy_structure = None
-        for base in bases:
-            is_proxy = isinstance(base, BaseProxyStructureMeta)
-            if is_proxy and non_proxy_structure:
-                error = "wrong inheritance order, can't use non-proxy base {!r} before proxy class {!r}".format(
-                    non_proxy_structure.__name__, base.__name__
-                )
-                raise TypeError(error)
-
-            if not is_proxy and isinstance(base, BaseStructureMeta):
-                non_proxy_structure = base
-
-        return super(BaseProxyStructureMeta, mcs).__new__(mcs, name, bases, dct, **kwargs)
-
-
-# noinspection PyAbstractClass
-class BaseProxyStructure(six.with_metaclass(BaseProxyStructureMeta, BaseStructure, Generic[BS])):
-    """Base proxy structure."""
-
-    __slots__ = ()
-
-    def __init__(self, wrapped):
-        # type: (BS) -> None
-        """
-        :param wrapped: Structure to wrap.
-        """
-        self.__wrapped__ = wrapped
-        wrapped.__register_proxy__(self)
-
-    def _repr(self):
-        # type: () -> str
-        """
-        Get representation.
-
-        :return: Representation.
-        """
-        return "{}({!r})".format(type(self).__name__, self._wrapped)
-
-    def _eq(self, other):
-        # type: (object) -> bool
-        """
-        Compare for equality.
-
-        :param other: Another object.
-        :return: True if equal.
-        """
-        if self is other:
-            return True
-        return type(self) is type(other) and self._wrapped == other._wrapped  # type: ignore  # noqa
-
-    @property
-    def _wrapped(self):
-        # type: () -> BS
-        """Wrapped structure."""
-        return self.__wrapped__
-
-
-BPS = TypeVar("BPS", bound=BaseProxyStructure)  # base proxy structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserStructure(BaseProxyStructure[BUS], BaseUserStructure):
-    """Base proxy user structure."""
-
-    __slots__ = ()
-
-
-BPUS = TypeVar("BPUS", bound=BaseProxyUserStructure)  # base proxy user structure type
 
 
 # noinspection PyAbstractClass
@@ -309,55 +205,6 @@ BUMS = TypeVar("BUMS", bound=BaseUserMutableStructure)  # base user mutable stru
 
 
 # noinspection PyAbstractClass
-class BaseProxyImmutableStructure(BaseProxyStructure[BIS], BaseImmutableStructure):
-    """Base proxy immutable structure."""
-
-    __slots__ = ()
-
-    def _hash(self):
-        # type: () -> int
-        """
-        Get hash.
-
-        :return: Hash.
-        """
-        return hash(self._wrapped)
-
-
-BPIS = TypeVar("BPIS", bound=BaseProxyImmutableStructure)  # base proxy immutable structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserImmutableStructure(BaseProxyImmutableStructure[BUIS], BaseUserImmutableStructure):
-    """Base proxy user immutable structure."""
-
-    __slots__ = ()
-
-
-BPUIS = TypeVar("BPUIS", bound=BaseProxyUserImmutableStructure)  # base proxy user immutable structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyMutableStructure(BaseProxyStructure[BMS], BaseMutableStructure):
-    """Base proxy mutable structure."""
-
-    __slots__ = ()
-
-
-BPMS = TypeVar("BPMS", bound=BaseProxyMutableStructure)  # base proxy mutable structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserMutableStructure(BaseProxyMutableStructure[BUMS], BaseUserMutableStructure):
-    """Base proxy user mutable structure."""
-
-    __slots__ = ()
-
-
-BPUMS = TypeVar("BPUMS", bound=BaseProxyUserMutableStructure)  # base proxy user mutable structure self type
-
-
-# noinspection PyAbstractClass
 class BaseCollectionStructure(BaseStructure, slotted.SlottedCollection[T_co]):
     """Base collection structure."""
 
@@ -412,52 +259,6 @@ BUCS = TypeVar("BUCS", bound=BaseUserCollectionStructure)  # base user collectio
 
 
 # noinspection PyAbstractClass
-class BaseProxyCollectionStructure(BaseProxyStructure[BCS], BaseCollectionStructure[T_co]):
-    """Base proxy collection structure."""
-
-    __slots__ = ()
-
-    def __iter__(self):
-        # type: () -> Iterator[T_co]
-        """
-        Iterate over values.
-
-        :return: Value iterator.
-        """
-        for i in self._wrapped:
-            yield i
-
-    def __len__(self):
-        # type: () -> int
-        """
-        Get value count.
-
-        :return: Value count.
-        """
-        return len(self._wrapped)
-
-    def __contains__(self, value):
-        # type: (object) -> bool
-        """
-        Whether value is in the collection or not.
-
-        :param value: Value.
-        :return: True if contained.
-        """
-        return value in self._wrapped
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserCollectionStructure(BaseProxyCollectionStructure[BUCS, T_co], BaseUserCollectionStructure[T_co]):
-    """Base proxy user collection structure."""
-
-    __slots__ = ()
-
-
-BPUCS = TypeVar("BPUCS", bound=BaseProxyUserCollectionStructure)  # base proxy user collection structure self type
-
-
-# noinspection PyAbstractClass
 class BaseImmutableCollectionStructure(BaseCollectionStructure[T_co], BaseImmutableStructure):
     """Immutable collection structure."""
 
@@ -490,43 +291,6 @@ BUICS = TypeVar(
 
 
 # noinspection PyAbstractClass
-class BaseProxyImmutableCollectionStructure(
-    BaseProxyCollectionStructure[BICS, T_co], BaseProxyImmutableStructure[BICS], BaseImmutableCollectionStructure[T_co]
-):
-    """Base proxy immutable collection structure."""
-
-    __slots__ = ()
-
-
-BPICS = TypeVar(
-    "BPICS", bound=BaseProxyImmutableCollectionStructure
-)  # base proxy immutable collection structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserImmutableCollectionStructure(
-    BaseProxyImmutableCollectionStructure[BUICS, T_co], BaseProxyUserCollectionStructure[BUICS, T_co]
-):
-    """Base proxy user immutable collection structure."""
-
-    __slots__ = ()
-
-    def _do_clear(self):
-        # type: (BPUICS) -> BPUICS
-        """
-        Clear (internal).
-
-        :return: Transformed.
-        """
-        return type(self)(self._wrapped.clear())
-
-
-BPUICS = TypeVar(
-    "BPUICS", bound=BaseProxyUserImmutableCollectionStructure
-)  # base proxy user immutable collection structure self type
-
-
-# noinspection PyAbstractClass
 class BaseMutableCollectionStructure(BaseCollectionStructure[T_co], BaseMutableStructure):
     """Base mutable collection structure."""
 
@@ -550,39 +314,3 @@ class BaseUserMutableCollectionStructure(BaseMutableCollectionStructure[T_co], B
 
 
 BUMCS = TypeVar("BUMCS", bound=BaseUserMutableCollectionStructure)  # base user mutable collection structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyMutableCollectionStructure(
-    BaseProxyCollectionStructure[BMCS, T_co], BaseProxyMutableStructure[BMCS], BaseMutableCollectionStructure[T_co]
-):
-    """Base proxy mutable collection structure."""
-
-    __slots__ = ()
-
-
-BPMCS = TypeVar("BPMCS", bound=BaseProxyMutableCollectionStructure)  # base proxy mutable collection structure self type
-
-
-# noinspection PyAbstractClass
-class BaseProxyUserMutableCollectionStructure(
-    BaseProxyMutableCollectionStructure[BUMCS, T_co], BaseProxyUserCollectionStructure[BUMCS, T_co]
-):
-    """Base proxy user mutable collection structure."""
-
-    __slots__ = ()
-
-    def _do_clear(self):
-        # type: (BPUMCS) -> BPUMCS
-        """
-        Clear (internal).
-
-        :return: Self.
-        """
-        self._wrapped.clear()
-        return self
-
-
-BPUMCS = TypeVar(
-    "BPUMCS", bound=BaseProxyUserMutableCollectionStructure
-)  # base proxy user mutable collection structure self type

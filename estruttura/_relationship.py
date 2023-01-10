@@ -424,17 +424,17 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
     @overload
     def update(self, __m, **kwargs):
         # type: (R, SupportsKeysAndGetItem[str, Any], **Any) -> R
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (R, Iterable[tuple[str, Any]], **Any) -> R
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (R, **Any) -> R
-        """."""
+        pass
 
     def update(self, *args, **kwargs):
         """
@@ -584,17 +584,17 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, SupportsKeysAndGetItem[str, Any], **Any) -> RTI
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, Iterable[tuple[str, Any]], **Any) -> RTI
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (RTI, **Any) -> RTI
-        """."""
+        pass
 
     def update(self, *args, **kwargs):
         """

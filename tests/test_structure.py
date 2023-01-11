@@ -1,7 +1,61 @@
 import pytest
 
-from estruttura._attribute import MutableAttribute, getter
-from estruttura.examples import MutableClass
+from estruttura._attribute import Attribute, MutableAttribute, getter
+from estruttura.examples import ImmutableClass, MutableClass
+
+
+def test_init():
+    class Point(MutableClass):
+        x = MutableAttribute()
+        y = MutableAttribute()
+
+    assert Point(3, 4).serialize() == {"x": 3, "y": 4}
+    assert Point(3, y=4).serialize() == {"x": 3, "y": 4}
+    assert Point(x=3, y=4).serialize() == {"x": 3, "y": 4}
+
+    with pytest.raises(TypeError):
+        Point(3, 4, x=3, y=4)
+
+    with pytest.raises(TypeError):
+        Point(3, x=3, y=4)
+
+    with pytest.raises(TypeError):
+        Point(3, 4, y=4)
+
+    with pytest.raises(TypeError):
+        Point(3, 4, z=5)
+
+    with pytest.raises(TypeError):
+        Point(3, 4, 5)
+
+
+def test_kw_only():
+    class Point(MutableClass):
+        __kw_only__ = True
+        x = MutableAttribute()
+        y = MutableAttribute()
+
+    with pytest.raises(TypeError):
+        Point(3, 4)
+
+    with pytest.raises(TypeError):
+        Point(3, y=4)
+
+    assert Point(x=3, y=4).serialize() == {"x": 3, "y": 4}
+
+
+def test_immutable():
+    class Point(ImmutableClass):
+        x = Attribute()
+        y = Attribute()
+
+    p = Point(3, 4)
+
+    with pytest.raises(AttributeError):
+        p.x = 30
+
+    p = p.update(x=30)
+    assert p.x == 30
 
 
 class Foo(MutableClass):
@@ -27,12 +81,12 @@ class Bar(MutableClass):
 
     @getter(x, dependencies=(_x,))
     def _(self):
-        return self._x
+        return self._x * 2
 
 
 def test_delegated_init_as():
     bar = Bar(1)
-    assert bar.x == 1
+    assert bar.x == 2
     assert repr(bar) == "Bar(1)"
     assert bar.serialize() == {"x": 1}
     assert Bar.deserialize({"x": 1}) == bar

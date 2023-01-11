@@ -15,7 +15,7 @@ from ._bases import (
     BaseUserImmutableCollectionStructure,
     BaseUserMutableCollectionStructure,
 )
-from .exceptions import ProcessingError, SerializationError
+from .exceptions import ProcessingError
 
 T = TypeVar("T")
 

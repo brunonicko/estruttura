@@ -395,10 +395,7 @@ UIDS = TypeVar("UIDS", bound=UserImmutableDictStructure)  # user immutable dicti
 
 
 # noinspection PyAbstractClass
-class MutableDictStructure(
-    DictStructure[KT, VT],
-    BaseMutableCollectionStructure[KT],
-):
+class MutableDictStructure(DictStructure[KT, VT], BaseMutableCollectionStructure[KT]):
     """Mutable dictionary structure."""
 
     __slots__ = ()

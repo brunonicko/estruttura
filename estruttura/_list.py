@@ -833,7 +833,7 @@ def pre_move(length, item, target_index):
     :param length: Length of the list.
     :param item: Index/slice.
     :param target_index: Target index.
-    :return: None or (target index, index, stop, post index, post_stop).
+    :return: None or (target index, index, stop, post index, post stop).
     """
 
     # Resolve slice/index.

@@ -19,19 +19,13 @@ from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseMutableCollectionStructure,
-    BaseProxyCollectionStructure,
-    BaseProxyImmutableCollectionStructure,
-    BaseProxyMutableCollectionStructure,
-    BaseProxyUserCollectionStructure,
-    BaseProxyUserImmutableCollectionStructure,
-    BaseProxyUserMutableCollectionStructure,
     BaseUserCollectionStructure,
     BaseUserImmutableCollectionStructure,
     BaseUserMutableCollectionStructure,
 )
 from ._relationship import Relationship
 from .constants import DELETED, MISSING, DeletedType, MissingType
-from .exceptions import ProcessingError, SerializationError
+from .exceptions import ProcessingError
 
 KT = TypeVar("KT")
 VT = TypeVar("VT")
@@ -306,62 +300,6 @@ UDS = TypeVar("UDS", bound=UserDictStructure)  # user dictionary structure self 
 
 
 # noinspection PyAbstractClass
-class ProxyDictStructure(BaseProxyCollectionStructure[DS, KT], DictStructure[KT, VT]):
-    """Proxy dictionary structure."""
-
-    __slots__ = ()
-
-    def __getitem__(self, key):
-        # type: (KT) -> VT
-        """
-        Get value for key.
-
-        :param key: Key.
-        :return: Value.
-        :raises KeyError: Key is not present.
-        """
-        return self._wrapped[key]
-
-    def _do_init(self, initial_values):  # noqa
-        """
-        Initialize keys and values (internal).
-
-        :param initial_values: Initial values.
-        """
-        error = "{!r} object already initialized".format(type(self).__name__)
-        raise RuntimeError(error)
-
-    @classmethod
-    def _do_deserialize(cls, values):  # noqa
-        """
-        Deserialize (internal).
-
-        :param values: Deserialized values.
-        :return: Dictionary structure.
-        :raises SerializationError: Error while deserializing.
-        """
-        error = "can't deserialize proxy object {!r}".format(cls.__name__)
-        raise SerializationError(error)
-
-
-PDS = TypeVar("PDS", bound=ProxyDictStructure)  # proxy dictionary structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserDictStructure(
-    ProxyDictStructure[UDS, KT, VT],
-    BaseProxyUserCollectionStructure[UDS, KT],
-    UserDictStructure[KT, VT],
-):
-    """Proxy user dictionary structure."""
-
-    __slots__ = ()
-
-
-PUDS = TypeVar("PUDS", bound=ProxyUserDictStructure)  # proxy user dictionary structure self type
-
-
-# noinspection PyAbstractClass
 class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStructure[KT]):
     """Immutable dictionary structure."""
 
@@ -430,17 +368,17 @@ class UserImmutableDictStructure(
     @overload
     def update(self, __m, **kwargs):
         # type: (UIDS, SupportsKeysAndGetItem[KT, VT], **VT) -> UIDS
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (UIDS, Iterable[tuple[KT, VT]], **VT) -> UIDS
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (UIDS, **VT) -> UIDS
-        """."""
+        pass
 
     @final
     def update(self, *args, **kwargs):
@@ -457,61 +395,7 @@ UIDS = TypeVar("UIDS", bound=UserImmutableDictStructure)  # user immutable dicti
 
 
 # noinspection PyAbstractClass
-class ProxyImmutableDictStructure(
-    ProxyDictStructure[IDS, KT, VT],
-    BaseProxyImmutableCollectionStructure[IDS, KT],
-    ImmutableDictStructure[KT, VT],
-):
-    """Proxy immutable dictionary structure."""
-
-    __slots__ = ()
-
-
-PIDS = TypeVar("PIDS", bound=ProxyImmutableDictStructure)  # proxy immutable dictionary structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserImmutableDictStructure(
-    ProxyImmutableDictStructure[UIDS, KT, VT],
-    BaseProxyUserImmutableCollectionStructure[UIDS, KT],
-    UserImmutableDictStructure[KT, VT],
-):
-    """Proxy user immutable dictionary structure."""
-
-    __slots__ = ()
-
-    def _do_update(
-        self,  # type: PUIDS
-        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
-    ):
-        # type: (...) -> PUIDS
-        """
-        Update keys and values (internal).
-
-        :param inserts: Keys and values being inserted.
-        :param deletes: Keys and values being deleted.
-        :param updates_old: Keys and values being updated (old values).
-        :param updates_new: Keys and values being updated (new values).
-        :param updates_and_inserts: Keys and values being updated or inserted.
-        :param all_updates: All updates.
-        :return: Transformed.
-        """
-        return type(self)(self._wrapped.update(all_updates))
-
-
-PUIDS = TypeVar("PUIDS", bound=ProxyUserImmutableDictStructure)  # proxy user immutable dictionary structure self type
-
-
-# noinspection PyAbstractClass
-class MutableDictStructure(
-    DictStructure[KT, VT],
-    BaseMutableCollectionStructure[KT],
-):
+class MutableDictStructure(DictStructure[KT, VT], BaseMutableCollectionStructure[KT]):
     """Mutable dictionary structure."""
 
     __slots__ = ()
@@ -636,17 +520,17 @@ class UserMutableDictStructure(
     @overload
     def update(self, __m, **kwargs):
         # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> None
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (Iterable[tuple[KT, VT]], **VT) -> None
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (**VT) -> None
-        """."""
+        pass
 
     @final
     def update(self, *args, **kwargs):
@@ -659,54 +543,3 @@ class UserMutableDictStructure(
 
 
 UMDS = TypeVar("UMDS", bound=UserMutableDictStructure)  # user mutable dictionary structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyMutableDictStructure(
-    ProxyDictStructure[MDS, KT, VT],
-    BaseProxyMutableCollectionStructure[MDS, KT],
-    MutableDictStructure[KT, VT],
-):
-    """Proxy mutable dictionary structure."""
-
-    __slots__ = ()
-
-
-PMDS = TypeVar("PMDS", bound=ProxyMutableDictStructure)  # proxy mutable dictionary structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserMutableDictStructure(
-    ProxyMutableDictStructure[UMDS, KT, VT],
-    BaseProxyUserMutableCollectionStructure[UMDS, KT],
-    UserMutableDictStructure[KT, VT],
-):
-    """Proxy user mutable dictionary structure."""
-
-    __slots__ = ()
-
-    def _do_update(
-        self,  # type: PUMDS
-        inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_new,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]  # noqa
-        all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
-    ):
-        # type: (...) -> PUMDS
-        """
-        Update keys and values (internal).
-
-        :param inserts: Keys and values being inserted.
-        :param deletes: Keys and values being deleted.
-        :param updates_old: Keys and values being updated (old values).
-        :param updates_new: Keys and values being updated (new values).
-        :param updates_and_inserts: Keys and values being updated or inserted.
-        :return: Self.
-        """
-        self._wrapped.update(all_updates)
-        return self
-
-
-PUMDS = TypeVar("PUMDS", bound=ProxyUserMutableDictStructure)  # proxy user mutable dictionary structure self type

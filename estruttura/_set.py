@@ -11,17 +11,11 @@ from ._bases import (
     BaseCollectionStructure,
     BaseImmutableCollectionStructure,
     BaseMutableCollectionStructure,
-    BaseProxyCollectionStructure,
-    BaseProxyImmutableCollectionStructure,
-    BaseProxyMutableCollectionStructure,
-    BaseProxyUserCollectionStructure,
-    BaseProxyUserImmutableCollectionStructure,
-    BaseProxyUserMutableCollectionStructure,
     BaseUserCollectionStructure,
     BaseUserImmutableCollectionStructure,
     BaseUserMutableCollectionStructure,
 )
-from .exceptions import ProcessingError, SerializationError
+from .exceptions import ProcessingError
 
 T = TypeVar("T")
 
@@ -455,131 +449,6 @@ USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
 
 
 # noinspection PyAbstractClass
-class ProxySetStructure(BaseProxyCollectionStructure[SS, T], SetStructure[T]):
-    """Proxy set structure."""
-
-    __slots__ = ()
-
-    def _do_init(self, initial_values):  # noqa
-        """
-        Initialize keys and values (internal).
-
-        :param initial_values: Initial values.
-        """
-        error = "{!r} object already initialized".format(type(self).__name__)
-        raise RuntimeError(error)
-
-    @classmethod
-    def _do_deserialize(cls, values):  # noqa
-        """
-        Deserialize (internal).
-
-        :param values: Deserialized values.
-        :return: Set structure.
-        :raises SerializationError: Error while deserializing.
-        """
-        error = "can't deserialize proxy object {!r}".format(cls.__name__)
-        raise SerializationError(error)
-
-    def isdisjoint(self, iterable):
-        # type: (Iterable) -> bool
-        """
-        Get whether is a disjoint set of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is disjoint.
-        """
-        return self._wrapped.isdisjoint(iterable)
-
-    def issubset(self, iterable):
-        # type: (Iterable) -> bool
-        """
-        Get whether is a subset of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is subset.
-        """
-        return self._wrapped.issubset(iterable)
-
-    def issuperset(self, iterable):
-        # type: (Iterable) -> bool
-        """
-        Get whether is a superset of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is superset.
-        """
-        return self._wrapped.issuperset(iterable)
-
-    def intersection(self, iterable):
-        # type: (Iterable) -> AbstractSet
-        """
-        Get intersection.
-
-        :param iterable: Iterable.
-        :return: Intersection.
-        """
-        return self._wrapped.intersection(iterable)
-
-    def symmetric_difference(self, iterable):
-        # type: (Iterable) -> AbstractSet
-        """
-        Get symmetric difference.
-
-        :param iterable: Iterable.
-        :return: Symmetric difference.
-        """
-        return self._wrapped.symmetric_difference(iterable)
-
-    def union(self, iterable):
-        # type: (Iterable) -> AbstractSet
-        """
-        Get union.
-
-        :param iterable: Iterable.
-        :return: Union.
-        """
-        return self._wrapped.union(iterable)
-
-    def difference(self, iterable):
-        # type: (Iterable) -> AbstractSet
-        """
-        Get difference.
-
-        :param iterable: Iterable.
-        :return: Difference.
-        """
-        return self._wrapped.difference(iterable)
-
-    def inverse_difference(self, iterable):
-        # type: (Iterable) -> AbstractSet
-        """
-        Get an iterable's difference to this.
-
-        :param iterable: Iterable.
-        :return: Inverse Difference.
-        """
-        return self._wrapped.inverse_difference(iterable)
-
-
-PSS = TypeVar("PSS", bound=ProxySetStructure)  # proxy set structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserSetStructure(
-    ProxySetStructure[USS, T],
-    BaseProxyUserCollectionStructure[USS, T],
-    UserSetStructure[T],
-):
-    """Proxy user set structure."""
-
-    __slots__ = ()
-
-
-PUSS = TypeVar("PUSS", bound=ProxyUserSetStructure)  # proxy user set structure self type
-
-
-# noinspection PyAbstractClass
 class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]):
     """Immutable set structure."""
 
@@ -646,54 +515,6 @@ class UserImmutableSetStructure(
 
 
 UISS = TypeVar("UISS", bound=UserImmutableSetStructure)  # user immutable set structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyImmutableSetStructure(
-    ProxySetStructure[ISS, T],
-    BaseProxyImmutableCollectionStructure[ISS, T],
-    ImmutableSetStructure[T],
-):
-    """Proxy immutable set structure."""
-
-    __slots__ = ()
-
-
-PISS = TypeVar("PISS", bound=ProxyImmutableSetStructure)  # proxy immutable set structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserImmutableSetStructure(
-    ProxyImmutableSetStructure[UISS, T],
-    BaseProxyUserImmutableCollectionStructure[UISS, T],
-    UserImmutableSetStructure[T],
-):
-    """Proxy user immutable set structure."""
-
-    __slots__ = ()
-
-    def _do_remove(self, old_values):
-        # type: (PUISS, frozenset[T]) -> PUISS
-        """
-        Remove values (internal).
-
-        :param old_values: Old values.
-        :return: Transformed.
-        """
-        return self._wrapped.remove(old_values)
-
-    def _do_update(self, new_values):
-        # type: (PUISS, frozenset[T]) -> PUISS
-        """
-        Add values (internal).
-
-        :param new_values: New values.
-        :return: Transformed.
-        """
-        return self._wrapped.update(new_values)
-
-
-PUISS = TypeVar("PUISS", bound=ProxyUserImmutableSetStructure)  # proxy user immutable set structure self type
 
 
 # noinspection PyAbstractClass
@@ -859,53 +680,3 @@ class UserMutableSetStructure(
 
 
 UMSS = TypeVar("UMSS", bound=UserMutableSetStructure)  # user mutable set structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyMutableSetStructure(
-    ProxySetStructure[MSS, T],
-    BaseProxyMutableCollectionStructure[MSS, T],
-    MutableSetStructure[T],
-):
-    """Proxy mutable set structure."""
-
-    __slots__ = ()
-
-
-PMSS = TypeVar("PMSS", bound=ProxyMutableSetStructure)  # proxy mutable set structure self type
-
-
-# noinspection PyAbstractClass
-class ProxyUserMutableSetStructure(
-    ProxyMutableSetStructure[UMSS, T],
-    BaseProxyUserMutableCollectionStructure[UMSS, T],
-    UserMutableSetStructure[T],
-):
-    """Proxy user mutable set structure."""
-
-    __slots__ = ()
-
-    def _do_remove(self, old_values):
-        # type: (PUMSS, frozenset[T]) -> PUMSS
-        """
-        Remove values (internal).
-
-        :param old_values: Old values.
-        :return: Self.
-        """
-        self._wrapped.remove(old_values)
-        return self
-
-    def _do_update(self, new_values):
-        # type: (PUMSS, frozenset[T]) -> PUMSS
-        """
-        Add values (internal).
-
-        :param new_values: New values.
-        :return: Self.
-        """
-        self._wrapped.update(new_values)
-        return self
-
-
-PUMSS = TypeVar("PUMSS", bound=ProxyUserMutableSetStructure)  # proxy user mutable set structure self type

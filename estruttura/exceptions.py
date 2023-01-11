@@ -1,7 +1,6 @@
 """Estruttura exceptions."""
 
 __all__ = [
-    "EstrutturaException",
     "ProcessingError",
     "ConversionError",
     "ValidationError",
@@ -10,11 +9,7 @@ __all__ = [
 ]
 
 
-class EstrutturaException(Exception):
-    """Base estruttura package exception."""
-
-
-class ProcessingError(EstrutturaException):
+class ProcessingError(Exception):
     """Error while processing a value through a relationship."""
 
 
@@ -30,5 +25,5 @@ class InvalidTypeError(ProcessingError):
     """Invalid type found when checking a value through a relationship."""
 
 
-class SerializationError(EstrutturaException):
+class SerializationError(Exception):
     """Could not serialize/deserialize value."""

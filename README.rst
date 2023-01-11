@@ -36,7 +36,7 @@
 
 Overview
 --------
-`estruttura` provides abstract data structures.
+Abstract data structures.
 
 Motivation
 ----------
@@ -77,23 +77,6 @@ Holds data internally and only allow for changes privately.
 User Structure
 ^^^^^^^^^^^^^^
 Allows for changing of the data by external clients (public).
-
-Proxy Structure
-^^^^^^^^^^^^^^^
-Wraps another structure and acts as a view of its data.
-Proxy structures can even point to other proxy structures.
-
-.. code:: python
-
-    >>> from estruttura import ProxyMutableListStructure
-    >>> from estruttura.examples import MutableList
-    >>> l = MutableList(range(3))
-    >>> p = ProxyMutableListStructure(l)
-    >>> list(p) == [0, 1, 2]
-    True
-    >>> l.append(3)
-    >>> list(p) == [0, 1, 2, 3]
-    True
 
 Immutable Structure
 ^^^^^^^^^^^^^^^^^^^
@@ -176,7 +159,7 @@ Dataclass-like structure class that has a schema defined by attributes.
     >>> class Point(ImmutableClass):
     ...     x = Attribute()
     ...     y = Attribute()
-    ...     d = Attribute(serializable=True)
+    ...     d = Attribute(serializable=True, repr=True)
     ...     @getter(d, dependencies=(x, y))
     ...     def _(self):
     ...         return math.sqrt(self.x**2 + self.y**2)

@@ -16,14 +16,16 @@ T = TypeVar("T")
 class EnumSerializer(Serializer):
     """Serializer for enum types."""
 
-    __slots__ = ("_by_name",)
+    __slots__ = ("_by_name", "_fallback")
 
-    def __init__(self, by_name=False):
-        # type: (bool) -> None
+    def __init__(self, by_name=False, fallback=None):
+        # type: (bool, Serializer[T] | None) -> None
         """
         :param by_name: Whether to serialize by name instead of value.
+        :param fallback: Fallback serializer (in case value is not an enum).
         """
         self._by_name = bool(by_name)
+        self._fallback = fallback
 
     def serialize(self, relationship, value):
         # type: (Relationship[T], T) -> Any
@@ -35,8 +37,13 @@ class EnumSerializer(Serializer):
         :return: Serialized value.
         :raises SerializationError: Error while serializing.
         """
-        assert isinstance(value, enum.Enum)
-        return value.name if self.by_name else value.value
+        if isinstance(value, enum.Enum):
+            return value.name if self.by_name else value.value
+        elif self._fallback is not None:
+            return self._fallback.serialize(relationship, value)
+        else:
+            error = "{!r} object is not an enum value".format(type(value).__name__)
+            raise SerializationError(error)
 
     def deserialize(self, relationship, serialized):
         # type: (Relationship[T], Any) -> T
@@ -58,6 +65,9 @@ class EnumSerializer(Serializer):
                 if self.by_name and item.name == serialized or item.value == serialized:
                     return cast(T, item)
 
+        if self._fallback is not None:
+            return self._fallback.deserialize(relationship, serialized)
+
         if not enum_types:
             error = "no enum types defined"
         elif self.by_name:
@@ -71,3 +81,9 @@ class EnumSerializer(Serializer):
         # type: () -> bool
         """Whether to serialize by name instead of value."""
         return self._by_name
+
+    @property
+    def fallback(self):
+        # type: () -> Serializer[T] | None
+        """Fallback serializer (in case value is not an enum)."""
+        return self._fallback

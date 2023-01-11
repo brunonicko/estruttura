@@ -1,7 +1,7 @@
 """Relationship between objects and values."""
 
 import six
-from basicco import SlottedBase, basic_data, fabricate_value, type_checking
+from basicco import basic_data, fabricate_value, type_checking
 from basicco.abstract_class import abstract
 from basicco.import_path import get_path, import_path
 from tippo import (
@@ -31,7 +31,7 @@ from .exceptions import (
 T = TypeVar("T")
 
 
-class Serializer(SlottedBase, Generic[T]):
+class Serializer(basic_data.ImmutableBasicData, Generic[T]):
     """Abstract serializer."""
 
     __slots__ = ()
@@ -62,19 +62,50 @@ class Serializer(SlottedBase, Generic[T]):
         """
         raise NotImplementedError()
 
+    def to_items(self, usecase=None):
+        # type: (basic_data.ItemUsecase | None) -> list[tuple[str, Any]]
+        """
+        Convert to items.
+
+        :param usecase: Usecase.
+        :return: Items.
+        """
+        return []
+
+    @overload
+    def update(self, __m, **kwargs):
+        # type: (S, SupportsKeysAndGetItem[str, Any], **Any) -> S
+        pass
+
+    @overload
+    def update(self, __m, **kwargs):
+        # type: (S, Iterable[tuple[str, Any]], **Any) -> S
+        pass
+
+    @overload
+    def update(self, **kwargs):
+        # type: (S, **Any) -> S
+        pass
+
+    def update(self, *args, **kwargs):
+        """
+        Make a new serializer with updates.
+
+        Same parameters as :meth:`dict.update`.
+        :return: Updated serializer.
+        """
+        init_args = self.to_dict(usecase=basic_data.ItemUsecase.INIT)
+        init_args.update(*args, **kwargs)
+        return cast(R, type(self)(**init_args))  # noqa
+
+
+S = TypeVar("S", bound=Serializer)  # serializer self type
+
 
 class TypedSerializer(Serializer[T]):
     """Serializer that utilizes relationship types to best guess serialization formatting."""
 
-    __slots__ = (
-        "_types",
-        "_subtypes",
-        "_resolved_types",
-        "_basic_types",
-        "_complex_types",
-        "_extra_paths",
-        "_builtin_paths",
-    )
+    __slots__ = ()
 
     def serialize(self, relationship, value):
         # type: (Relationship[T], T) -> Any
@@ -87,8 +118,10 @@ class TypedSerializer(Serializer[T]):
         :raises SerializationError: Error while serializing.
         """
 
-        # Value is of basic type, passthrough.
-        if isinstance(value, BASIC_TYPES):
+        # Value is of basic type and there are basic types in the accepted types, passthrough.
+        if isinstance(value, BASIC_TYPES) and (
+            type(value) in relationship.types_info.basic_types or not relationship.types_info.all_types
+        ):
             return value
 
         # Value is a class, serialize as a path with special '__class__' keyword.
@@ -142,8 +175,10 @@ class TypedSerializer(Serializer[T]):
         :raises SerializationError: Error while deserializing.
         """
 
-        # Serialized value is of basic type, passthrough.
-        if isinstance(serialized, BASIC_TYPES):
+        # Serialized value is of basic type and there are basic types in the accepted types, passthrough.
+        if isinstance(serialized, BASIC_TYPES) and (
+            type(serialized) in relationship.types_info.basic_types or not relationship.types_info.all_types
+        ):
             return cast(T, serialized)
 
         # Serialized class path in a dictionary, try to import it.
@@ -197,7 +232,9 @@ class TypedSerializer(Serializer[T]):
 
             # Too many complex types defined to deserialize.
             else:
-                error = "ambiguous types when deserializing {!r}".format(serialized)
+                error = "ambiguous types when deserializing {!r}; {}".format(
+                    serialized, ", ".join(type_checking.type_names(relationship.types_info.all_types))
+                )
                 raise SerializationError(error)
 
         # Single complex type, no subtype.
@@ -243,7 +280,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
     def __init__(
         self,
         converter=None,  # type: Callable[[Any], T] | Type[T] | str | None
-        validator=None,  # type: Callable[[Any], None] | str | None
+        validator=None,  # type: Callable[[Any], Any] | str | None
         types=(),  # type: Iterable[Type[T] | str | None] | Type[T] | str | None
         subtypes=False,  # type: bool
         serializer=TypedSerializer(),  # type: Serializer[T] | None
@@ -308,7 +345,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
                     extra_paths=self._extra_paths,
                     builtin_paths=self._builtin_paths,
                 )
-            except ValidationError as e:
+            except (ValidationError, TypeError, ValueError) as e:
                 exc = ValidationError(str(e))
                 six.raise_from(exc, None)
                 raise exc
@@ -424,17 +461,17 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
     @overload
     def update(self, __m, **kwargs):
         # type: (R, SupportsKeysAndGetItem[str, Any], **Any) -> R
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (R, Iterable[tuple[str, Any]], **Any) -> R
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (R, **Any) -> R
-        """."""
+        pass
 
     def update(self, *args, **kwargs):
         """
@@ -455,7 +492,7 @@ class Relationship(basic_data.ImmutableBasicData, Generic[T]):
 
     @property
     def validator(self):
-        # type: () -> Callable[[Any], None] | str | None
+        # type: () -> Callable[[Any], Any] | str | None
         """Callable value validator."""
         return self._validator
 
@@ -584,17 +621,17 @@ class RelationshipTypesInfo(basic_data.ImmutableBasicData, Generic[T]):
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, SupportsKeysAndGetItem[str, Any], **Any) -> RTI
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (RTI, Iterable[tuple[str, Any]], **Any) -> RTI
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (RTI, **Any) -> RTI
-        """."""
+        pass
 
     def update(self, *args, **kwargs):
         """

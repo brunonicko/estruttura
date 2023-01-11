@@ -9,7 +9,7 @@ sys.path.insert(0, root_path)
 
 # Project information.
 project = "Estruttura"
-copyright = "2022, Bruno Nicko"  # noqa
+copyright = "2023, Bruno Nicko"  # noqa
 author = "Bruno Nicko"
 
 # Sphinx extensions.
@@ -26,7 +26,7 @@ intersphinx_mapping = {
     "basicco": ("https://basicco.readthedocs.io/en/stable/", None),
     "slotted": ("https://slotted.readthedocs.io/en/stable/", None),
     "six": ("https://six.readthedocs.io/", None),
-    "pyrsistent": ("https://pyrsistent.readthedocs.io/en/stable/", None),
+    "pyrsistent": ("https://pyrsistent.readthedocs.io/en/latest/", None),
     "sphinx": ("https://www.sphinx-doc.org/en/master/", None),
     "python": ("https://docs.python.org/3.11", None),
 }

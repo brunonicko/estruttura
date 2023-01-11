@@ -3,7 +3,8 @@
 from enum import Enum
 
 import six
-from tippo import final
+from basicco.type_checking import TEXT_TYPES
+from tippo import Tuple, cast, final
 
 __all__ = [
     "MissingType",
@@ -49,5 +50,5 @@ DEFAULT = DefaultType.DEFAULT
 """`DEFAULT` sentinel value."""
 
 
-BASIC_TYPES = (bool, float, type(None)) + six.integer_types + six.string_types
+BASIC_TYPES = cast(Tuple[type, ...], (bool, float, type(None)) + six.integer_types + TEXT_TYPES)
 """Basic immutable types."""

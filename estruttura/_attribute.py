@@ -1,5 +1,18 @@
+import collections
+import contextlib
+import weakref
+
 import six
-from basicco import basic_data, fabricate_value, unique_iterator
+import slotted
+from basicco import (
+    SlottedBase,
+    basic_data,
+    custom_repr,
+    fabricate_value,
+    recursive_repr,
+    safe_repr,
+    unique_iterator,
+)
 from basicco.namespace import Namespace
 from basicco.runtime_final import final
 from tippo import (
@@ -7,8 +20,10 @@ from tippo import (
     Callable,
     Generic,
     Iterable,
+    Iterator,
     Literal,
     Mapping,
+    Protocol,
     SupportsGetItem,
     SupportsGetSetDeleteItem,
     SupportsKeysAndGetItem,
@@ -19,7 +34,8 @@ from tippo import (
 )
 
 from ._relationship import Relationship
-from .constants import MISSING, MissingType
+from .constants import DEFAULT, DELETED, MISSING, MissingType
+from .exceptions import ProcessingError
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
@@ -29,7 +45,7 @@ _attribute_count = 0
 
 # noinspection PyAbstractClass
 class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
-    """Attribute descriptor."""
+    """Attribute descriptor for structures."""
 
     __slots__ = (
         "_owner",
@@ -56,7 +72,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         "_callback",
         "_extra_paths",
         "_builtin_paths",
-        "_processed_default",
+        "_constant_value",
         "_dependencies",
         "_recursive_dependencies",
         "_dependents",
@@ -190,9 +206,6 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             if required is None:
                 required = True
 
-            if repr is None:
-                repr = True
-
             if eq is None:
                 eq = True
 
@@ -240,7 +253,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._serialize_default = bool(serialize_default)
         self._constant = bool(constant)
         self._dependencies = ()  # type: tuple[Attribute, ...]
-        self._repr = repr if callable(repr) else bool(repr)  # type: bool | Callable[[T_co], str]
+        self._repr = (
+            repr if callable(repr) else (bool(repr) if repr is not None else None)
+        )  # type: bool | None | Callable[[T_co], str]
         self._eq = bool(eq)
         self._order = bool(order)
         self._hash = bool(hash)
@@ -251,7 +266,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         self._extra_paths = tuple(extra_paths)
         self._builtin_paths = tuple(builtin_paths) if builtin_paths is not None else None
 
-        self._processed_default = False  # type: bool
+        self._constant_value = MISSING  # type: T_co | MissingType
         self._recursive_dependencies = None  # type: tuple[Attribute, ...] | None
         self._dependents = ()  # type: tuple[Attribute, ...]
         self._recursive_dependents = None  # type: tuple[Attribute, ...] | None
@@ -292,7 +307,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
         # Constant value.
         if owner is not None and self.constant:
-            return self.default
+            return self.constant_value
 
         # Instance value.
         if instance is not None:
@@ -333,6 +348,8 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
             if self.init is None:
                 self._init = True
 
+        if self._repr is None:
+            self._repr = self._init
         if self._serializable is None:
             self._serializable = self._init or self.settable
 
@@ -450,9 +467,9 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         :raises RuntimeError: No valid default value/factory defined.
         """
         if self.default is not MISSING:
-            default_value = self.default
+            return self.default
         elif self.factory is not MISSING:
-            default_value = fabricate_value.fabricate_value(
+            return fabricate_value.fabricate_value(
                 self.factory,
                 extra_paths=self.extra_paths,
                 builtin_paths=self.builtin_paths,
@@ -460,7 +477,6 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         else:
             error = "no valid default/factory defined"
             raise RuntimeError(error)
-        return default_value
 
     def process_value(self, value, location=MISSING):
         # type: (Any, Any) -> T_co
@@ -484,12 +500,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def getter(self, maybe_func):
         # type: (A, Callable[[Any], T_co]) -> A
-        """."""
+        pass
 
     @overload
     def getter(self, *dependencies):
         # type: (A, *Attribute) -> Callable[[Callable[[Any], T_co]], A]
-        """."""
+        pass
 
     def getter(self, *dependencies):
         """
@@ -534,12 +550,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def setter(self, maybe_func=None):
         # type: (A, None) -> Callable[[Callable[[Any, T_co], None]], A]
-        """."""
+        pass
 
     @overload
     def setter(self, maybe_func):
         # type: (A, Callable[[Any, T_co], None]) -> A
-        """."""
+        pass
 
     def setter(self, maybe_func=None):
         """
@@ -581,12 +597,12 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def deleter(self, maybe_func=None):
         # type: (A, None) -> Callable[[Callable[[SupportsGetItem], None]], A]
-        """."""
+        pass
 
     @overload
     def deleter(self, maybe_func):
         # type: (A, Callable[[SupportsGetItem], None]) -> A
-        """."""
+        pass
 
     def deleter(self, maybe_func=None):
         """
@@ -628,17 +644,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     @overload
     def update(self, __m, **kwargs):
         # type: (A, SupportsKeysAndGetItem[str, Any], **Any) -> A
-        """."""
+        pass
 
     @overload
     def update(self, __m, **kwargs):
         # type: (A, Iterable[tuple[str, Any]], **Any) -> A
-        """."""
+        pass
 
     @overload
     def update(self, **kwargs):
         # type: (A, **Any) -> A
-        """."""
+        pass
 
     def update(self, *args, **kwargs):
         """
@@ -667,10 +683,6 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
     def default(self):
         # type: () -> T_co | MissingType
         """Default value."""
-        if not self._processed_default:
-            if self._default is not MISSING:
-                self._default = self.process_value(self._default)
-            self._processed_default = True
         return self._default
 
     @property
@@ -741,7 +753,7 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
 
     @property
     def repr(self):
-        # type: () -> bool | Callable[[T_co], str]
+        # type: () -> bool | None | Callable[[T_co], str]
         """Whether to include in the `__repr__` method (or a custom repr function)."""
         return self._repr
 
@@ -792,6 +804,17 @@ class Attribute(basic_data.ImmutableBasicData, Generic[T_co]):
         # type: () -> tuple[str, ...] | None
         """Builtin module paths in fallback order."""
         return self._builtin_paths
+
+    @property
+    def constant_value(self):
+        # type: () -> T_co
+        """Constant value."""
+        if not self.constant:
+            error = "not a constant attribute"
+            raise AttributeError(error)
+        if self._constant_value is MISSING:
+            self._constant_value = self.process_value(self.get_default_value())
+        return self._constant_value
 
     @property
     def dependencies(self):
@@ -930,6 +953,619 @@ class MutableAttribute(Attribute[T]):
 MA = TypeVar("MA", bound=MutableAttribute)  # mutable attribute self type
 
 
+class AttributedProtocol(Protocol):
+    def __contains__(self, name):
+        # type: (object) -> bool
+        pass
+
+    def __getitem__(self, name):
+        # type: (str) -> Any
+        pass
+
+    def __iter__(self):
+        # type: () -> Iterator[tuple[str, Any]]
+        pass
+
+
+class MutableAttributedProtocol(AttributedProtocol):
+    def __setitem__(self, name, value):
+        # type: (str, Any) -> None
+        pass
+
+    def __delitem__(self, name):
+        # type: (str) -> None
+        pass
+
+
+KT_str = TypeVar("KT_str", bound=str)
+AT_co = TypeVar("AT_co", bound=Attribute, covariant=True)
+
+
+@final
+class AttributeMap(SlottedBase, slotted.SlottedHashable, slotted.SlottedMapping[KT_str, AT_co]):
+    """Maps attributes by name."""
+
+    __slots__ = ("__attribute_dict",)
+
+    @overload
+    def __init__(self, ordered_attributes):
+        # type: (collections.OrderedDict[str, AT_co]) -> None
+        pass
+
+    @overload
+    def __init__(self, ordered_attributes=()):
+        # type: (Iterable[tuple[str, AT_co]]) -> None
+        pass
+
+    def __init__(self, ordered_attributes=()):
+        # type: (collections.OrderedDict[str, AT_co] | Iterable[tuple[str, AT_co]]) -> None
+        """
+        :param ordered_attributes: Ordered attributes (ordered dict or items).
+        """
+        if isinstance(ordered_attributes, collections.OrderedDict):
+            self.__attribute_dict = ordered_attributes  # type: collections.OrderedDict[str, AT_co]
+        else:
+            self.__attribute_dict = collections.OrderedDict()
+            for name, attribute in ordered_attributes:
+                self.__attribute_dict[name] = attribute
+
+    @safe_repr.safe_repr
+    @recursive_repr.recursive_repr
+    def __repr__(self):
+        # type: () -> str
+        return "{}({})".format(type(self).__name__, custom_repr.iterable_repr(self.items()))
+
+    def __hash__(self):
+        # type: () -> int
+        return object.__hash__(self)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        return self is other
+
+    def __getitem__(self, name):
+        # type: (str) -> AT_co
+        return self.__attribute_dict[name]
+
+    def __contains__(self, name):
+        # type: (object) -> bool
+        return name in self.__attribute_dict
+
+    def __len__(self):
+        # type: () -> int
+        return len(self.__attribute_dict)
+
+    def __iter__(self):
+        # type: () -> Iterator[KT_str]
+        for name in self.__attribute_dict:
+            yield cast(KT_str, name)
+
+    def ordered_items(self):
+        # type: () -> Iterator[tuple[KT_str, AT_co]]
+        for name in self.__attribute_dict:
+            yield cast(KT_str, name), self.__attribute_dict[name]
+
+    def get_initial_values(self, args, kwargs, init_property="init", init_method="__init__"):
+        # type: (tuple, dict[str, Any], str, str) -> dict[str, Any]
+        """
+        Get initial/deserialized attribute values.
+
+        :param args: Positional arguments.
+        :param kwargs: Keyword arguments.
+        :param init_property: Which boolean attribute property to use when considering it a `init` attribute.
+        :param init_method: The name of the initialization method receiving the values.
+        :return: Initial attribute values.
+        """
+
+        # Copy kwargs.
+        kwargs = dict(kwargs)
+
+        # Go through each attribute.
+        i = 0
+        reached_kwargs = False
+        required_names = set()
+        constant_names = set()
+        initial_values = {}  # type: dict[str, Any]
+        for name, attribute in self.ordered_items():
+
+            # Keep track of required attribute names.
+            if attribute.required:
+                required_names.add(name)
+
+            # Skip non-init attributes.
+            if not getattr(attribute, init_property):
+
+                # Can't get its value from the init method.
+                if name in kwargs:
+                    error = "attribute {!r} is not supported by the {!r} method".format(name, init_method)
+                    raise TypeError(error)
+
+                if attribute.has_default:
+
+                    # Default value.
+                    if attribute.constant:
+                        constant_names.add(name)
+                        initial_values[name] = attribute.constant_value
+                    else:
+                        initial_values[name] = attribute.get_default_value()
+
+                continue
+
+            # Get value for positional argument.
+            if not reached_kwargs:
+                try:
+                    value = args[i]
+                except IndexError:
+                    reached_kwargs = True
+                else:
+                    if value is DEFAULT:
+                        if attribute.has_default:
+                            value = attribute.get_default_value()
+                        else:
+                            error = "missing value for attribute {!r}".format(name)
+                            raise ValueError(error)
+                    i += 1
+                    initial_values[name] = value
+                    continue
+
+            # Get value for keyword argument.
+            try:
+                value = kwargs.pop(name)
+                if value is DEFAULT:
+                    raise KeyError()
+            except KeyError:
+                if attribute.has_default:
+                    value = attribute.get_default_value()
+                else:
+                    continue
+
+            # Set attribute value.
+            initial_values[name] = value
+
+        # Invalid kwargs.
+        invalid_kwargs = set(kwargs).difference(self)
+        if invalid_kwargs:
+            error = "invalid keyword argument(s) {}".format(", ".join(repr(k) for k in invalid_kwargs))
+            raise TypeError(error)
+
+        additional_kwargs = set(kwargs).intersection(initial_values)
+        if additional_kwargs:
+            error = "got multiple values for argument(s) {}".format(", ".join(repr(k) for k in additional_kwargs))
+            raise TypeError(error)
+
+        # Invalid positional arguments.
+        invalid_args = args[i:]
+        if invalid_args:
+            error = "invalid/additional positional argument value(s) {}".format(
+                ", ".join(repr(p) for p in invalid_args)
+            )
+            raise TypeError(error)
+
+        # Compile updates.
+        initial_values, _ = self.get_update_values(initial_values)
+
+        # Remove constant values.
+        for constant_name in constant_names:
+            del initial_values[constant_name]
+
+        # Check for required attributes.
+        missing = required_names.difference(initial_values)
+        if missing:
+            sorted_missing = [n for n in self if n in missing]
+            error = "missing values for required attributes {}".format(", ".join(repr(k) for k in sorted_missing))
+            raise RuntimeError(error)
+
+        return initial_values
+
+    def get_update_values(self, updates, attributed=None):
+        # type: (Mapping[str, Any], AttributedProtocol | None) -> tuple[dict[str, Any], dict[str, Any]]
+        """
+        Get values for an update.
+
+        :param updates: Updated values.
+        :param attributed: Instance that holds attribute values.
+        :return: New values and old values.
+        """
+
+        # Compile update values.
+        delegate_self = _DelegateSelf(self, attributed)
+        sorting_key = lambda i: len(self[i[0]].recursive_dependencies)
+        for name, value in sorted(six.iteritems(updates), key=sorting_key, reverse=True):
+            setattr(delegate_self, name, value)
+        new_values, old_values = delegate_self.__.get_results()
+
+        # Ensure no required attributes are being deleted.
+        for name, value in six.iteritems(new_values):
+            if value is DELETED and self[name].required:
+                error = "can't delete required attribute {!r}".format(name)
+                raise AttributeError(error)
+
+        return new_values, old_values
+
+
+@final
+class _DelegateSelf(SlottedBase):
+    """Intermediary `self` object provided to delegates."""
+
+    __slots__ = ("__",)
+
+    def __init__(self, attribute_map, attributed=None):
+        # type: (AttributeMap, AttributedProtocol | None) -> None
+        """
+        :param attribute_map: Attribute map.
+        :param attributed: Instance that holds attribute values.
+        """
+        internals = _DelegateSelfInternals(self, attribute_map, attributed)
+        object.__setattr__(self, "__", internals)
+
+    def __hash__(self):
+        # type: () -> int
+        return object.__hash__(self)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        return self is other
+
+    def __dir__(self):
+        # type: () -> list[str]
+        """
+        Get attribute names.
+
+        :return: Attribute names.
+        """
+        if self.__.in_getter is not None:
+            attribute = self.__.in_getter
+            return sorted(n for n, a in self.__.attribute_map.ordered_items() if a is attribute or a in a.dependencies)
+        return sorted(self.__.attribute_map)
+
+    def __getattr__(self, name):
+        # type: (str) -> Any
+        """
+        Get attribute value.
+        :param name: Attribute name.
+        :return: Value.
+        """
+        if name != "__" and name in self.__.attribute_map:
+            return self[name]
+        else:
+            return self.__getattribute__(name)
+
+    def __setattr__(self, name, value):
+        # type: (str, Any) -> None
+        """
+        Set attribute value.
+        :param name: Attribute name.
+        :param value: Value.
+        """
+        if name in self.__.attribute_map:
+            self[name] = value
+        else:
+            super(_DelegateSelf, self).__setattr__(name, value)
+
+    def __delattr__(self, name):
+        # type: (str) -> None
+        """
+        Delete attribute value.
+        :param name: Attribute name.
+        """
+        if name in self.__.attribute_map:
+            del self[name]
+        else:
+            super(_DelegateSelf, self).__delattr__(name)
+
+    def __getitem__(self, name):
+        # type: (str) -> Any
+        """
+        Get attribute value.
+        :param name: Attribute name.
+        :return: Value.
+        """
+        return self.__.get_value(name)
+
+    def __setitem__(self, name, value):
+        # type: (str, Any) -> None
+        """
+        Set attribute value.
+        :param name: Attribute name.
+        :param value: Value.
+        """
+        self.__.set_value(name, value)
+
+    def __delitem__(self, name):
+        # type: (str) -> None
+        """
+        Delete attribute value.
+        :param name: Attribute name.
+        """
+        self.__.delete_value(name)
+
+
+@final
+class _DelegateSelfInternals(SlottedBase):
+    """Internals for :class:`_DelegateSelf`."""
+
+    __slots__ = (
+        "__delegate_self_ref",
+        "__attribute_map",
+        "__attributed",
+        "__dependencies",
+        "__in_getter",
+        "__new_values",
+        "__old_values",
+        "__dirty",
+    )
+
+    def __init__(self, delegate_self, attribute_map, attributed):
+        # type: (_DelegateSelf, AttributeMap, AttributedProtocol | None) -> None
+        """
+        :param delegate_self: Internal object.
+        :param attribute_map: Attribute map.
+        :param attributed: Instance that holds attribute values.
+        """
+        self.__delegate_self_ref = weakref.ref(delegate_self)
+        self.__attribute_map = attribute_map
+        self.__attributed = attributed
+        self.__dependencies = None  # type: tuple[Attribute, ...] | None
+        self.__in_getter = None  # type: Attribute | None
+        self.__new_values = {}  # type: dict[str, Any]
+        self.__old_values = {}  # type: dict[str, Any]
+        self.__dirty = set(attribute_map).difference(
+            (list(zip(*(list(attributed or [])))) or [[], []])[0]
+        )  # type: set[str]
+
+    def __hash__(self):
+        # type: () -> int
+        return object.__hash__(self)
+
+    def __eq__(self, other):
+        # type: (object) -> bool
+        return self is other
+
+    def get_value(self, name):
+        """
+        Get current value for attribute.
+
+        :param name: Attribute name.
+        :return: Value.
+        :raises NameError: Can't access attribute not declared as dependency.
+        :raises AttributeError: Attribute has no value.
+        """
+        attribute = self.__get_attribute(name)
+        if self.__dependencies is not None and attribute not in self.__dependencies:
+            error = (
+                "can't access {!r} attribute from {!r} getter delegate since it was " "not declared as a dependency"
+            ).format(name, self.__in_getter.name)
+            raise NameError(error)
+
+        if name in self.__dirty:
+            value = MISSING
+        else:
+            try:
+                value = self.__new_values[name]
+            except KeyError:
+                try:
+                    if self.__attributed is None:
+                        raise KeyError()
+                    value = self.__attributed[name]
+                except KeyError:
+                    value = MISSING
+
+        if value in (MISSING, DELETED):
+            if attribute.delegated:
+                with self.__getter_context(attribute):
+                    value = attribute.fget(self.delegate_self)
+                try:
+                    value = attribute.process_value(value, name)
+                except (ProcessingError, TypeError, ValueError) as e:
+                    exc = type(e)(e)
+                    six.raise_from(exc, None)
+                    raise exc
+                self.__set_new_value(name, value)
+                return value
+            else:
+                error = "attribute {!r} has no value".format(name)
+                raise AttributeError(error)
+        else:
+            return value
+
+    def set_value(self, name, value, process=True):
+        # type: (str, Any, bool) -> None
+        """
+        Set attribute value.
+
+        :param name: Attribute name.
+        :param value: Value.
+        :param process: Whether to process value or not.
+        :raises AttributeError: Can't set attributes while running getter delegate.
+        :raises AttributeError: Attribute is read-only.
+        :raises AttributeError: Attribute already has a value and can't be changed.
+        :raises AttributeError: Can't delete attributes while running getter delegate.
+        :raises AttributeError: Attribute is not deletable.
+        """
+
+        if value is DELETED:
+            self.delete_value(name)
+            return
+
+        if self.__in_getter is not None:
+            error = "can't set attributes while running getter delegate"
+            raise AttributeError(error)
+
+        attribute = self.__get_attribute(name)
+        if not attribute.settable:
+            if attribute.delegated:
+                error = "attribute {!r} is read-only".format(name)
+                raise AttributeError(error)
+            try:
+                self.get_value(name)
+            except AttributeError:
+                pass
+            else:
+                error = "attribute {!r} already has a value and can't be changed".format(name)
+                raise AttributeError(error)
+
+        if process:
+            try:
+                value = attribute.process_value(value, name)
+            except (ProcessingError, TypeError, ValueError) as e:
+                exc = type(e)(e)
+                six.raise_from(exc, None)
+                raise exc
+        if attribute.delegated:
+            attribute.fset(self.delegate_self, value)
+        else:
+            self.__set_new_value(name, value)
+
+    def delete_value(self, name):
+        """
+        Delete attribute.
+
+        :param name: Attribute name.
+        :raises AttributeError: Can't delete attributes while running getter delegate.
+        :raises AttributeError: Attribute is not deletable.
+        """
+        if self.__in_getter is not None:
+            error = "can't delete attributes while running getter delegate"
+            raise AttributeError(error)
+
+        attribute = self.__get_attribute(name)
+        if not attribute.deletable:
+            error = "attribute {!r} is not deletable".format(name)
+            raise AttributeError(error)
+
+        if attribute.delegated:
+            attribute.fdel(self.delegate_self)
+        else:
+            self.get_value(name)  # will error if it has no value, which we want
+            self.__set_new_value(name, DELETED)
+
+    @contextlib.contextmanager
+    def __getter_context(self, attribute):
+        # type: (Attribute) -> Iterator
+        """
+        Getter context.
+
+        :param attribute: Attribute.
+        :return: Getter context manager.
+        """
+        before = self.__in_getter
+        before_dependencies = self.__dependencies
+
+        self.__in_getter = attribute
+        if attribute.delegated:
+            self.__dependencies = attribute.dependencies
+        else:
+            self.__dependencies = None
+
+        try:
+            yield
+        finally:
+            self.__in_getter = before
+            self.__dependencies = before_dependencies
+
+    def __set_new_value(self, name, value):
+        # type: (str, Any) -> None
+        """
+        Set new attribute value.
+
+        :param name: Attribute name.
+        :param value: Value.
+        """
+        try:
+            if self.__attributed is None:
+                raise KeyError()
+            old_value = self.__attributed[name]
+        except KeyError:
+            old_value = DELETED
+
+        if value is not old_value:
+            self.__old_values[name] = old_value
+            self.__new_values[name] = value
+        else:
+            self.__old_values.pop(name, None)
+            self.__new_values.pop(name, None)
+
+        self.__dirty.discard(name)
+        for dependent in self.__attribute_map[name].recursive_dependents:
+            self.__dirty.add(dependent.name)
+            try:
+                if self.__attributed is None:
+                    raise KeyError()
+                old_value = self.__attributed[dependent.name]
+            except KeyError:
+                self.__new_values.pop(dependent.name, None)
+                self.__old_values.pop(dependent.name, None)
+            else:
+                self.__old_values[dependent.name] = old_value
+                self.__new_values[dependent.name] = DELETED
+
+    def __get_attribute(self, name):
+        # type: (str) -> Any
+        """
+        Get attribute value.
+
+        :param name: Attribute name.
+        :return: Value.
+        :raises AttributeError: Has no such attribute.
+        """
+        try:
+            return self.__attribute_map[name]
+        except KeyError:
+            pass
+        error = "no attribute named {!r}".format(name)
+        raise AttributeError(error)
+
+    def get_results(self):
+        # type: () -> tuple[dict[str, Any], dict[str, Any]]
+        """
+        Get results.
+
+        :return: New values, old values.
+        """
+        sorted_dirty = sorted(
+            self.__dirty,
+            key=lambda n: len(self.__attribute_map[n].recursive_dependencies),
+        )
+        failed = set()
+        success = set()
+        for name in sorted_dirty:
+            try:
+                self.get_value(name)
+            except AttributeError:
+                failed.add(name)
+            else:
+                success.add(name)
+
+        new_values = self.__new_values.copy()
+        old_values = self.__old_values.copy()
+
+        return new_values, old_values
+
+    @property
+    def delegate_self(self):
+        # type: () -> _DelegateSelf | None
+        """Delegate self."""
+        return self.__delegate_self_ref()
+
+    @property
+    def attribute_map(self):
+        # type: () -> AttributeMap
+        """AttributeMap."""
+        return self.__attribute_map
+
+    @property
+    def attributed(self):
+        # type: () -> AttributedProtocol | None
+        """Instance that holds attribute values."""
+        return self.__attributed
+
+    @property
+    def in_getter(self):
+        # type: () -> Attribute | None
+        """Whether running in an attribute's getter delegate."""
+        return self.__in_getter
+
+
 def _traverse(attribute, direction):
     # type: (Attribute, Literal["dependencies", "dependents"]) -> tuple[Attribute, ...]
     unvisited = set(getattr(attribute, direction))  # type: set[Attribute]
@@ -1006,3 +1642,13 @@ def deleter(attribute):
         cast(Attribute[T], attribute).deleter(func)
 
     return decorator
+
+
+def get_global_attribute_count():
+    # type: () -> int
+    """
+    Get global number of initialized attributes.
+
+    :return: Global attribute count.
+    """
+    return _attribute_count

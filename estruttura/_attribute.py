@@ -4,15 +4,7 @@ import weakref
 
 import six
 import slotted
-from basicco import (
-    SlottedBase,
-    basic_data,
-    custom_repr,
-    fabricate_value,
-    recursive_repr,
-    safe_repr,
-    unique_iterator,
-)
+from basicco import SlottedBase, basic_data, custom_repr, fabricate_value, recursive_repr, safe_repr, unique_iterator
 from basicco.namespace import Namespace
 from basicco.runtime_final import final
 from tippo import (

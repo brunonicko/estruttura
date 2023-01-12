@@ -39,6 +39,7 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
                 six.raise_from(exc, None)
                 raise exc
         self._do_init(initial_values)
+        self.__post_init__()
 
     @final
     def __le__(self, other):
@@ -198,6 +199,22 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
         """
         return self.__xor__(other)
 
+    @final
+    def _eq(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        if other is self:
+            return True
+        elif isinstance(other, set):
+            return set(self) == other
+        else:
+            return isinstance(other, type(self)) and type(self) is type(other) and set(self) == set(other)
+
     def _repr(self):
         # type: () -> str
         """
@@ -246,7 +263,9 @@ class SetStructure(BaseCollectionStructure[T], slotted.SlottedSet[T]):
         :raises SerializationError: Error while deserializing.
         """
         values = frozenset(cls.relationship.deserialize_value(s) for s in serialized)
-        return cls._do_deserialize(values)
+        self = cls._do_deserialize(values)
+        self.__post_deserialize__()
+        return self
 
     @abstract
     def isdisjoint(self, iterable):
@@ -359,12 +378,11 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
 
     @abstract
     def _do_remove(self, old_values):
-        # type: (USS, frozenset[T]) -> USS
+        # type: (frozenset[T]) -> None
         """
         Remove values (internal).
 
         :param old_values: Old values.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -388,7 +406,9 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
         elif missing:
             raise KeyError(tuple(missing))
 
-        return self._do_remove(old_values)
+        with self.__change_context__() as _self:
+            _self._do_remove(old_values)
+            return _self
 
     @final
     def _discard(self, *values):
@@ -406,16 +426,17 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
         if not old_values:
             return self
 
-        return self._do_remove(old_values)
+        with self.__change_context__() as _self:
+            _self._do_remove(old_values)
+            return _self
 
     @abstract
     def _do_update(self, new_values):
-        # type: (USS, frozenset[T]) -> USS
+        # type: (frozenset[T]) -> None
         """
         Add values (internal).
 
         :param new_values: New values.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -442,7 +463,9 @@ class UserSetStructure(SetStructure[T], BaseUserCollectionStructure[T]):
         if not new_values:
             return self
 
-        return self._do_update(new_values)
+        with self.__change_context__() as _self:
+            _self._do_update(new_values)
+            return _self
 
 
 USS = TypeVar("USS", bound=UserSetStructure)  # user set structure self type
@@ -453,6 +476,16 @@ class ImmutableSetStructure(SetStructure[T], BaseImmutableCollectionStructure[T]
     """Immutable set structure."""
 
     __slots__ = ()
+
+    @final
+    def _hash(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
+        return hash(frozenset(self))
 
 
 ISS = TypeVar("ISS", bound=ImmutableSetStructure)  # immutable set structure self type

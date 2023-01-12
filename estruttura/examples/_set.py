@@ -24,12 +24,6 @@ class BaseSet(estruttura.UserSetStructure[T]):
     def __iter__(self):
         return iter(self._internal)
 
-    def _eq(self, other):
-        if isinstance(other, set):
-            return self._internal == other
-        else:
-            return isinstance(other, type(self)) and self._internal == other._internal
-
     def _do_init(self, initial_values):
         self._internal = set(initial_values)
 
@@ -40,113 +34,57 @@ class BaseSet(estruttura.UserSetStructure[T]):
         return self
 
     def isdisjoint(self, iterable):
-        """
-        Get whether is a disjoint set of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is disjoint.
-        """
         return self._internal.isdisjoint(iterable)
 
     def issubset(self, iterable):
-        """
-        Get whether is a subset of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is subset.
-        """
         return self._internal.issubset(iterable)
 
     def issuperset(self, iterable):
-        """
-        Get whether is a superset of an iterable.
-
-        :param iterable: Iterable.
-        :return: True if is superset.
-        """
         return self._internal.issuperset(iterable)
 
     def symmetric_difference(self, iterable):
-        """
-        Get symmetric difference.
-
-        :param iterable: Iterable.
-        :return: Symmetric difference.
-        """
-        new_internal = self._internal.symmetric_difference(iterable)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        return self._internal.symmetric_difference(iterable)
 
     def union(self, iterable):
-        """
-        Get union.
-
-        :param iterable: Iterable.
-        :return: Union.
-        """
-        new_internal = self._internal.union(iterable)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        return self._internal.union(iterable)
 
     def difference(self, iterable):
-        """
-        Get difference.
-
-        :param iterable: Iterable.
-        :return: Difference.
-        """
-        new_internal = self._internal.difference(iterable)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        return self._internal.difference(iterable)
 
     def inverse_difference(self, iterable):
-        """
-        Get an iterable's difference to this.
-
-        :param iterable: Iterable.
-        :return: Inverse Difference.
-        """
-        new_internal = set(iterable).difference(self._internal)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        return set(iterable).difference(self._internal)
 
     def intersection(self, iterable):
-        """
-        Get intersection.
-
-        :param iterable: Iterable.
-        :return: Intersection.
-        """
-        new_internal = self._internal.intersection(iterable)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        return self._internal.intersection(iterable)
 
 
 class ImmutableSet(BaseSet[T], estruttura.UserImmutableSetStructure[T]):
     """Immutable set."""
 
-    def _hash(self):
-        return hash(tuple(self._internal))
+    __slots__ = ("__hash",)
+
+    def __cache_hash__(self, hash_):
+        self.__hash = hash_
+
+    def __retrieve_hash__(self):
+        try:
+            return self.__hash
+        except AttributeError:
+            return None
+
+    def _do_copy(self):
+        return copy.copy(self)
 
     def _do_clear(self):
-        return type(self)()
+        self._internal = set()
 
     def _do_remove(self, old_values):
         new_internal = self._internal.difference(old_values)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
     def _do_update(self, new_values):
         new_internal = self._internal.union(new_values)
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
 
 class MutableSet(BaseSet[T], estruttura.UserMutableSetStructure[T]):
@@ -154,7 +92,6 @@ class MutableSet(BaseSet[T], estruttura.UserMutableSetStructure[T]):
 
     def _do_clear(self):
         self._internal.clear()
-        return self
 
     def _do_remove(self, old_values):
         for value in old_values:

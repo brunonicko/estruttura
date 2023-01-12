@@ -7,18 +7,7 @@ from basicco import get_mro, mapping_proxy
 from basicco.abstract_class import abstract
 from basicco.namespace import Namespace
 from basicco.runtime_final import final
-from tippo import (
-    Any,
-    Callable,
-    Iterable,
-    Iterator,
-    Mapping,
-    SupportsKeysAndGetItem,
-    Type,
-    TypeVar,
-    cast,
-    overload,
-)
+from tippo import Any, Callable, Iterable, Iterator, Mapping, SupportsKeysAndGetItem, Type, TypeVar, cast, overload
 
 from ._attribute import Attribute, AttributeMap, MutableAttribute
 from ._bases import (
@@ -43,8 +32,18 @@ class StructureMeta(BaseStructureMeta):
 
         # Get/set attribute type for this class.
         dct = dict(dct)
+        attribute_type = Attribute
+        for base in reversed(get_mro.preview_mro(*bases)):
+            if base is object:
+                continue
+            if "__attribute_type__" in base.__dict__:
+                if isinstance(base, StructureMeta):
+                    attribute_type = base.__dict__["__attribute_type__"]
+                else:
+                    error = "invalid base {!r} defines '__attribute_type__'".format(base.__name__)
+                    raise TypeError(error)
         attribute_type = dct["__attribute_type__"] = dct.get("__kwargs__", {}).get(
-            "attribute_type", kwargs.get("attribute_type", dct.get("__attribute_type__", Attribute))
+            "attribute_type", kwargs.get("attribute_type", dct.get("__attribute_type__", attribute_type))
         )
 
         # Scrape bases for attributes.
@@ -318,6 +317,8 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
             six.raise_from(exc, None)
             raise exc
 
+        self.__post_init__()
+
     def __order__(self, other, func):
         # type: (object, Callable[[Any, Any], bool]) -> bool
 
@@ -419,6 +420,7 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
         """
         raise NotImplementedError()
 
+    @final
     def _eq(self, other):
         # type: (object) -> bool
         """
@@ -571,7 +573,9 @@ class Structure(six.with_metaclass(StructureMeta, BaseStructure)):
             init_property="serializable",
             init_method="deserialize",
         )
-        return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
+        self = cls._do_deserialize(mapping_proxy.MappingProxyType(values))
+        self.__post_deserialize__()
+        return self
 
 
 S = TypeVar("S", bound=Structure)  # structure self type
@@ -622,7 +626,7 @@ class UserStructure(Structure, BaseUserStructure):
 
     @abstract
     def _do_update(
-        self,  # type: US
+        self,
         inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
         deletes,  # type: mapping_proxy.MappingProxyType[str, Any]
         updates_old,  # type: mapping_proxy.MappingProxyType[str, Any]
@@ -630,7 +634,7 @@ class UserStructure(Structure, BaseUserStructure):
         updates_and_inserts,  # type: mapping_proxy.MappingProxyType[str, Any]
         all_updates,  # type: mapping_proxy.MappingProxyType[str, Any]
     ):
-        # type: (...) -> US
+        # type: (...) -> None
         """
         Update attribute values (internal).
 
@@ -640,7 +644,6 @@ class UserStructure(Structure, BaseUserStructure):
         :param updates_new: Keys and values being updated (new values).
         :param updates_and_inserts: Keys and values being updated or inserted.
         :param all_updates: All updates.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -692,14 +695,16 @@ class UserStructure(Structure, BaseUserStructure):
             if name not in new_values:
                 deletes[name] = value
 
-        return self._do_update(
-            mapping_proxy.MappingProxyType(inserts),
-            mapping_proxy.MappingProxyType(deletes),
-            mapping_proxy.MappingProxyType(updates_old),
-            mapping_proxy.MappingProxyType(updates_new),
-            mapping_proxy.MappingProxyType(updates_and_inserts),
-            mapping_proxy.MappingProxyType(all_updates),
-        )
+        with self.__change_context__() as _self:
+            _self._do_update(
+                mapping_proxy.MappingProxyType(inserts),
+                mapping_proxy.MappingProxyType(deletes),
+                mapping_proxy.MappingProxyType(updates_old),
+                mapping_proxy.MappingProxyType(updates_new),
+                mapping_proxy.MappingProxyType(updates_and_inserts),
+                mapping_proxy.MappingProxyType(all_updates),
+            )
+            return _self
 
 
 US = TypeVar("US", bound=UserStructure)  # user structure self type
@@ -711,6 +716,7 @@ class ImmutableStructure(Structure, BaseImmutableStructure):
 
     __slots__ = ()
 
+    @final
     def _hash(self):
         # type: () -> int
         """

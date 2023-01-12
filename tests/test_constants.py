@@ -1,13 +1,6 @@
 import pytest
 
-from estruttura.constants import (
-    DEFAULT,
-    DELETED,
-    MISSING,
-    DefaultType,
-    DeletedType,
-    MissingType,
-)
+from estruttura.constants import DEFAULT, DELETED, MISSING, DefaultType, DeletedType, MissingType
 
 
 def test_inheritance():

@@ -20,13 +20,7 @@ from tippo import (
 )
 
 from .constants import BASIC_TYPES, MISSING
-from .exceptions import (
-    ConversionError,
-    InvalidTypeError,
-    ProcessingError,
-    SerializationError,
-    ValidationError,
-)
+from .exceptions import ConversionError, InvalidTypeError, ProcessingError, SerializationError, ValidationError
 
 T = TypeVar("T")
 

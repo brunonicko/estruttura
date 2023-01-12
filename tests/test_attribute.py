@@ -1,12 +1,7 @@
 import pytest
 from basicco import SlottedBase
 
-from estruttura._attribute import (
-    Attribute,
-    AttributeMap,
-    MutableAttribute,
-    get_global_attribute_count,
-)
+from estruttura._attribute import Attribute, AttributeMap, MutableAttribute, get_global_attribute_count
 from estruttura._relationship import Relationship
 
 

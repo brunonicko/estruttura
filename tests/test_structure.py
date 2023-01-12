@@ -4,6 +4,122 @@ from estruttura._attribute import Attribute, MutableAttribute, getter
 from estruttura.examples import ImmutableClass, MutableClass
 
 
+def test_post_methods():
+    inits = []
+    deserializes = []
+
+    class A(MutableClass):
+        def __post_init__(self):
+            inits.append(True)
+
+        def __post_deserialize__(self):
+            deserializes.append(True)
+
+    A()
+    assert inits
+
+    A.deserialize({})
+    assert deserializes
+
+
+def test_immutable_post_methods():
+    inits = []
+    deserializes = []
+    changes = []
+
+    class A(ImmutableClass):
+        def __post_init__(self):
+            inits.append(True)
+
+        def __post_deserialize__(self):
+            deserializes.append(True)
+
+        def __post_change__(self):
+            changes.append(True)
+
+    A()
+    assert inits
+
+    a = A.deserialize({})
+    assert deserializes
+
+    a = a.update()
+    assert changes
+
+
+def test_attributes():
+    class A(MutableClass):
+        a = MutableAttribute()
+
+    assert dict(A.__attribute_map__) == dict(A.attributes) == {"a": A.a}  # noqa
+
+    class B(A):
+        b = MutableAttribute()
+
+    assert dict(B.__attribute_map__) == dict(B.attributes) == {"a": A.a, "b": B.b}  # noqa
+
+    class C(B):
+        c = MutableAttribute()
+
+    assert dict(C.__attribute_map__) == dict(C.attributes) == {"a": A.a, "b": B.b, "c": C.c}  # noqa
+
+    class AA(MutableClass):
+        aa = MutableAttribute()
+
+    assert dict(AA.__attribute_map__) == dict(AA.attributes) == {"aa": AA.aa}  # noqa
+
+    class BB(AA, C):
+        bb = MutableAttribute()
+
+    assert (
+        dict(BB.__attribute_map__)
+        == dict(BB.attributes)  # noqa
+        == {"aa": AA.aa, "bb": BB.bb, "a": A.a, "b": B.b, "c": C.c}
+    )
+
+    assert ImmutableClass.__attribute_type__ is Attribute
+    assert MutableClass.__attribute_type__ is MutableAttribute
+
+
+def test_attributes_override():
+    class A(MutableClass):
+        a = MutableAttribute()
+
+    assert dict(A.__attribute_map__) == dict(A.attributes) == {"a": A.a}  # noqa
+
+    with pytest.raises(TypeError):
+
+        class B(A):  # noqa
+            a = None
+
+    class MyAttribute(MutableAttribute):
+        pass
+
+    class C(MutableClass):
+        __attribute_type__ = MyAttribute
+        c = MyAttribute()
+
+    assert dict(C.__attribute_map__) == dict(C.attributes) == {"c": C.c}  # noqa
+
+    class D(C):
+        d = MyAttribute()
+
+    assert dict(D.__attribute_map__) == dict(D.attributes) == {"c": C.c, "d": D.d}  # noqa
+
+    with pytest.raises(TypeError):
+
+        class E(D):  # noqa
+            e = MutableAttribute()
+
+    class X(MutableClass):
+        a = MutableAttribute()
+
+    with pytest.raises(TypeError):
+
+        class Y(X):  # noqa
+            __attribute_type__ = MyAttribute
+
+
 def test_init():
     class Point(MutableClass):
         x = MutableAttribute()

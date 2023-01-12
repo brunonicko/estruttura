@@ -1,10 +1,12 @@
+import contextlib
+
 import basicco
 import six
 import slotted
 from basicco import recursive_repr, safe_repr
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import Any, Type, TypeVar
+from tippo import Any, Iterator, Type, TypeVar
 
 from ._relationship import Relationship
 from .constants import MISSING, MissingType
@@ -67,6 +69,36 @@ class BaseStructure(six.with_metaclass(BaseStructureMeta, basicco.SlottedBase)):
         :return: String representation.
         """
         return self._str()
+
+    @contextlib.contextmanager
+    @abstract
+    def __change_context__(self):
+        # type: (BS) -> Iterator[BS]
+        raise NotImplementedError()
+
+    def __post_init__(self):
+        # type: () -> None
+        """
+        Called after initialization.
+        The default implementation does nothing.
+        """
+        pass
+
+    def __post_deserialize__(self):
+        # type: () -> None
+        """
+        Called after deserialization.
+        The default implementation calls `__post_init__`.
+        """
+        self.__post_init__()
+
+    def __post_change__(self):
+        # type: () -> None
+        """
+        Called after change.
+        The default implementation does nothing.
+        """
+        pass
 
     @abstract
     def _eq(self, other):
@@ -145,7 +177,51 @@ class BaseImmutableStructure(BaseStructure, slotted.SlottedHashable):
     @final
     def __hash__(self):
         # type: () -> int
-        return self._hash()
+        hash_ = self.__retrieve_hash__()
+        if hash_ is None:
+            hash_ = self._hash()
+            assert hash_ is not None
+            self.__cache_hash__(hash_)
+            hash_ = self.__retrieve_hash__()
+            assert hash_ is not None, "hash was not cached properly"
+        return hash_
+
+    @abstract
+    def __cache_hash__(self, hash_):
+        # type: (int | None) -> None
+        """
+        Cache hash.
+
+        :param hash_: Calculated hash (to be cached) or None (to clear the cache).
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def __retrieve_hash__(self):
+        # type: () -> int | None
+        """
+        Retrieve cached hash.
+
+        :return: Cached hash or None.
+        """
+        raise NotImplementedError()
+
+    @contextlib.contextmanager
+    @final
+    def __change_context__(self):
+        # type: (BIS) -> Iterator[BIS]
+        _self = self._do_copy()
+        _self.__cache_hash__(None)
+        yield _self
+        _self.__post_change__()
+
+    def __post_change__(self):
+        # type: () -> None
+        """
+        Called after change.
+        The default implementation calls `__post_init__`.
+        """
+        self.__post_init__()
 
     @abstract
     def _hash(self):
@@ -154,6 +230,17 @@ class BaseImmutableStructure(BaseStructure, slotted.SlottedHashable):
         Get hash.
 
         :return: Hash.
+        """
+        raise NotImplementedError()
+
+    @abstract
+    def _do_copy(self):
+        # type: (BIS) -> BIS
+        """
+        Perform a shallow copy prior to internal mutation.
+        The result is passed to the respective `_do_...` methods for mutation.
+
+        :return: Shallow copy.
         """
         raise NotImplementedError()
 
@@ -181,6 +268,13 @@ class BaseMutableStructure(BaseStructure):
     def __hash__(self):
         error = "{!r} object is not hashable".format(type(self).__name__)
         raise TypeError(error)
+
+    @contextlib.contextmanager
+    @final
+    def __change_context__(self):
+        # type: (BMS) -> Iterator[BMS]
+        yield self
+        self.__post_change__()
 
 
 # Add descriptor that forces final 'None' hash.
@@ -236,12 +330,8 @@ class BaseUserCollectionStructure(BaseCollectionStructure[T_co], BaseUserStructu
 
     @abstract
     def _do_clear(self):
-        # type: (BUCS) -> BUCS
-        """
-        Clear (internal).
-
-        :return: Transformed (immutable) or self (mutable).
-        """
+        # type: () -> None
+        """Clear (internal)."""
         raise NotImplementedError()
 
     @final
@@ -252,7 +342,9 @@ class BaseUserCollectionStructure(BaseCollectionStructure[T_co], BaseUserStructu
 
         :return: Transformed (immutable) or self (mutable).
         """
-        return self._do_clear()
+        with self.__change_context__() as _self:
+            _self._do_clear()
+            return _self
 
 
 BUCS = TypeVar("BUCS", bound=BaseUserCollectionStructure)  # base user collection structure self type

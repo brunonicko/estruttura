@@ -1,11 +1,6 @@
 import pytest
 
-from estruttura.exceptions import (
-    ConversionError,
-    InvalidTypeError,
-    ProcessingError,
-    ValidationError,
-)
+from estruttura.exceptions import ConversionError, InvalidTypeError, ProcessingError, ValidationError
 
 
 def test_inheritance():

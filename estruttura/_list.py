@@ -40,6 +40,7 @@ class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
         else:
             initial_values = tuple(initial)
         self._do_init(initial_values)
+        self.__post_init__()
 
     @overload
     def __getitem__(self, item):
@@ -60,6 +61,22 @@ class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
         :return: Value/values.
         """
         raise NotImplementedError()
+
+    @final
+    def _eq(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        if other is self:
+            return True
+        elif isinstance(other, list):
+            return list(self) == other
+        else:
+            return isinstance(other, type(self)) and type(self) is type(other) and list(self) == list(other)
 
     def _repr(self):
         # type: () -> str
@@ -114,7 +131,9 @@ class ListStructure(BaseCollectionStructure[T], slotted.SlottedSequence[T]):
         :raises SerializationError: Error while deserializing.
         """
         values = tuple(cls.relationship.deserialize_value(s) for s in serialized)
-        return cls._do_deserialize(values)
+        self = cls._do_deserialize(values)
+        self.__post_deserialize__()
+        return self
 
     @abstract
     def count(self, value):
@@ -245,13 +264,12 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
 
     @abstract
     def _do_insert(self, index, new_values):
-        # type: (ULS, int, tuple[T, ...]) -> ULS
+        # type: (int, tuple[T, ...]) -> None
         """
         Insert value(s) at index (internal).
 
         :param index: Index.
         :param new_values: New values.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -275,11 +293,13 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
                 exc = type(e)(e)
                 six.raise_from(exc, None)
                 raise exc
-        return self._do_insert(index, values)
+        with self.__change_context__() as _self:
+            _self._do_insert(index, values)
+            return _self
 
     @abstract
     def _do_move(self, target_index, index, stop, post_index, post_stop, values):
-        # type: (ULS, int, int, int, int, int, tuple[T, ...]) -> ULS
+        # type: (int, int, int, int, int, tuple[T, ...]) -> None
         """
         Move values internally (internal).
 
@@ -289,7 +309,6 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
         :param post_index: Post index (post-move).
         :param post_index: Post stop (post-move).
         :param values: Values being moved.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -308,18 +327,19 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
             return self
         target_index, index, stop, post_index, post_stop = result
         values = tuple(self[index:stop])
-        return self._do_move(target_index, index, stop, post_index, post_stop, values)
+        with self.__change_context__() as _self:
+            _self._do_move(target_index, index, stop, post_index, post_stop, values)
+            return _self
 
     @abstract
     def _do_delete(self, index, stop, old_values):
-        # type: (ULS, int, int, tuple[T, ...]) -> ULS
+        # type: (int, int, tuple[T, ...]) -> None
         """
         Delete values at index/slice (internal).
 
         :param index: Index.
         :param index: Stop.
         :param old_values: Values being deleted.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -344,7 +364,9 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
         if not values:
             return self
 
-        return self._do_delete(index, stop, values)
+        with self.__change_context__() as _self:
+            _self._do_delete(index, stop, values)
+            return _self
 
     @final
     def _set(self, index, value):
@@ -362,7 +384,7 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
 
     @abstract
     def _do_update(self, index, stop, old_values, new_values):
-        # type: (ULS, int, int, tuple[T, ...], tuple[T, ...]) -> ULS
+        # type: (int, int, tuple[T, ...], tuple[T, ...]) -> None
         """
         Update value(s) (internal).
 
@@ -370,7 +392,6 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
         :param stop: Stop.
         :param old_values: Old values.
         :param new_values: New values.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -422,7 +443,9 @@ class UserListStructure(ListStructure[T], BaseUserCollectionStructure[T]):
                 six.raise_from(exc, None)
                 raise exc
 
-        return self._do_update(index, stop, old_values, new_values)
+        with self.__change_context__() as _self:
+            _self._do_update(index, stop, old_values, new_values)
+            return _self
 
 
 ULS = TypeVar("ULS", bound=UserListStructure)  # user list structure self type
@@ -433,6 +456,16 @@ class ImmutableListStructure(ListStructure[T], BaseImmutableCollectionStructure[
     """Immutable list structure."""
 
     __slots__ = ()
+
+    @final
+    def _hash(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
+        return hash(tuple(self))
 
 
 ILS = TypeVar("ILS", bound=ImmutableListStructure)  # immutable list structure self type

@@ -31,15 +31,7 @@ from ._dict import (
     UserImmutableDictStructure,
     UserMutableDictStructure,
 )
-from ._helpers import (
-    attribute,
-    dict_attribute,
-    dict_cls,
-    list_attribute,
-    list_cls,
-    set_attribute,
-    set_cls,
-)
+from ._helpers import attribute, dict_attribute, dict_cls, list_attribute, list_cls, set_attribute, set_cls
 from ._list import (
     ImmutableListStructure,
     ListStructure,

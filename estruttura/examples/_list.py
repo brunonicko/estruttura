@@ -21,12 +21,6 @@ class BaseList(estruttura.UserListStructure[T]):
     def __len__(self):
         return len(self._internal)
 
-    def _eq(self, other):
-        if isinstance(other, list):
-            return self._internal == other
-        else:
-            return isinstance(other, type(self)) and self._internal == other._internal
-
     def _do_init(self, initial_values):
         self._internal = list(initial_values)
 
@@ -61,40 +55,43 @@ class BaseList(estruttura.UserListStructure[T]):
 class ImmutableList(BaseList[T], estruttura.UserImmutableListStructure[T]):
     """Immutable list."""
 
-    def _hash(self):
-        return hash(tuple(self._internal))
+    __slots__ = ("__hash",)
+
+    def __cache_hash__(self, hash_):
+        self.__hash = hash_
+
+    def __retrieve_hash__(self):
+        try:
+            return self.__hash
+        except AttributeError:
+            return None
+
+    def _do_copy(self):
+        return copy.copy(self)
 
     def _do_clear(self):
-        return type(self)()
+        self._internal = []
 
     def _do_insert(self, index, new_values):
         new_internal = list(self._internal)
         new_internal[index:index] = new_values
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
     def _do_move(self, target_index, index, stop, post_index, post_stop, values):
         new_internal = list(self._internal)
         del new_internal[index:stop]
         new_internal[post_index:post_index] = values
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
     def _do_delete(self, index, stop, old_values):
         new_internal = list(self._internal)
         del new_internal[index:stop]
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
     def _do_update(self, index, stop, old_values, new_values):
         new_internal = list(self._internal)
         new_internal[index:stop] = new_values
-        new_self = copy.copy(self)
-        new_self._internal = new_internal
-        return new_self
+        self._internal = new_internal
 
 
 class MutableList(BaseList[T], estruttura.UserMutableListStructure[T]):
@@ -102,21 +99,16 @@ class MutableList(BaseList[T], estruttura.UserMutableListStructure[T]):
 
     def _do_clear(self):
         self._internal.clear()
-        return self
 
     def _do_insert(self, index, new_values):
         self._internal[index:index] = new_values
-        return self
 
     def _do_move(self, target_index, index, stop, post_index, post_stop, values):
         del self._internal[index:stop]
         self._internal[post_index:post_index] = values
-        return self
 
     def _do_delete(self, index, stop, old_values):
         del self._internal[index:stop]
-        return self
 
     def _do_update(self, index, stop, old_values, new_values):
         self._internal[index:stop] = new_values
-        return self

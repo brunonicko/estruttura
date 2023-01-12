@@ -2,15 +2,7 @@ import pytest
 
 from estruttura._attribute import Attribute
 from estruttura._dict import DictStructure
-from estruttura._helpers import (
-    attribute,
-    dict_attribute,
-    dict_cls,
-    list_attribute,
-    list_cls,
-    set_attribute,
-    set_cls,
-)
+from estruttura._helpers import attribute, dict_attribute, dict_cls, list_attribute, list_cls, set_attribute, set_cls
 from estruttura._list import ListStructure
 from estruttura._relationship import Relationship
 from estruttura._set import SetStructure

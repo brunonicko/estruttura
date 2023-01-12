@@ -2,18 +2,10 @@
 
 import six
 import slotted
-from basicco import custom_repr, mapping_proxy
+from basicco import custom_repr, hash_cache_wrapper, mapping_proxy
 from basicco.abstract_class import abstract
 from basicco.runtime_final import final
-from tippo import (
-    Any,
-    Iterable,
-    Mapping,
-    SupportsKeysAndGetItem,
-    Type,
-    TypeVar,
-    overload,
-)
+from tippo import Any, Iterable, Mapping, SupportsKeysAndGetItem, Type, TypeVar, overload
 
 from ._bases import (
     BaseCollectionStructure,
@@ -66,9 +58,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         pass
 
     def __init__(self, *args, **kwargs):
-        """
-        Same parameters as :class:`dict`.
-        """
+        """Same parameters as :class:`dict`."""
         initial_values = dict(*args, **kwargs)
         if self.relationship.will_process or self.value_relationship.will_process:
             try:
@@ -84,6 +74,7 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
                 six.raise_from(exc, None)
                 raise exc
         self._do_init(mapping_proxy.MappingProxyType(initial_values))
+        self.__post_init__()
 
     @abstract
     def __getitem__(self, key):
@@ -96,6 +87,22 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
         :raises KeyError: Key is not present.
         """
         raise NotImplementedError()
+
+    @final
+    def _eq(self, other):
+        # type: (object) -> bool
+        """
+        Compare for equality.
+
+        :param other: Another object.
+        :return: True if equal.
+        """
+        if other is self:
+            return True
+        elif isinstance(other, dict):
+            return dict(self) == other
+        else:
+            return isinstance(other, type(self)) and type(self) is type(other) and dict(self) == dict(other)
 
     def _repr(self):
         # type: () -> str
@@ -156,7 +163,9 @@ class DictStructure(BaseCollectionStructure[KT], slotted.SlottedMapping[KT, VT])
             (cls.relationship.deserialize_value(k), cls.value_relationship.deserialize_value(v))
             for k, v in six.iteritems(serialized)
         )
-        return cls._do_deserialize(mapping_proxy.MappingProxyType(values))
+        self = cls._do_deserialize(mapping_proxy.MappingProxyType(values))
+        self.__post_deserialize__()
+        return self
 
 
 DS = TypeVar("DS", bound=DictStructure)  # dictionary structure self type
@@ -208,7 +217,7 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
 
     @abstract
     def _do_update(
-        self,  # type: UDS
+        self,
         inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
         deletes,  # type: mapping_proxy.MappingProxyType[KT, VT]
         updates_old,  # type: mapping_proxy.MappingProxyType[KT, VT]
@@ -216,7 +225,7 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
         updates_and_inserts,  # type: mapping_proxy.MappingProxyType[KT, VT]
         all_updates,  # type: mapping_proxy.MappingProxyType[KT, VT | DeletedType]
     ):
-        # type: (...) -> UDS
+        # type: (...) -> None
         """
         Update keys and values (internal).
 
@@ -225,7 +234,6 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
         :param updates_old: Keys and values being updated (old values).
         :param updates_new: Keys and values being updated (new values).
         :param updates_and_inserts: Keys and values being updated or inserted.
-        :return: Transformed (immutable) or self (mutable).
         """
         raise NotImplementedError()
 
@@ -286,14 +294,16 @@ class UserDictStructure(DictStructure[KT, VT], BaseUserCollectionStructure[KT]):
             else:
                 inserts[key] = value
 
-        return self._do_update(
-            mapping_proxy.MappingProxyType(inserts),
-            mapping_proxy.MappingProxyType(deletes),
-            mapping_proxy.MappingProxyType(updates_old),
-            mapping_proxy.MappingProxyType(updates_new),
-            mapping_proxy.MappingProxyType(updates_and_inserts),
-            mapping_proxy.MappingProxyType(all_updates),
-        )
+        with self.__change_context__() as _self:
+            _self._do_update(
+                mapping_proxy.MappingProxyType(inserts),
+                mapping_proxy.MappingProxyType(deletes),
+                mapping_proxy.MappingProxyType(updates_old),
+                mapping_proxy.MappingProxyType(updates_new),
+                mapping_proxy.MappingProxyType(updates_and_inserts),
+                mapping_proxy.MappingProxyType(all_updates),
+            )
+            return _self
 
 
 UDS = TypeVar("UDS", bound=UserDictStructure)  # user dictionary structure self type
@@ -304,6 +314,16 @@ class ImmutableDictStructure(DictStructure[KT, VT], BaseImmutableCollectionStruc
     """Immutable dictionary structure."""
 
     __slots__ = ()
+
+    @final
+    def _hash(self):
+        # type: () -> int
+        """
+        Get hash.
+
+        :return: Hash.
+        """
+        return hash(frozenset(self.items()))
 
 
 IDS = TypeVar("IDS", bound=ImmutableDictStructure)  # immutable dictionary structure self type

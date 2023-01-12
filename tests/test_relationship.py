@@ -2,12 +2,7 @@ import pytest
 from basicco.type_checking import import_types
 
 from estruttura._relationship import Relationship, Serializer, TypedSerializer
-from estruttura.exceptions import (
-    ConversionError,
-    InvalidTypeError,
-    SerializationError,
-    ValidationError,
-)
+from estruttura.exceptions import ConversionError, InvalidTypeError, SerializationError, ValidationError
 
 
 def test_validator():

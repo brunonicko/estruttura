@@ -1,5 +1,5 @@
-tippo>=3.9,<4
-basicco>=8.13,<9
-slotted>=4.3,<5
-six
+basicco>=10,<11
 pyrsistent>=0,<1
+six
+slotted>=5.1,<6
+tippo>=4,<5

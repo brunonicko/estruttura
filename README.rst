@@ -5,8 +5,15 @@
      <a href="https://github.com/brunonicko/estruttura">
          <picture>
             <object data="./_static/estruttura.svg" type="image/png">
-                <source srcset="./docs/source/_static/estruttura_white.svg" media="(prefers-color-scheme: dark)">
-                <img src="./docs/source/_static/estruttura.svg" width="60%" alt="estruttura" />
+                <source
+                    srcset="./docs/source/_static/estruttura_white.svg"
+                    media="(prefers-color-scheme: dark)"
+                />
+                <img
+                    src="./docs/source/_static/estruttura.svg"
+                    width="60%"
+                    alt="estruttura"
+                />
             </object>
          </picture>
      </a>

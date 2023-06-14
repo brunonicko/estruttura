@@ -7,13 +7,13 @@ PATHS = "estruttura setup.py tasks.py docs/source/conf.py tests"
 
 @task
 def conform(c):
-    c.run("isort {} -m 3 -l 88 --up --tc --lbt 0".format(PATHS))
+    c.run("isort {} -m 9 -l 88 --up --tc --lbt 0".format(PATHS))
     c.run("black {}".format(PATHS))
 
 
 @task
 def lint(c):
-    c.run("isort {} -m 3 -l 88 --up --tc --lbt 0 --check-only".format(PATHS))
+    c.run("isort {} -m 9 -l 88 --up --tc --lbt 0 --check-only".format(PATHS))
     c.run("black {} --check".format(PATHS))
     c.run(
         "flake8 {} --count --select=E9,F63,F7,F82 --max-line-length 88 --show-source "

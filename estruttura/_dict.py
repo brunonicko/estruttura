@@ -71,7 +71,9 @@ class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
         if not isinstance(other, Mapping):
             return False
         if type(self) is not type(other):
-            return not isinstance(other, Hashable) and dict(self) == dict(other)  # noqa
+            return (
+                not isinstance(self, Hashable) or not isinstance(other, Hashable)
+            ) and dict(self) == dict(other)
         return dict(self) == dict(other)  # noqa
 
     @abstract
@@ -88,7 +90,7 @@ class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
 
     @abstract
     def __or__(self, other):
-        # type: (Mapping[Any, Any]) -> Mapping[Any, Any]
+        # type: (Mapping[KT, VT]) -> Mapping[KT, VT]
         """
         Merge: (self | other).
 
@@ -163,8 +165,9 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
         """
         return hash(frozenset(self.items()))
 
+    @abstract
     def __or__(self, other):
-        # type: (Mapping[Any, Any]) -> Self
+        # type: (Mapping[KT, VT]) -> Self
         """
         Merge: (self | other).
 
@@ -261,7 +264,7 @@ class MutableDictStructure(
     __hash__ = None  # type: ignore
 
     def __ior__(self, other):
-        # type: (Mapping[Any, Any]) -> Self
+        # type: (Mapping[KT, VT]) -> Self
         """
         Merge in-place: (self |= other).
 
@@ -322,7 +325,6 @@ class MutableDictStructure(
         Discard key(s).
 
         :param: Key(s).
-        :return: Transformed.
         """
         raise NotImplementedError()
 

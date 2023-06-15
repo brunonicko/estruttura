@@ -56,7 +56,9 @@ class SetStructure(CollectionStructure[T], SlottedSet[T]):
         if not isinstance(other, AbstractSet):
             return False
         if type(self) is not type(other):
-            return not isinstance(other, Hashable) and set(self) == set(other)  # noqa
+            return (
+                not isinstance(self, Hashable) or not isinstance(other, Hashable)
+            ) and set(self) == set(other)
         return set(self) == set(other)  # noqa
 
     def __le__(self, other):

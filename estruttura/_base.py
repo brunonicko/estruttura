@@ -7,6 +7,8 @@ __all__ = [
     "ImmutableStructure",
     "MutableStructure",
     "CollectionStructure",
+    "ImmutableCollectionStructure",
+    "MutableCollectionStructure",
 ]
 
 

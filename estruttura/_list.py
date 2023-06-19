@@ -3,8 +3,8 @@ from basicco.custom_repr import iterable_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMutableSequence, SlottedSequence
-from tippo import Any, Callable, Hashable, Iterable, Self, Sequence, TypeVar, Union
-from tippo import MutableSequence, overload
+from tippo import Any, Callable, Hashable, Iterable, MutableSequence, Self, Sequence
+from tippo import TypeVar, Union, overload
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
 from ._base import MutableCollectionStructure

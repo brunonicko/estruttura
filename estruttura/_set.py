@@ -3,8 +3,7 @@ from basicco.custom_repr import iterable_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMutableSet, SlottedSet
-from tippo import AbstractSet, Any, Callable, Hashable, Iterable, Self, TypeVar, Union
-from tippo import overload
+from tippo import AbstractSet, Any, Hashable, Iterable, Self, TypeVar
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
 from ._base import MutableCollectionStructure
@@ -32,7 +31,7 @@ class SetStructure(CollectionStructure[T], SlottedSet[T]):
         return iterable_repr(
             self,
             prefix="{}({{".format(type(self).__name__),
-            suffix="}})",
+            suffix="})",
         )
 
     @abstract
@@ -312,25 +311,39 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
         raise NotImplementedError()
 
     @abstract
-    def discard(self, *values):
+    def discard(self, *value):
         # type: (*T) -> Self
         """
         Discard value(s).
 
-        :param values: Value(s).
+        :param value: Value(s).
         :return: Transformed.
         """
         raise NotImplementedError()
 
-    def add(self, value):
-        # type: (T) -> Self
+    def add(self, *value):
+        # type: (*T) -> Self
         """
-        Add value.
+        Add value(s).
 
-        :param value: Value.
+        :param value: Value(s).
         :return: Transformed.
         """
-        return self.update((value,))
+        return self.update(value)
+
+    def remove(self, *value):
+        # type: (*T) -> Self
+        """
+        Remove value(s).
+
+        :param value: Value(s).
+        :return: Transformed.
+        :raises KeyError: Value is not present.
+        """
+        for v in value:
+            if v not in self:
+                raise KeyError(v)
+        return self.discard(*value)
 
 
 class MutableSetStructure(
@@ -400,14 +413,36 @@ class MutableSetStructure(
         raise NotImplementedError()
 
     @abstract
-    def discard(self, *values):
+    def discard(self, *value):
         # type: (*T) -> None
         """
         Discard value(s).
 
-        :param values: Value(s).
+        :param value: Value(s).
         """
         raise NotImplementedError()
+
+    def add(self, *value):
+        # type: (*T) -> None
+        """
+        Add value(s).
+
+        :param value: Value(s).
+        """
+        self.update(value)
+
+    def remove(self, *value):
+        # type: (*T) -> None
+        """
+        Remove value(s).
+
+        :param value: Value(s).
+        :raises KeyError: Value is not present.
+        """
+        for v in value:
+            if v not in self:
+                raise KeyError(v)
+        return self.discard(*value)
 
     def pop(self):
         # type: () -> T

@@ -3,8 +3,8 @@ from basicco.custom_repr import mapping_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMapping, SlottedMutableMapping
-from tippo import Any, Hashable, Iterable, Mapping, Self, SupportsKeysAndGetItem, Tuple
-from tippo import TypeVar, overload, ItemsView, KeysView, ValuesView, Union
+from tippo import Any, Hashable, ItemsView, Iterable, KeysView, Mapping, Self
+from tippo import SupportsKeysAndGetItem, Tuple, TypeVar, Union, ValuesView, overload
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
 from ._base import MutableCollectionStructure
@@ -237,20 +237,6 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
         :return: Transformed.
         """
         return self.update({key: value})
-
-    def setdefault(self, key, value):
-        # type: (KT, VT) -> Self
-        """
-        Set value for key if it's not present.
-
-        :param key: Key.
-        :param value: Value.
-        :return: Transformed.
-        """
-        if key in self:
-            return self
-        else:
-            return self.set(key, value)
 
 
 class MutableDictStructure(

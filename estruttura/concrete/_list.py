@@ -1,16 +1,6 @@
 import pyrsistent
-from tippo import (
-    Any,
-    Iterable,
-    List,
-    Self,
-    Type,
-    TypeVar,
-    Union,
-    Iterator,
-    Sequence,
-    overload,
-)
+from tippo import Any, Iterable, Iterator, List, Self, Sequence, Type, TypeVar, Union
+from tippo import cast, overload
 
 from .._list import ImmutableListStructure, MutableListStructure
 from ..utils import pre_move, resolve_continuous_slice, resolve_index
@@ -35,7 +25,7 @@ class ImmutableList(ImmutableListStructure[T]):
         :param initial: Initial values.
         """
         if type(initial) is _PVector:
-            self.__pvector = initial
+            self.__pvector = cast("pyrsistent.PVector[T]", initial)
         else:
             self.__pvector = pyrsistent.pvector(initial)
 
@@ -228,22 +218,22 @@ class MutableList(MutableListStructure[T]):
         """
         self.__list = list(initial)  # type: List[T]
 
-    def __contains__(self, content):
+    def __contains__(self, value):
         # type: (object) -> bool
         """
-        Whether has content.
+        Whether has value.
 
-        :param content: Content.
-        :return: True if has content.
+        :param value: Value.
+        :return: True if has value.
         """
-        return content in self.__list
+        return value in self.__list
 
     def __iter__(self):
         # type: () -> Iterator[T]
         """
-        Iterate over content.
+        Iterate over values.
 
-        :return: Content iterator.
+        :return: Value iterator.
         """
         for value in self.__list:
             yield value
@@ -251,9 +241,9 @@ class MutableList(MutableListStructure[T]):
     def __len__(self):
         # type: () -> int
         """
-        Get length.
+        Get value count.
 
-        :return: Length.
+        :return: Value count.
         """
         return len(self.__list)
 

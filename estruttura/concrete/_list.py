@@ -1,5 +1,5 @@
 import pyrsistent
-from tippo import Any, Iterable, Iterator, List, Self, Sequence, Type, TypeVar, Union
+from tippo import Any, Iterable, Iterator, List, Sequence, Type, TypeVar, Union
 from tippo import cast, overload
 
 from .._list import ImmutableListStructure, MutableListStructure
@@ -65,7 +65,7 @@ class ImmutableList(ImmutableListStructure[T]):
 
     @overload
     def __getitem__(self, item):
-        # type: (slice) -> Self
+        # type: (IL, slice) -> IL
         pass
 
     def __getitem__(self, item):
@@ -83,7 +83,7 @@ class ImmutableList(ImmutableListStructure[T]):
             return self.__pvector[item]
 
     def __add__(self, other):
-        # type: (Iterable[T]) -> Self
+        # type: (IL, Iterable[T]) -> IL
         """
         Concatenate: (self + other).
 
@@ -95,7 +95,7 @@ class ImmutableList(ImmutableListStructure[T]):
         return type(self)(self.__pvector.extend(other))
 
     def __mul__(self, times):
-        # type: (int) -> Self
+        # type: (IL, int) -> IL
         """
         Repeat: (self * times).
 
@@ -105,7 +105,7 @@ class ImmutableList(ImmutableListStructure[T]):
         return type(self)(self.__pvector * times)  # type: ignore
 
     def insert(self, index, *value):
-        # type: (int, *T) -> Self
+        # type: (IL, int, *T) -> IL
         """
         Insert value(s) at index.
 
@@ -124,12 +124,12 @@ class ImmutableList(ImmutableListStructure[T]):
 
     @overload
     def set(self, item, value):
-        # type: (int, T) -> Self
+        # type: (IL, int, T) -> IL
         pass
 
     @overload
     def set(self, item, value):
-        # type: (slice, Iterable[T]) -> Self
+        # type: (IL, slice, Iterable[T]) -> IL
         pass
 
     def set(self, item, value):
@@ -151,12 +151,12 @@ class ImmutableList(ImmutableListStructure[T]):
 
     @overload
     def delete(self, item):
-        # type: (int) -> Self
+        # type: (IL, int) -> IL
         pass
 
     @overload
     def delete(self, item):
-        # type: (slice) -> Self
+        # type: (IL, slice) -> IL
         pass
 
     def delete(self, item):
@@ -176,7 +176,7 @@ class ImmutableList(ImmutableListStructure[T]):
         return type(self)(pvector[:start] + pvector[stop:])
 
     def move(self, item, target_index):
-        # type: (Union[int, slice], int) -> Self
+        # type: (IL, Union[int, slice], int) -> IL
         """
         Move value/values from index/slice to a target index.
 
@@ -197,13 +197,16 @@ class ImmutableList(ImmutableListStructure[T]):
         return type(self)(pvector)
 
     def clear(self):
-        # type: () -> Self
+        # type: (IL) -> IL
         """
         Clear contents.
 
         :return: Transformed.
         """
         return type(self)()
+
+
+IL = TypeVar("IL", bound=ImmutableList[Any])
 
 
 class MutableList(MutableListStructure[T]):
@@ -254,7 +257,7 @@ class MutableList(MutableListStructure[T]):
 
     @overload
     def __getitem__(self, item):
-        # type: (slice) -> Self
+        # type: (ML, slice) -> ML
         pass
 
     def __getitem__(self, item):
@@ -364,3 +367,6 @@ class MutableList(MutableListStructure[T]):
         values = self.__list[index:stop]
         del self.__list[index:stop]
         self.__list[post_index:post_index] = values
+
+
+ML = TypeVar("ML", bound=MutableList[Any])

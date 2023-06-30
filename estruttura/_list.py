@@ -3,7 +3,7 @@ from basicco.custom_repr import iterable_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMutableSequence, SlottedSequence
-from tippo import Any, Callable, Hashable, Iterable, MutableSequence, Self, Sequence
+from tippo import Any, Callable, Hashable, Iterable, MutableSequence, Sequence
 from tippo import TypeVar, Union, overload
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
@@ -174,6 +174,9 @@ class ListStructure(CollectionStructure[T], SlottedSequence[T]):
         raise ValueError("{!r} is not in {}".format(value, type(self).__name__))
 
 
+LS = TypeVar("LS", bound=ListStructure[Any])
+
+
 class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
     """Immutable List Structure."""
 
@@ -190,7 +193,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
 
     @abstract
     def __add__(self, other):
-        # type: (Iterable[T]) -> Self
+        # type: (ILS, Iterable[T]) -> ILS
         """
         Concatenate: (self + other).
 
@@ -201,7 +204,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
 
     @abstract
     def insert(self, index, *value):
-        # type: (int, *T) -> Self
+        # type: (ILS, int, *T) -> ILS
         """
         Insert value(s) at index.
 
@@ -213,12 +216,12 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
 
     @overload
     def set(self, item, value):
-        # type: (int, T) -> Self
+        # type: (ILS, int, T) -> ILS
         pass
 
     @overload
     def set(self, item, value):
-        # type: (slice, Iterable[T]) -> Self
+        # type: (ILS, slice, Iterable[T]) -> ILS
         pass
 
     @abstract
@@ -236,12 +239,12 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
 
     @overload
     def delete(self, item):
-        # type: (int) -> Self
+        # type: (ILS, int) -> ILS
         pass
 
     @overload
     def delete(self, item):
-        # type: (slice) -> Self
+        # type: (ILS, slice) -> ILS
         pass
 
     @abstract
@@ -258,7 +261,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
 
     @abstract
     def move(self, item, target_index):
-        # type: (Union[int, slice], int) -> Self
+        # type: (ILS, Union[int, slice], int) -> ILS
         """
         Move value/values from index/slice to a target index.
 
@@ -270,7 +273,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         raise NotImplementedError()
 
     def extend(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (ILS, Iterable[T]) -> ILS
         """
         Extend with iterable.
 
@@ -280,7 +283,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         return self.insert(len(self), *iterable)
 
     def append(self, value):
-        # type: (T) -> Self
+        # type: (ILS, T) -> ILS
         """
         Append value.
 
@@ -290,7 +293,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         return self.insert(len(self), value)
 
     def reverse(self):
-        # type: () -> Self
+        # type: (ILS) -> ILS
         """
         Reverse values.
 
@@ -299,7 +302,7 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         return self.set(slice(0, len(self)), reversed(self))
 
     def sort(self, key=None, reverse=False):
-        # type: (Union[Callable[[T], Any], None], bool) -> Self
+        # type: (ILS, Union[Callable[[T], Any], None], bool) -> ILS
         """
         Sort values.
 
@@ -307,11 +310,11 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         :param reverse: Whether to reverse sorting order.
         :return: Transformed.
         """
-        sorted_values = sorted(self, key=key, reverse=reverse)  # type: ignore
+        sorted_values = sorted(self, key=key, reverse=reverse)
         return self.set(slice(0, len(self)), sorted_values)
 
     def remove(self, value, start=None, stop=None, identity=False):
-        # type: (T, Union[int, None], Union[int, None], bool) -> Self
+        # type: (ILS, T, Union[int, None], Union[int, None], bool) -> ILS
         """
         Remove value.
 
@@ -323,6 +326,9 @@ class ImmutableListStructure(ImmutableCollectionStructure[T], ListStructure[T]):
         :raises ValueError: Value is not present.
         """
         return self.delete(self.index(value, start=start, stop=stop, identity=identity))
+
+
+ILS = TypeVar("ILS", bound=ImmutableListStructure[Any])
 
 
 class MutableListStructure(
@@ -401,7 +407,7 @@ class MutableListStructure(
         self.delete(item)
 
     def __iadd__(self, other):
-        # type: (Iterable[T]) -> Self
+        # type: (MLS, Iterable[T]) -> MLS
         """
         Concatenate in place: (self += other).
 
@@ -412,7 +418,7 @@ class MutableListStructure(
         return self
 
     def __imul__(self, times):
-        # type: (int) -> Self
+        # type: (MLS, int) -> MLS
         """
         Repeat in place: (self *= times).
 
@@ -552,3 +558,6 @@ class MutableListStructure(
         value = self[index]
         self.delete(index)
         return value
+
+
+MLS = TypeVar("MLS", bound=MutableListStructure[Any])

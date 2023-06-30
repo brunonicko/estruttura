@@ -1,5 +1,5 @@
 import pyrsistent
-from tippo import Any, Iterable, Iterator, Self, Set, Type, TypeVar, cast
+from tippo import Any, Iterable, Iterator, Set, Type, TypeVar, cast
 
 from .._set import ImmutableSetStructure, MutableSetStructure
 
@@ -57,7 +57,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return len(self.__pset)
 
     def intersection(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Get intersection.
 
@@ -67,7 +67,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.intersection(iterable))
 
     def symmetric_difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Get symmetric difference.
 
@@ -77,7 +77,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.symmetric_difference(iterable))
 
     def union(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Get union.
 
@@ -87,7 +87,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.union(iterable))
 
     def difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Get difference.
 
@@ -97,7 +97,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.difference(iterable))
 
     def inverse_difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Get an iterable's difference to this.
 
@@ -107,7 +107,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(pyrsistent.pset(iterable).difference(self.__pset))
 
     def update(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (IS, Iterable[T]) -> IS
         """
         Update with iterable.
 
@@ -117,7 +117,7 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.update(iterable))
 
     def discard(self, *value):
-        # type: (*T) -> Self
+        # type: (IS, *T) -> IS
         """
         Discard value(s).
 
@@ -127,13 +127,16 @@ class ImmutableSet(ImmutableSetStructure[T]):
         return type(self)(self.__pset.difference(value))
 
     def clear(self):
-        # type: () -> Self
+        # type: (IS) -> IS
         """
         Clear contents.
 
         :return: Transformed.
         """
         return type(self)()
+
+
+IS = TypeVar("IS", bound=ImmutableSet[Any])
 
 
 class MutableSet(MutableSetStructure[T]):
@@ -178,7 +181,7 @@ class MutableSet(MutableSetStructure[T]):
         return len(self.__set)
 
     def intersection(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (MS, Iterable[T]) -> MS
         """
         Get intersection.
 
@@ -188,7 +191,7 @@ class MutableSet(MutableSetStructure[T]):
         return type(self)(self.__set.intersection(iterable))
 
     def symmetric_difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (MS, Iterable[T]) -> MS
         """
         Get symmetric difference.
 
@@ -198,7 +201,7 @@ class MutableSet(MutableSetStructure[T]):
         return type(self)(self.__set.symmetric_difference(iterable))
 
     def union(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (MS, Iterable[T]) -> MS
         """
         Get union.
 
@@ -208,7 +211,7 @@ class MutableSet(MutableSetStructure[T]):
         return type(self)(self.__set.union(iterable))
 
     def difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (MS, Iterable[T]) -> MS
         """
         Get difference.
 
@@ -218,7 +221,7 @@ class MutableSet(MutableSetStructure[T]):
         return type(self)(self.__set.difference(iterable))
 
     def inverse_difference(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (MS, Iterable[T]) -> MS
         """
         Get an iterable's difference to this.
 
@@ -249,3 +252,6 @@ class MutableSet(MutableSetStructure[T]):
         # type: () -> None
         """Clear contents."""
         self.__set.clear()
+
+
+MS = TypeVar("MS", bound=MutableSet[Any])

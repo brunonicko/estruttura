@@ -1,5 +1,5 @@
 import pyrsistent
-from tippo import Any, Dict, Iterable, Iterator, Mapping, Self, SupportsKeysAndGetItem
+from tippo import Any, Dict, Iterable, Iterator, Mapping, SupportsKeysAndGetItem
 from tippo import Tuple, Type, TypeVar, overload
 
 from .._dict import ImmutableDictStructure, MutableDictStructure
@@ -21,7 +21,7 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
 
     @classmethod
     def fromkeys(cls, keys, value):
-        # type: (Type[Self], Iterable[KT], VT) -> Self
+        # type: (Type[ID], Iterable[KT], VT) -> ID
         """
         Build from keys and a single value.
 
@@ -85,7 +85,7 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
         return self.__pmap[key]
 
     def __or__(self, other):
-        # type: (Mapping[KT, VT]) -> Self
+        # type: (ID, Mapping[KT, VT]) -> ID
         """
         Merge: (self | other).
 
@@ -97,7 +97,7 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
         return type(self)(self.__pmap.update(other))
 
     def clear(self):
-        # type: () -> Self
+        # type: (ID) -> ID
         """
         Clear contents.
 
@@ -106,7 +106,7 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
         return type(self)()
 
     def discard(self, *keys):
-        # type: (*KT) -> Self
+        # type: (ID, *KT) -> ID
         """
         Discard key(s).
 
@@ -121,21 +121,21 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
 
     @overload
     def update(self, mapping, **kwargs):
-        # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> Self
+        # type: (ID, SupportsKeysAndGetItem[KT, VT], **VT) -> ID
         pass
 
     @overload
     def update(self, iterable, **kwargs):
-        # type: (Iterable[Tuple[KT, VT]], **VT) -> Self
+        # type: (ID, Iterable[Tuple[KT, VT]], **VT) -> ID
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (**VT) -> Self
+        # type: (ID, **VT) -> ID
         pass
 
     def update(self, *args, **kwargs):
-        # type: (*Any, **Any) -> Self
+        # type: (ID, *Any, **Any) -> ID
         """
         Update keys and values.
         Same parameters as :meth:`dict.update`.
@@ -151,6 +151,9 @@ class ImmutableDict(ImmutableDictStructure[KT, VT]):
         return type(self)(pmap)
 
 
+ID = TypeVar("ID", bound=ImmutableDict[Any, Any])
+
+
 class MutableDict(MutableDictStructure[KT, VT]):
     """Mutable Dictionary."""
 
@@ -158,7 +161,7 @@ class MutableDict(MutableDictStructure[KT, VT]):
 
     @classmethod
     def fromkeys(cls, keys, value):
-        # type: (Type[Self], Iterable[KT], VT) -> Self
+        # type: (Type[MD], Iterable[KT], VT) -> MD
         """
         Build from keys and a single value.
 
@@ -203,7 +206,7 @@ class MutableDict(MutableDictStructure[KT, VT]):
         return len(self.__dict)
 
     def __or__(self, other):
-        # type: (Mapping[KT, VT]) -> Self
+        # type: (MD, Mapping[KT, VT]) -> MD
         """
         Merge: (self | other).
 
@@ -265,3 +268,6 @@ class MutableDict(MutableDictStructure[KT, VT]):
         for key in keys:
             if key in self.__dict:
                 del self.__dict[key]
+
+
+MD = TypeVar("MD", bound=MutableDict[Any, Any])

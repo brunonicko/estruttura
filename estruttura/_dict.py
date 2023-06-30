@@ -3,7 +3,7 @@ from basicco.custom_repr import mapping_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMapping, SlottedMutableMapping
-from tippo import Any, Hashable, ItemsView, Iterable, KeysView, Mapping, Self
+from tippo import Any, Hashable, ItemsView, Iterable, KeysView, Mapping, Type
 from tippo import SupportsKeysAndGetItem, Tuple, TypeVar, Union, ValuesView, overload
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
@@ -12,9 +12,9 @@ from ._base import MutableCollectionStructure
 __all__ = ["DictStructure", "ImmutableDictStructure", "MutableDictStructure"]
 
 
-T = TypeVar("T")
 KT = TypeVar("KT")
 VT = TypeVar("VT")
+_VT = TypeVar("_VT")
 
 
 class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
@@ -25,7 +25,7 @@ class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
     @classmethod
     @abstract
     def fromkeys(cls, keys, value):
-        # type: (Iterable[KT], VT) -> Self
+        # type: (Type[DS], Iterable[KT], VT) -> DS
         """
         Build from keys and a single value.
 
@@ -106,7 +106,7 @@ class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
 
     @overload
     def get(self, key, default):  # noqa
-        # type: (KT, T) -> Union[VT, T]
+        # type: (KT, _VT) -> Union[VT, _VT]
         pass
 
     def get(self, key, default=None):
@@ -151,6 +151,9 @@ class DictStructure(CollectionStructure[KT], SlottedMapping[KT, VT]):
         return ValuesView(self)
 
 
+DS = TypeVar("DS", bound=DictStructure[Any, Any])
+
+
 class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT, VT]):
     """Immutable Dictionary Structure."""
 
@@ -167,7 +170,7 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
 
     @abstract
     def __or__(self, other):
-        # type: (Mapping[KT, VT]) -> Self
+        # type: (IDS, Mapping[KT, VT]) -> IDS
         """
         Merge: (self | other).
 
@@ -178,22 +181,22 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
 
     @overload
     def update(self, mapping, **kwargs):
-        # type: (SupportsKeysAndGetItem[KT, VT], **VT) -> Self
+        # type: (IDS, SupportsKeysAndGetItem[KT, VT], **VT) -> IDS
         pass
 
     @overload
     def update(self, iterable, **kwargs):
-        # type: (Iterable[Tuple[KT, VT]], **VT) -> Self
+        # type: (IDS, Iterable[Tuple[KT, VT]], **VT) -> IDS
         pass
 
     @overload
     def update(self, **kwargs):
-        # type: (**VT) -> Self
+        # type: (IDS, **VT) -> IDS
         pass
 
     @abstract
     def update(self, *args, **kwargs):
-        # type: (*Any, **Any) -> Self
+        # type: (IDS, *Any, **Any) -> IDS
         """
         Update keys and values.
         Same parameters as :meth:`dict.update`.
@@ -204,7 +207,7 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
 
     @abstract
     def discard(self, *key):
-        # type: (*KT) -> Self
+        # type: (IDS, *KT) -> IDS
         """
         Discard key(s).
 
@@ -214,7 +217,7 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
         raise NotImplementedError()
 
     def remove(self, *key):
-        # type: (*KT) -> Self
+        # type: (IDS, *KT) -> IDS
         """
         Remove key(s).
 
@@ -228,7 +231,7 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
         return self.discard(*key)
 
     def set(self, key, value):
-        # type: (KT, VT) -> Self
+        # type: (IDS, KT, VT) -> IDS
         """
         Set value for key.
 
@@ -237,6 +240,9 @@ class ImmutableDictStructure(ImmutableCollectionStructure[KT], DictStructure[KT,
         :return: Transformed.
         """
         return self.update({key: value})
+
+
+IDS = TypeVar("IDS", bound=ImmutableDictStructure[Any, Any])
 
 
 class MutableDictStructure(
@@ -250,7 +256,7 @@ class MutableDictStructure(
     __hash__ = None  # type: ignore
 
     def __ior__(self, other):
-        # type: (Mapping[KT, VT]) -> Self
+        # type: (MDS, Mapping[KT, VT]) -> MDS
         """
         Merge in-place: (self |= other).
 
@@ -343,11 +349,14 @@ class MutableDictStructure(
         Set value for key if it's not present.
 
         :param key: Key.
-        :param value: Value.
-        :return: Self.
+        :param value: Default value.
+        :return: Value or default value.
         """
         try:
             return self[key]
         except KeyError:
             self[key] = value
             return value
+
+
+MDS = TypeVar("MDS", bound=MutableDictStructure[Any, Any])

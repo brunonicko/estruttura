@@ -3,7 +3,7 @@ from basicco.custom_repr import iterable_repr
 from basicco.recursive_repr import recursive_repr
 from basicco.safe_repr import safe_repr
 from slotted import SlottedMutableSet, SlottedSet
-from tippo import AbstractSet, Any, Hashable, Iterable, Self, TypeVar
+from tippo import AbstractSet, Any, Hashable, Iterable, TypeVar
 
 from ._base import CollectionStructure, ImmutableCollectionStructure
 from ._base import MutableCollectionStructure
@@ -292,6 +292,9 @@ class SetStructure(CollectionStructure[T], SlottedSet[T]):
         raise NotImplementedError()
 
 
+SS = TypeVar("SS", bound=SetStructure[Any])
+
+
 class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
     __slots__ = ()
 
@@ -301,7 +304,7 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
 
     @abstract
     def update(self, iterable):
-        # type: (Iterable[T]) -> Self
+        # type: (ISS, Iterable[T]) -> ISS
         """
         Update with iterable.
 
@@ -312,7 +315,7 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
 
     @abstract
     def discard(self, *value):
-        # type: (*T) -> Self
+        # type: (ISS, *T) -> ISS
         """
         Discard value(s).
 
@@ -322,7 +325,7 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
         raise NotImplementedError()
 
     def add(self, *value):
-        # type: (*T) -> Self
+        # type: (ISS, *T) -> ISS
         """
         Add value(s).
 
@@ -332,7 +335,7 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
         return self.update(value)
 
     def remove(self, *value):
-        # type: (*T) -> Self
+        # type: (ISS, *T) -> ISS
         """
         Remove value(s).
 
@@ -346,6 +349,9 @@ class ImmutableSetStructure(ImmutableCollectionStructure[T], SetStructure[T]):
         return self.discard(*value)
 
 
+ISS = TypeVar("ISS", bound=ImmutableSetStructure[Any])
+
+
 class MutableSetStructure(
     MutableCollectionStructure[T],
     SetStructure[T],
@@ -356,7 +362,7 @@ class MutableSetStructure(
     __hash__ = None  # type: ignore
 
     def __iand__(self, iterable):
-        # type: (Iterable[Any]) -> Self
+        # type: (MSS, Iterable[Any]) -> MSS
         """
         Intersect in place: `self &= iterable`.
 
@@ -367,7 +373,7 @@ class MutableSetStructure(
         return self
 
     def __isub__(self, iterable):
-        # type: (Iterable[Any]) -> Self
+        # type: (MSS, Iterable[Any]) -> MSS
         """
         Difference in place: `self -= iterable`.
 
@@ -378,7 +384,7 @@ class MutableSetStructure(
         return self
 
     def __ior__(self, iterable):
-        # type: (Iterable[Any]) -> Self
+        # type: (MSS, Iterable[Any]) -> MSS
         """
         Update in place: `self |= iterable`.
 
@@ -389,7 +395,7 @@ class MutableSetStructure(
         return self
 
     def __ixor__(self, iterable):
-        # type: (Iterable[Any]) -> Self
+        # type: (MSS, Iterable[Any]) -> MSS
         """
         Symmetric difference in place: `self ^= iterable`.
 
@@ -496,3 +502,6 @@ class MutableSetStructure(
         intersection = self.intersection(iterable)
         if intersection:
             self.discard(*intersection)
+
+
+MSS = TypeVar("MSS", bound=MutableSetStructure[Any])

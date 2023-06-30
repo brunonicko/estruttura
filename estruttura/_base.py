@@ -1,6 +1,6 @@
 from basicco import SlottedBase, abstract
 from slotted import SlottedCollection
-from tippo import Iterator, Self, TypeVar
+from tippo import Any, Iterator, TypeVar
 
 __all__ = [
     "Structure",
@@ -42,12 +42,14 @@ class Structure(SlottedBase):
         raise NotImplementedError()
 
 
+# noinspection PyAbstractClass
 class ImmutableStructure(Structure):
     """Base Immutable Structure."""
 
     __slots__ = ()
 
 
+# noinspection PyAbstractClass
 class MutableStructure(Structure):
     """Base Mutable Structure."""
 
@@ -99,13 +101,16 @@ class ImmutableCollectionStructure(ImmutableStructure, CollectionStructure[T]):
 
     @abstract
     def clear(self):
-        # type: () -> Self
+        # type: (ICS) -> ICS
         """
         Clear contents.
 
         :return: Transformed.
         """
         raise NotImplementedError()
+
+
+ICS = TypeVar("ICS", bound=ImmutableCollectionStructure[Any])
 
 
 class MutableCollectionStructure(MutableStructure, CollectionStructure[T]):

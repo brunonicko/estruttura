@@ -4,7 +4,6 @@ from basicco.descriptors import Descriptor, OwnerMeta, Owner, get_descriptors
 from basicco.mapping_proxy import MappingProxyType
 from tippo import (
     Any,
-    Self,
     Callable,
     Tuple,
     TypeVar,
@@ -12,7 +11,6 @@ from tippo import (
     Union,
     Type,
     Iterable,
-    SupportsGetItem,
     cast,
     overload,
 )
@@ -36,6 +34,8 @@ T = TypeVar("T")
 class Attribute(Descriptor, Generic[T]):
     __slots__ = (
         "_constant",
+        "_settable",
+        "_deletable",
         "_dependencies",
         "_dependents",
         "_fget",
@@ -45,41 +45,57 @@ class Attribute(Descriptor, Generic[T]):
 
     def __init__(
         self,
+        settable=None,  # type: bool | None
+        deletable=None,  # type: bool | None
         constant=False,  # type: bool
     ):
         # type: (...) -> None
         super(Attribute, self).__init__()
+
+        if constant:
+            if settable is None:
+                settable = False
+            elif settable:
+                raise ValueError("constant attribute can't be settable")
+
+            if deletable is None:
+                deletable = False
+            elif deletable:
+                raise ValueError("constant attribute can't be deletable")
+
         self._constant = bool(constant)
+        self._settable = bool(settable) if settable is not None else None
+        self._deletable = bool(deletable) if deletable is not None else None
 
         self._dependencies = ()  # type: Tuple[Attribute[Any], ...]
         self._dependents = ()  # type: Tuple[Attribute[Any], ...]
-        self._fget = None
-        self._fset = None
-        self._fdel = None
+        self._fget = None  # type: Union[Callable[[A], T], None]
+        self._fset = None  # type: Union[Callable[[A, T], None], None]
+        self._fdel = None  # type: Union[Callable[[A], None], None]
 
     @overload
     def getter(self, *maybe_func):
-        # type: (A, Callable[[AS_co], T]) -> A
+        # type: (A, Callable[[A], T]) -> A
         pass
 
     @overload
     def getter(self, *dependencies):
-        # type: (A, *Attribute[Any]) -> Callable[[Callable[[AS_co], T]], A]
+        # type: (A, *Attribute[Any]) -> Callable[[Callable[[A], T]], A]
         pass
 
     def getter(self, *dependencies):
-        # type: (*Any) -> Any
+        # type: (A, *Any) -> Any
         """
-        Define a getter delegate method by using a decorator.
+        Define a getter method by using a decorator.
 
         :param dependencies: Attribute dependencies.
         :return: Getter method decorator.
-        :raises RuntimeError: Can't define a delegate for a constant attribute.
+        :raises RuntimeError: Can't define a getter for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
-        :raises ValueError: Getter delegate already defined.
+        :raises ValueError: Getter already defined.
         """
         if self.constant:
-            error_ = "can't define a delegate for a constant attribute"
+            error_ = "can't define a getter for a constant attribute"
             raise RuntimeError(error_)
 
         def getter_decorator(func):
@@ -89,7 +105,7 @@ class Attribute(Descriptor, Generic[T]):
                 error = "{!r} owned by a class".format(self.name)
                 raise ValueError(error)
             if self.fget is not None:
-                error = "getter delegate already defined"
+                error = "getter already defined"
                 raise ValueError(error)
             assert not self._dependencies
 
@@ -116,47 +132,46 @@ class Attribute(Descriptor, Generic[T]):
 
     @overload
     def setter(self, maybe_func):
-        # type: (A, Callable[[AS_co, T], None]) -> A
+        # type: (A, Callable[[A, T], None]) -> A
         pass
 
     @overload
     def setter(self, maybe_func=None):
-        # type: (A, None) -> Callable[[Callable[[AS_co, T], None]], A]
+        # type: (A, None) -> Callable[[Callable[[A, T], None]], A]
         pass
 
     def setter(self, maybe_func=None):
-        # type: (Any) -> Any
+        # type: (A, Any) -> Any
         """
-        Define a setter delegate method by using a decorator.
+        Define a setter method by using a decorator.
 
         :return: Setter method decorator.
-        :raises RuntimeError: Can't define a delegate for a constant attribute.
+        :raises RuntimeError: Can't define a setter for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
         :raises ValueError: Attribute is not settable.
         :raises ValueError: Need to define a getter before defining a setter.
-        :raises ValueError: Setter delegate already defined.
+        :raises ValueError: Setter already defined.
         """
         if self.constant:
-            error_ = "can't define a delegate for a constant attribute"
+            error_ = "can't define a setter for a constant attribute"
             raise RuntimeError(error_)
 
         def setter_decorator(func):
+            # type: (Callable[[A, T], None]) -> A
             """Setter decorator."""
-            if self.owned:
+            if self.owner is not None:
                 error = "attribute {!r} already named and owned by a class".format(
                     self.name
                 )
                 raise ValueError(error)
             if self.settable is False:
-                error = "attribute is not settable, can't define setter delegate"
+                error = "attribute is not settable, can't define setter"
                 raise ValueError(error)
             if self.fget is None:
-                error = (
-                    "need to define a getter delegate before defining a setter delegate"
-                )
+                error = "need to define a getter before defining a setter"
                 raise ValueError(error)
             if self.fset is not None:
-                error = "setter delegate already defined"
+                error = "setter already defined"
                 raise ValueError(error)
             self._fset = func
             return self
@@ -177,35 +192,37 @@ class Attribute(Descriptor, Generic[T]):
         pass
 
     def deleter(self, maybe_func=None):
+        # type: (A, Any) -> Any
         """
-        Define a deleter delegate method by using a decorator.
+        Define a deleter method by using a decorator.
 
         :return: Deleter method decorator.
-        :raises RuntimeError: Can't define a delegate for a constant attribute.
+        :raises RuntimeError: Can't define a deleter for a constant attribute.
         :raises ValueError: Attribute already named and owned by a class.
         :raises ValueError: Attribute is not deletable.
         :raises ValueError: Need to define a getter before defining a deleter.
-        :raises ValueError: Deleter delegate already defined.
+        :raises ValueError: Deleter already defined.
         """
         if self.constant:
-            error_ = "can't define a delegate for a constant attribute"
+            error_ = "can't define a deleter for a constant attribute"
             raise RuntimeError(error_)
 
         def deleter_decorator(func):
+            # type: (Callable[[A], None]) -> A
             """Deleter decorator."""
-            if self.owned:
+            if self.owner is not None:
                 error = "attribute {!r} already named and owned by a class".format(
                     self.name
                 )
                 raise ValueError(error)
             if self.deletable is False:
-                error = "attribute is not deletable, can't define deleter delegate"
+                error = "attribute is not deletable, can't define deleter"
                 raise ValueError(error)
             if self.fget is None:
-                error = "need to define a getter delegate before defining a deleter delegate"
+                error = "need to define a getter before defining a deleter"
                 raise ValueError(error)
             if self.fdel is not None:
-                error = "deleter delegate already defined"
+                error = "deleter already defined"
                 raise ValueError(error)
             self._fdel = func
             return self
@@ -214,6 +231,16 @@ class Attribute(Descriptor, Generic[T]):
             return deleter_decorator(maybe_func)
         else:
             return deleter_decorator
+
+    @property
+    def settable(self):
+        # type: () -> Union[bool, None]
+        return self._settable
+
+    @property
+    def deletable(self):
+        # type: () -> Union[bool, None]
+        return self._deletable
 
     @property
     def constant(self):
@@ -232,17 +259,17 @@ class Attribute(Descriptor, Generic[T]):
 
     @property
     def fget(self):
-        # type: () -> Union[Callable[[AS_co], T], None]
+        # type: () -> Union[Callable[[A], T], None]
         return self._fget
 
     @property
     def fset(self):
-        # type: () -> Union[Callable[[AS_co, T], None], None]
+        # type: () -> Union[Callable[[A, T], None], None]
         return self._fset
 
     @property
     def fdel(self):
-        # type: () -> Union[Callable[[AS_co], None], None]
+        # type: () -> Union[Callable[[A], None], None]
         return self._fdel
 
 
@@ -265,7 +292,7 @@ class AttributeStructure(six.with_metaclass(AttributeStructureMeta, Owner, Struc
     __slots__ = ()
 
 
-AS_co = TypeVar("AS_co", bound=AttributeStructure, covariant=True)
+AS = TypeVar("AS", bound=AttributeStructure)
 
 
 class ImmutableAttributeStructure(ImmutableStructure, AttributeStructure):
